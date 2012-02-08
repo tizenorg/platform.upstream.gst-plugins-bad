@@ -73,7 +73,6 @@ CONFIGURE_OPTION= --disable-static \
 --disable-dts  \
 --disable-divx \
 --disable-dvdnav   \
---disable-faac \
 --disable-faad \
 --disable-fbdev    \
 --disable-gsm  \
@@ -143,6 +142,7 @@ CONFIGURE_OPTION= --disable-static \
 #--disable-alsa \
 #--disable-selector \
 #--disable-metadata \
+#--disable-faac \
 
 LDFLAGS += -Wl,--hash-style=both -Wl,--as-needed
 
