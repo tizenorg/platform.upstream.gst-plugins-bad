@@ -8,7 +8,6 @@ Build-Depends: debhelper (>= 5),
                liboil0.3-dev (>= 0.3.8),
                libgstreamer0.10-dev (>= 0.10.25),
                libgstreamer-plugins-base0.10-dev (>= 0.10.25),
-               libfaac-dev
 Standards-Version: 3.8.1
 
 Package: gstreamer0.10-plugins-bad
