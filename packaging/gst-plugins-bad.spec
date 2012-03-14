@@ -6,7 +6,7 @@ Group:      TO_BE/FILLED_IN
 License:    TO_BE/FILLED_IN
 Source0:    %{name}-%{version}.tar.gz
 Patch0:     gst-plugins-bad-disable-gtk-doc.patch
-BuildRequires:  gettext
+BuildRequires:  gettext-tools
 BuildRequires:  gst-plugins-base-devel  
 BuildRequires:  pkgconfig(gstreamer-0.10) 
 BuildRequires:  pkgconfig(glib-2.0)
