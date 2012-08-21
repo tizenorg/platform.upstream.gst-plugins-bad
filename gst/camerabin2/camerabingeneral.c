@@ -20,16 +20,22 @@
 
 /**
  * SECTION:camerabingeneral
- * @short_description: helper functions for #GstCameraBin and it's modules
+ * @short_description: helper functions for #GstCameraBin2 and it's modules
  *
- * Common helper functions for #GstCameraBin, #GstCameraBinImage and
- * #GstCameraBinVideo.
+ * Common helper functions for #GstCameraBin2, #GstCameraBin2Image and
+ * #GstCameraBin2Video.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <string.h>
 
 #include <glib.h>
 #include <gst/basecamerabinsrc/gstbasecamerasrc.h>
+#include <gst/gst-i18n-plugin.h>
+
 #include "camerabingeneral.h"
 
 /**
@@ -119,7 +125,8 @@ gst_camerabin_try_add_element (GstBin * bin, const gchar * srcpad,
         GST_DEBUG_PAD_NAME (bin_pad));
     bin_elem = gst_pad_get_parent_element (bin_pad);
     gst_object_unref (bin_pad);
-    if (!gst_element_link_pads (bin_elem, srcpad, new_elem, dstpad)) {
+    if (!gst_element_link_pads_full (bin_elem, srcpad, new_elem, dstpad,
+            GST_PAD_LINK_CHECK_CAPS)) {
       gst_object_ref (new_elem);
       gst_bin_remove (bin, new_elem);
       ret = FALSE;
@@ -155,8 +162,9 @@ gst_camerabin_create_and_add_element (GstBin * bin, const gchar * elem_name,
 
   new_elem = gst_element_factory_make (elem_name, instance_name);
   if (!new_elem) {
-    GST_ELEMENT_ERROR (bin, CORE, MISSING_PLUGIN, (NULL),
-        ("could not create \"%s\" element.", elem_name));
+    GST_ELEMENT_ERROR (bin, CORE, MISSING_PLUGIN,
+        (_("Missing element '%s' - check your GStreamer installation."),
+            elem_name), (NULL));
   } else if (!gst_camerabin_add_element (bin, new_elem)) {
     new_elem = NULL;
   }
@@ -249,30 +257,4 @@ gst_camerabin_remove_elements_from_bin (GstBin * bin)
     }
   }
   gst_iterator_free (iter);
-}
-
-/**
- * gst_camerabin_drop_eos_probe:
- * @pad: pad receiving the event
- * @event: received event
- * @u_data: not used
- *
- * Event probe that drop all eos events.
- *
- * Returns: FALSE to drop the event, TRUE otherwise
- */
-gboolean
-gst_camerabin_drop_eos_probe (GstPad * pad, GstEvent * event, gpointer u_data)
-{
-  gboolean ret = TRUE;
-
-  switch (GST_EVENT_TYPE (event)) {
-    case GST_EVENT_EOS:
-      GST_DEBUG ("dropping eos in %s:%s", GST_DEBUG_PAD_NAME (pad));
-      ret = FALSE;
-      break;
-    default:
-      break;
-  }
-  return ret;
 }

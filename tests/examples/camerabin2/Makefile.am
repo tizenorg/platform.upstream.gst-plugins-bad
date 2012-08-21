@@ -15,6 +15,7 @@ gst_camera2_LDADD   = \
         $(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_MAJORMINOR@.la \
         $(GST_PLUGINS_BASE_LIBS) \
         -lgstinterfaces-@GST_MAJORMINOR@ \
+	-lgstpbutils-@GST_MAJORMINOR@ \
         $(GST_LIBS) \
 	$(GTK_LIBS) \
 	$(GMODULE_EXPORT_LIBS)
@@ -38,6 +39,8 @@ gst_camerabin2_test_LDADD   = \
 	$(GST_PLUGINS_BASE_LIBS) \
 	-lgstinterfaces-@GST_MAJORMINOR@ \
 	-lgstpbutils-@GST_MAJORMINOR@ \
+	-lgstvideo-@GST_MAJORMINOR@ \
+	$(GST_BASE_LIBS) \
 	$(GST_LIBS) \
 	$(X11_LIBS)
 

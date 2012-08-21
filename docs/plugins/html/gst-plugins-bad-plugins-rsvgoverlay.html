@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>rsvgoverlay</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-rsvgdec.html" title="rsvgdec">
-<link rel="next" href="gst-plugins-bad-plugins-rtpdtmfdepay.html" title="rtpdtmfdepay">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<link rel="next" href="gst-plugins-bad-plugins-rtmpsink.html" title="rtmpsink">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -18,7 +18,7 @@
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
 <th width="100%" align="center">GStreamer Bad Plugins 0.10 Plugins Reference Manual</th>
-<td><a accesskey="n" href="gst-plugins-bad-plugins-rtpdtmfdepay.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
+<td><a accesskey="n" href="gst-plugins-bad-plugins-rtmpsink.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
 </tr>
 <tr><td colspan="5" class="shortcuts">
 <a href="#gst-plugins-bad-plugins-rsvgoverlay.synopsis" class="shortcut">Top</a>
@@ -73,77 +73,10 @@
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-rsvgoverlay.description"></a><h2>Description</h2>
-<p>
-This elements overlays SVG graphics over the video. SVG data can
-either be specified through properties, or fed through the
-data-sink pad.
-</p>
-<p>
-Position and dimension of the SVG graphics can be achieved by
-specifying appropriate dimensions in the SVG file itself, but
-shortcuts are provided by the element to specify x/y position and
-width/height dimension, both in absolute form (pixels) and in
-relative form (percentage of video dimension).
-</p>
-<p>
-For any measure (x/y/width/height), the absolute value (in pixels)
-takes precedence over the relative one if both are
-specified. Absolute values must be set to 0 to disable them.
-</p>
-<p>
-If all parameters are 0, the image is displayed without rescaling
-at (0, 0) position.
-</p>
-<p>
-The fit-to-frame property is a shortcut for displaying the SVG
-overlay at (0, 0) position filling the whole screen. It modifies
-the values of the x/y/width/height attributes, by setting
-height-/width-relative to 1.0. and all other attributes to 0.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp8574016"></a><h3>Example launch lines</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> rsvgoverlay location<span class="gtkdoc opt">=</span>foo<span class="gtkdoc opt">.</span>svg <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> autovideosink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- specifies the SVG location through the filename property.
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> rsvgoverlay name<span class="gtkdoc opt">=</span>overlay <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> autovideosink filesrc location<span class="gtkdoc opt">=</span>foo<span class="gtkdoc opt">.</span>svg <span class="gtkdoc opt">!</span> image<span class="gtkdoc opt">/</span>svg <span class="gtkdoc opt">!</span> overlay<span class="gtkdoc opt">.</span>data_sink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- does the same by feeding data through the data_sink pad. You can also specify the SVG data itself as parameter:
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch <span class="gtkdoc opt">-</span>v videotestsrc <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> rsvgoverlay data<span class="gtkdoc opt">=</span><span class="string">'&lt;svg viewBox=&quot;0 0 800 600&quot;&gt;&lt;image x=&quot;80%&quot; y=&quot;80%&quot; width=&quot;10%&quot; height=&quot;10%&quot; xlink:href=&quot;foo.jpg&quot; /&gt;&lt;/svg&gt;'</span> <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> autovideosink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp16385456"></a><h3>Element Information</h3>
+<a name="idp9428864"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -166,7 +99,7 @@ height-/width-relative to 1.0. and all other attributes to 0.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp16392864"></a><h3>Element Pads</h3>
+<a name="idp16357280"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -249,7 +182,6 @@ height-/width-relative to 1.0. and all other attributes to 0.
 <a name="GstRsvgOverlay-struct"></a><h3>struct GstRsvgOverlay</h3>
 <pre class="programlisting">struct GstRsvgOverlay;</pre>
 <p>
-Opaque object data structure.
 </p>
 </div>
 </div>
@@ -339,6 +271,6 @@ Opaque object data structure.
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

@@ -2,12 +2,14 @@ Source: gst-plugins-bad0.10
 Section: libs
 Priority: extra
 Maintainer: Seungbae Shin <seungbae.shin@samsung.com>, JongHyuk Choi <jhchoi.choi@samsung.com>
-Uploaders: Naveen Ch <naveen.ch@samsung.com>, YoungHwan Ahn <younghwan_.an@samsung.com>, Jeongmo Yang <jm80.yang@samsung.com>
+Uploaders: Naveen Ch <naveen.ch@samsung.com>, YoungHwan Ahn <younghwan_.an@samsung.com>, Jeongmo Yang <jm80.yang@samsung.com>, Hyunseok Lee <hs7388.lee@samsung.com>
 Build-Depends: debhelper (>= 5),
                libglib2.0-dev (>= 2.16),
                liboil0.3-dev (>= 0.3.8),
                libgstreamer0.10-dev (>= 0.10.25),
                libgstreamer-plugins-base0.10-dev (>= 0.10.25),
+               libfaac-dev,
+               libvpx0.9-dev
 Standards-Version: 3.8.1
 
 Package: gstreamer0.10-plugins-bad

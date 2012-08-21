@@ -21,7 +21,7 @@
 /**
  * SECTION:element-speed
  *
- * Plays an audio stream at a different speed.
+ * Plays an audio stream at a different speed (by resampling the audio).
  * 
  * Do not use this element. Either use the 'pitch' element, or do a seek with
  * a non-1.0 rate parameter, this will have the same effect as using the speed
@@ -461,10 +461,10 @@ speed_base_init (gpointer g_class)
       "Andy Wingo <apwingo@eos.ncsu.edu>, "
       "Tim-Philipp Müller <tim@centricular.net>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_speed_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_speed_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_speed_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_speed_sink_template);
 }
 
 static void

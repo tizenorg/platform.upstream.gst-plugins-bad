@@ -3,11 +3,11 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>GstPhotography</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch03.html" title="gst-plugins-bad Interfaces">
 <link rel="prev" href="ch03.html" title="gst-plugins-bad Interfaces">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="GstPhotography.top_of_page"></a>GstPhotography</span></h2>
-<p>GstPhotography — Interface for digital image capture elements</p>
+<p>GstPhotography</p>
 </td>
 <td valign="top" align="right"></td>
 </tr></table></div>
@@ -62,7 +62,7 @@ enum                <a class="link" href="GstPhotography.html#GstPhotoShakeRisk"
 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            <a class="link" href="GstPhotography.html#gst-photography-get-aperture" title="gst_photography_get_aperture ()">gst_photography_get_aperture</a>        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> *aperture</code></em>);
 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            <a class="link" href="GstPhotography.html#gst-photography-get-exposure" title="gst_photography_get_exposure ()">gst_photography_get_exposure</a>        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
-                                                         <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint32"><span class="type">guint32</span></a> *exposure</code></em>);
+                                                         <em class="parameter"><code><span class="type">guint32</span> *exposure</code></em>);
 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            <a class="link" href="GstPhotography.html#gst-photography-get-white-balance-mode" title="gst_photography_get_white_balance_mode ()">gst_photography_get_white_balance_mode</a>
                                                         (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstWhiteBalanceMode" title="enum GstWhiteBalanceMode"><span class="type">GstWhiteBalanceMode</span></a> *wb_mode</code></em>);
@@ -148,16 +148,6 @@ GstPhotography requires
 <div class="refsect1">
 <a name="GstPhotography.description"></a><h2>Description</h2>
 <p>
-The interface allows access to some common digital image capture parameters.
-</p>
-<p>
-</p>
-<div class="note" style="margin-left: 0.5in; margin-right: 0.5in;">
-<h3 class="title">Note</h3>
-  The GstPhotography interface is unstable API and may change in future.
-  One can define GST_USE_UNSTABLE_API to acknowledge and avoid this warning.
-</div>
-<p>
 </p>
 </div>
 <div class="refsect1">
@@ -166,14 +156,12 @@ The interface allows access to some common digital image capture parameters.
 <a name="GstPhotography-struct"></a><h3>GstPhotography</h3>
 <pre class="programlisting">typedef struct _GstPhotography GstPhotography;</pre>
 <p>
-Opaque <a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> data structure.
 </p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="GstPhotographyNoiseReduction"></a><h3>enum GstPhotographyNoiseReduction</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_NOISE_REDUCTION_BAYER = ( 1&lt;&lt;0 ),
   GST_PHOTOGRAPHY_NOISE_REDUCTION_YCC = ( 1&lt;&lt;1 ),
   GST_PHOTOGRAPHY_NOISE_REDUCTION_TEMPORAL= ( 1&lt;&lt; 2),
@@ -182,50 +170,12 @@ Opaque <a class="link" href="GstPhotography.html" title="GstPhotography"><span c
 } GstPhotographyNoiseReduction;
 </pre>
 <p>
-Noise Reduction features of a photography capture or filter element.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><a name="GST-PHOTOGRAPHY-NOISE-REDUCTION-BAYER:CAPS"></a><span class="term"><code class="literal">GST_PHOTOGRAPHY_NOISE_REDUCTION_BAYER</code></span></p></td>
-<td>Adaptive noise reduction on Bayer
-format
-</td>
-</tr>
-<tr>
-<td><p><a name="GST-PHOTOGRAPHY-NOISE-REDUCTION-YCC:CAPS"></a><span class="term"><code class="literal">GST_PHOTOGRAPHY_NOISE_REDUCTION_YCC</code></span></p></td>
-<td>reduces the noise on Y and 2-chroma
-images.
-</td>
-</tr>
-<tr>
-<td><p><a name="GST-PHOTOGRAPHY-NOISE-REDUCTION-TEMPORAL:CAPS"></a><span class="term"><code class="literal">GST_PHOTOGRAPHY_NOISE_REDUCTION_TEMPORAL</code></span></p></td>
-<td>Multi-frame adaptive NR,
-provided for the video mode
-</td>
-</tr>
-<tr>
-<td><p><a name="GST-PHOTOGRAPHY-NOISE-REDUCTION-FIXED:CAPS"></a><span class="term"><code class="literal">GST_PHOTOGRAPHY_NOISE_REDUCTION_FIXED</code></span></p></td>
-<td>
-</td>
-</tr>
-<tr>
-<td><p><a name="GST-PHOTOGRAPHY-NOISE-REDUCTION-EXTRA:CAPS"></a><span class="term"><code class="literal">GST_PHOTOGRAPHY_NOISE_REDUCTION_EXTRA</code></span></p></td>
-<td>Extra Noise Reduction. In the case
-of high-ISO capturing, some noise remains after YCC NR. XNR reduces this
-remaining noise.
-</td>
-</tr>
-</tbody>
-</table></div>
-<p class="since">Since 0.10.21</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="GstWhiteBalanceMode"></a><h3>enum GstWhiteBalanceMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_WB_MODE_AUTO = 0,
   GST_PHOTOGRAPHY_WB_MODE_DAYLIGHT,
   GST_PHOTOGRAPHY_WB_MODE_CLOUDY,
@@ -240,8 +190,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstColourToneMode"></a><h3>enum GstColourToneMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_COLOUR_TONE_MODE_NORMAL = 0,
   GST_PHOTOGRAPHY_COLOUR_TONE_MODE_SEPIA,
   GST_PHOTOGRAPHY_COLOUR_TONE_MODE_NEGATIVE,
@@ -262,8 +211,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstSceneMode"></a><h3>enum GstSceneMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_SCENE_MODE_MANUAL = 0,
   GST_PHOTOGRAPHY_SCENE_MODE_CLOSEUP,
   GST_PHOTOGRAPHY_SCENE_MODE_PORTRAIT,
@@ -279,8 +227,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstFlashMode"></a><h3>enum GstFlashMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_FLASH_MODE_AUTO = 0,
   GST_PHOTOGRAPHY_FLASH_MODE_OFF,
   GST_PHOTOGRAPHY_FLASH_MODE_ON,
@@ -294,8 +241,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstFlickerReductionMode"></a><h3>enum GstFlickerReductionMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_FLICKER_REDUCTION_OFF = 0,
   GST_PHOTOGRAPHY_FLICKER_REDUCTION_50HZ,
   GST_PHOTOGRAPHY_FLICKER_REDUCTION_60HZ,
@@ -325,8 +271,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstFocusStatus"></a><h3>enum GstFocusStatus</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_FOCUS_STATUS_NONE = 0,
   GST_PHOTOGRAPHY_FOCUS_STATUS_RUNNING,
   GST_PHOTOGRAPHY_FOCUS_STATUS_FAIL,
@@ -339,8 +284,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstPhotoCaps"></a><h3>enum GstPhotoCaps</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_CAPS_NONE = (0 &lt;&lt; 0),
   GST_PHOTOGRAPHY_CAPS_EV_COMP = (1 &lt;&lt; 0),
   GST_PHOTOGRAPHY_CAPS_ISO_SPEED = (1 &lt;&lt; 1),
@@ -353,7 +297,9 @@ remaining noise.
   GST_PHOTOGRAPHY_CAPS_APERTURE = (1 &lt;&lt; 8),
   GST_PHOTOGRAPHY_CAPS_EXPOSURE = (1 &lt;&lt; 9),
   GST_PHOTOGRAPHY_CAPS_SHAKE = (1 &lt;&lt; 10),
-  GST_PHOTOGRAPHY_CAPS_NOISE_REDUCTION = (1 &lt;&lt; 11)
+  GST_PHOTOGRAPHY_CAPS_NOISE_REDUCTION = (1 &lt;&lt; 11),
+  GST_PHOTOGRAPHY_CAPS_FLICKER_REDUCTION = (1 &lt;&lt; 12),
+  GST_PHOTOGRAPHY_CAPS_ALL = (~0)
 } GstPhotoCaps;
 </pre>
 <p>
@@ -362,8 +308,7 @@ remaining noise.
 <hr>
 <div class="refsect2">
 <a name="GstPhotoShakeRisk"></a><h3>enum GstPhotoShakeRisk</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   GST_PHOTOGRAPHY_SHAKE_RISK_LOW = 0,
   GST_PHOTOGRAPHY_SHAKE_RISK_MEDIUM,
   GST_PHOTOGRAPHY_SHAKE_RISK_HIGH,
@@ -378,24 +323,7 @@ remaining noise.
 <pre class="programlisting"><span class="returnvalue">void</span>                (*GstPhotoCapturePrepared)          (<em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> data</code></em>,
                                                          <em class="parameter"><code>const <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstCaps.html#GstCaps"><span class="type">GstCaps</span></a> *configured_caps</code></em>);</pre>
 <p>
-This callback will be called when the element has finished preparations
-for photo capture.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>data</code></em> :</span></p></td>
-<td>user data that has been given, when registering the callback</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>configured_caps</code></em> :</span></p></td>
-<td>
-<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstCaps.html#GstCaps"><span class="type">GstCaps</span></a> defining the configured capture format.
-Ownership of these caps stays in the element.</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -403,28 +331,7 @@ Ownership of these caps stays in the element.</td>
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_ev_compensation (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gfloat"><span class="type">gfloat</span></a> *ev_comp</code></em>);</pre>
 <p>
-Get the ev compensation value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>ev_comp</code></em> :</span></p></td>
-<td>ev compensation value to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -432,28 +339,7 @@ Get the ev compensation value for the <a href="http://gstreamer.freedesktop.org/
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_iso_speed       (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> *iso_speed</code></em>);</pre>
 <p>
-Get the ISO value (light sensivity) for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>iso_speed</code></em> :</span></p></td>
-<td>ISO speed value to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -461,57 +347,15 @@ Get the ISO value (light sensivity) for the <a href="http://gstreamer.freedeskto
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_aperture        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> *aperture</code></em>);</pre>
 <p>
-Get the aperture value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>aperture</code></em> :</span></p></td>
-<td>aperture value to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="gst-photography-get-exposure"></a><h3>gst_photography_get_exposure ()</h3>
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_exposure        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
-                                                         <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint32"><span class="type">guint32</span></a> *exposure</code></em>);</pre>
+                                                         <em class="parameter"><code><span class="type">guint32</span> *exposure</code></em>);</pre>
 <p>
-Get the fixed exposure time (in us) for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>exposure</code></em> :</span></p></td>
-<td>exposure time to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -520,29 +364,7 @@ Get the fixed exposure time (in us) for the <a href="http://gstreamer.freedeskto
                                                         (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstWhiteBalanceMode" title="enum GstWhiteBalanceMode"><span class="type">GstWhiteBalanceMode</span></a> *wb_mode</code></em>);</pre>
 <p>
-Get the white balance mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>wb_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstWhiteBalanceMode" title="enum GstWhiteBalanceMode"><span class="type">GstWhiteBalanceMode</span></a> to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -551,29 +373,7 @@ Get the white balance mode for the <a href="http://gstreamer.freedesktop.org/dat
                                                         (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstColourToneMode" title="enum GstColourToneMode"><span class="type">GstColourToneMode</span></a> *tone_mode</code></em>);</pre>
 <p>
-Get the colour tone mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>tone_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstColourToneMode" title="enum GstColourToneMode"><span class="type">GstColourToneMode</span></a> to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -581,29 +381,7 @@ Get the colour tone mode for the <a href="http://gstreamer.freedesktop.org/data/
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_scene_mode      (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstSceneMode" title="enum GstSceneMode"><span class="type">GstSceneMode</span></a> *scene_mode</code></em>);</pre>
 <p>
-Get the scene mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>scene_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstSceneMode" title="enum GstSceneMode"><span class="type">GstSceneMode</span></a> to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -611,29 +389,7 @@ Get the scene mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gs
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_flash_mode      (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstFlashMode" title="enum GstFlashMode"><span class="type">GstFlashMode</span></a> *flash_mode</code></em>);</pre>
 <p>
-Get the flash mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>flash_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstFlashMode" title="enum GstFlashMode"><span class="type">GstFlashMode</span></a> to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -641,30 +397,7 @@ Get the flash mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gs
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_noise_reduction (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstPhotographyNoiseReduction" title="enum GstPhotographyNoiseReduction"><span class="type">GstPhotographyNoiseReduction</span></a> *noise_reduction</code></em>);</pre>
 <p>
-Get the noise reduction mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>noise_reduction</code></em> :</span></p></td>
-<td>
-<span class="type">GstNoiseReductionMode</span> to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
-<p class="since">Since 0.10.21</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -672,28 +405,7 @@ Get the noise reduction mode for the <a href="http://gstreamer.freedesktop.org/d
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_zoom            (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gfloat"><span class="type">gfloat</span></a> *zoom</code></em>);</pre>
 <p>
-Get the zoom value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>zoom</code></em> :</span></p></td>
-<td>zoom value to get</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if getting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -701,28 +413,7 @@ Get the zoom value for the <a href="http://gstreamer.freedesktop.org/data/doc/gs
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_ev_compensation (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gfloat"><span class="type">gfloat</span></a> ev_comp</code></em>);</pre>
 <p>
-Set the ev compensation value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>ev_comp</code></em> :</span></p></td>
-<td>ev compensation value to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -730,28 +421,7 @@ Set the ev compensation value for the <a href="http://gstreamer.freedesktop.org/
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_iso_speed       (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> iso_speed</code></em>);</pre>
 <p>
-Set the ISO value (light sensivity) for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>iso_speed</code></em> :</span></p></td>
-<td>ISO speed value to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -759,28 +429,7 @@ Set the ISO value (light sensivity) for the <a href="http://gstreamer.freedeskto
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_aperture        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> aperture</code></em>);</pre>
 <p>
-Set the aperture value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>aperture</code></em> :</span></p></td>
-<td>aperture value to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -788,28 +437,7 @@ Set the aperture value for the <a href="http://gstreamer.freedesktop.org/data/do
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_exposure        (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> exposure</code></em>);</pre>
 <p>
-Set the fixed exposure time (in us) for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>exposure</code></em> :</span></p></td>
-<td>exposure time to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -818,29 +446,7 @@ Set the fixed exposure time (in us) for the <a href="http://gstreamer.freedeskto
                                                         (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstWhiteBalanceMode" title="enum GstWhiteBalanceMode"><span class="type">GstWhiteBalanceMode</span></a> wb_mode</code></em>);</pre>
 <p>
-Set the white balance mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>wb_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstWhiteBalanceMode" title="enum GstWhiteBalanceMode"><span class="type">GstWhiteBalanceMode</span></a> to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -849,29 +455,7 @@ Set the white balance mode for the <a href="http://gstreamer.freedesktop.org/dat
                                                         (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstColourToneMode" title="enum GstColourToneMode"><span class="type">GstColourToneMode</span></a> tone_mode</code></em>);</pre>
 <p>
-Set the colour tone mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>tone_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstColourToneMode" title="enum GstColourToneMode"><span class="type">GstColourToneMode</span></a> to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -879,29 +463,7 @@ Set the colour tone mode for the <a href="http://gstreamer.freedesktop.org/data/
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_scene_mode      (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstSceneMode" title="enum GstSceneMode"><span class="type">GstSceneMode</span></a> scene_mode</code></em>);</pre>
 <p>
-Set the scene mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>scene_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstSceneMode" title="enum GstSceneMode"><span class="type">GstSceneMode</span></a> to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -909,29 +471,7 @@ Set the scene mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gs
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_flash_mode      (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstFlashMode" title="enum GstFlashMode"><span class="type">GstFlashMode</span></a> flash_mode</code></em>);</pre>
 <p>
-Set the flash mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>flash_mode</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstFlashMode" title="enum GstFlashMode"><span class="type">GstFlashMode</span></a> to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -939,30 +479,7 @@ Set the flash mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gs
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_noise_reduction (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a class="link" href="GstPhotography.html#GstPhotographyNoiseReduction" title="enum GstPhotographyNoiseReduction"><span class="type">GstPhotographyNoiseReduction</span></a> noise_reduction</code></em>);</pre>
 <p>
-Set the noise reduction mode for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>noise_reduction</code></em> :</span></p></td>
-<td>
-<span class="type">GstNoiseReductionMode</span> to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
-<p class="since">Since 0.10.21</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -970,54 +487,14 @@ Set the noise reduction mode for the <a href="http://gstreamer.freedesktop.org/d
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_zoom            (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gfloat"><span class="type">gfloat</span></a> zoom</code></em>);</pre>
 <p>
-Set the zoom value for the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>.
-E.g. 1.0 to get original image and 3.0 for 3x zoom and so on.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>zoom</code></em> :</span></p></td>
-<td>zoom value to set</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if setting the value succeeded, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="gst-photography-get-capabilities"></a><h3>gst_photography_get_capabilities ()</h3>
 <pre class="programlisting"><a class="link" href="GstPhotography.html#GstPhotoCaps" title="enum GstPhotoCaps"><span class="returnvalue">GstPhotoCaps</span></a>        gst_photography_get_capabilities    (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>);</pre>
 <p>
-Get <a class="link" href="GstPhotography.html#GstPhotoCaps" title="enum GstPhotoCaps"><span class="type">GstPhotoCaps</span></a> bitmask value that indicates what photography
-interface features the <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a> supports
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html#GstPhotoCaps" title="enum GstPhotoCaps"><span class="type">GstPhotoCaps</span></a> value</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -1027,33 +504,7 @@ interface features the <a href="http://gstreamer.freedesktop.org/data/doc/gstrea
                                                          <em class="parameter"><code><a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstCaps.html#GstCaps"><span class="type">GstCaps</span></a> *capture_caps</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
 <p>
-Start preparations for capture. <em class="parameter"><code>func</code></em> callback is called after
-preparations are done.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>func</code></em> :</span></p></td>
-<td>callback that is called after capturing has been prepared</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>user_data</code></em> :</span></p></td>
-<td>user data that will be passed to the callback <em class="parameter"><code>func</code></em>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>TRUE if preparations were started (caps were OK), otherwise FALSE.</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -1061,25 +512,7 @@ preparations are done.
 <pre class="programlisting"><span class="returnvalue">void</span>                gst_photography_set_autofocus       (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> on</code></em>);</pre>
 <p>
-Start or stop autofocusing. <code class="literal">GST_PHOTOGRAPHY_AUTOFOCUS_DONE</code>
-message is posted to bus when autofocusing has finished.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>on</code></em> :</span></p></td>
-<td>
-<a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> to start autofocusing, <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to stop autofocusing</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -1087,28 +520,7 @@ message is posted to bus when autofocusing has finished.
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_set_config          (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><span class="type">GstPhotoSettings</span> *config</code></em>);</pre>
 <p>
-Set all configuration settings at once.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>config</code></em> :</span></p></td>
-<td>
-<span class="type">GstPhotoSettings</span> containg the configuration</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>TRUE if configuration was set successfully, otherwise FALSE.</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 <hr>
 <div class="refsect2">
@@ -1116,28 +528,7 @@ Set all configuration settings at once.
 <pre class="programlisting"><a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            gst_photography_get_config          (<em class="parameter"><code><a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> *photo</code></em>,
                                                          <em class="parameter"><code><span class="type">GstPhotoSettings</span> *config</code></em>);</pre>
 <p>
-Get all configuration settings at once.
 </p>
-<div class="variablelist"><table border="0">
-<col align="left" valign="top">
-<tbody>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>photo</code></em> :</span></p></td>
-<td>
-<a class="link" href="GstPhotography.html" title="GstPhotography"><span class="type">GstPhotography</span></a> interface of a <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>
-</td>
-</tr>
-<tr>
-<td><p><span class="term"><em class="parameter"><code>config</code></em> :</span></p></td>
-<td>
-<span class="type">GstPhotoSettings</span> containg the configuration</td>
-</tr>
-<tr>
-<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>TRUE if configuration was got successfully, otherwise FALSE.</td>
-</tr>
-</tbody>
-</table></div>
 </div>
 </div>
 <div class="refsect1">
@@ -1250,6 +641,6 @@ Get all configuration settings at once.
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

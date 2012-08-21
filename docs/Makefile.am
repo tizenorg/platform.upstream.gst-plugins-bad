@@ -5,13 +5,13 @@ PLUGINS_DOCS_DIRS =
 endif
 
 if ENABLE_GTK_DOC
-GTK_DOC_DIRS = $(PLUGINS_DOCS_DIRS)
+GTK_DOC_DIRS = libs $(PLUGINS_DOCS_DIRS)
 else
 GTK_DOC_DIRS =
 endif
 
 SUBDIRS = $(GTK_DOC_DIRS)
-DIST_SUBDIRS = plugins
+DIST_SUBDIRS = libs plugins
 
 EXTRA_DIST = \
         random/ChangeLog-0.8 \

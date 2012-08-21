@@ -83,8 +83,8 @@ gst_sf_src_base_init (gpointer g_class)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sf_src_factory));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &sf_src_factory);
 
   gst_element_class_set_details_simple (gstelement_class, "Sndfile source",
       "Source/Audio",
@@ -200,7 +200,10 @@ gst_sf_src_create (GstBaseSrc * bsrc, guint64 offset, guint length,
 {
   GstSFSrc *this;
   GstBuffer *buf;
+/* FIXME discont is set but not used */
+#if 0
   gboolean discont = FALSE;
+#endif
   sf_count_t bytes_read;
 
   this = GST_SF_SRC (bsrc);
@@ -221,7 +224,9 @@ gst_sf_src_create (GstBaseSrc * bsrc, guint64 offset, guint length,
       goto seek_failed;
 
     this->offset = offset;
+#if 0
     discont = TRUE;
+#endif
   }
 
   buf = gst_buffer_new_and_alloc (length);

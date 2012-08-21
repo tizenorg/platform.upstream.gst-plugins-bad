@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>edgedetect</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-exclusion.html" title="exclusion">
 <link rel="next" href="gst-plugins-bad-plugins-faac.html" title="faac">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -24,10 +24,6 @@
 <a href="#gst-plugins-bad-plugins-edgedetect.synopsis" class="shortcut">Top</a>
                    | 
                   <a href="#gst-plugins-bad-plugins-edgedetect.description" class="shortcut">Description</a>
-                   | 
-                  <a href="#gst-plugins-bad-plugins-edgedetect.object-hierarchy" class="shortcut">Object Hierarchy</a>
-                   | 
-                  <a href="#gst-plugins-bad-plugins-edgedetect.properties" class="shortcut">Properties</a>
 </td></tr>
 </table>
 <div class="refentry">
@@ -41,54 +37,14 @@
 </tr></table></div>
 <div class="refsynopsisdiv">
 <a name="gst-plugins-bad-plugins-edgedetect.synopsis"></a><h2>Synopsis</h2>
-<a name="Gstedgedetect"></a><pre class="synopsis">struct              <a class="link" href="gst-plugins-bad-plugins-edgedetect.html#Gstedgedetect-struct" title="struct Gstedgedetect">Gstedgedetect</a>;
-</pre>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-edgedetect.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="synopsis">
-  <a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
-   +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
-         +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
-               +----Gstedgedetect
-</pre>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-edgedetect.properties"></a><h2>Properties</h2>
-<pre class="synopsis">
-  "<a class="link" href="gst-plugins-bad-plugins-edgedetect.html#Gstedgedetect--aperture" title='The "aperture" property'>aperture</a>"                 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-edgedetect.html#Gstedgedetect--mask" title='The "mask" property'>mask</a>"                     <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-edgedetect.html#Gstedgedetect--threshold1" title='The "threshold1" property'>threshold1</a>"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-edgedetect.html#Gstedgedetect--threshold2" title='The "threshold2" property'>threshold2</a>"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
-</pre>
+<pre class="synopsis"></pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-edgedetect.description"></a><h2>Description</h2>
-<p>
-FIXME:Describe edgedetect here.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp9687296"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">0.10</span> videotestsrc <span class="gtkdoc opt">!</span> decodebin <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> edgedetect <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> xvimagesink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp6993920"></a><h3>Element Information</h3>
+<a name="idp9125088"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -111,7 +67,7 @@ FIXME:Describe edgedetect here.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp12168304"></a><h3>Element Pads</h3>
+<a name="idp8632592"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -161,49 +117,10 @@ FIXME:Describe edgedetect here.
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-edgedetect.details"></a><h2>Details</h2>
-<div class="refsect2">
-<a name="Gstedgedetect-struct"></a><h3>struct Gstedgedetect</h3>
-<pre class="programlisting">struct Gstedgedetect;</pre>
-<p>
-</p>
-</div>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-edgedetect.property-details"></a><h2>Property Details</h2>
-<div class="refsect2">
-<a name="Gstedgedetect--aperture"></a><h3>The <code class="literal">"aperture"</code> property</h3>
-<pre class="programlisting">  "aperture"                 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
-<p>Aperture size for Sobel operator (Must be either 3, 5 or 7.</p>
-<p>Allowed values: [3,7]</p>
-<p>Default value: 3</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="Gstedgedetect--mask"></a><h3>The <code class="literal">"mask"</code> property</h3>
-<pre class="programlisting">  "mask"                     <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write</pre>
-<p>Sets whether the detected edges should be used as a mask on the original input or not.</p>
-<p>Default value: TRUE</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="Gstedgedetect--threshold1"></a><h3>The <code class="literal">"threshold1"</code> property</h3>
-<pre class="programlisting">  "threshold1"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
-<p>Threshold value for canny edge detection.</p>
-<p>Allowed values: [0,1000]</p>
-<p>Default value: 50</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="Gstedgedetect--threshold2"></a><h3>The <code class="literal">"threshold2"</code> property</h3>
-<pre class="programlisting">  "threshold2"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
-<p>Second threshold value for canny edge detection.</p>
-<p>Allowed values: [0,1000]</p>
-<p>Default value: 150</p>
-</div>
 </div>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

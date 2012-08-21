@@ -184,10 +184,10 @@ gst_festival_base_init (gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
   /* register pads */
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template_factory));
+  gst_element_class_add_static_pad_template (element_class,
+      &sink_template_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &src_template_factory);
 
   gst_element_class_set_details_simple (element_class,
       "Festival Text-to-Speech synthesizer", "Filter/Effect/Audio",
@@ -297,21 +297,29 @@ gst_festival_chain (GstPad * pad, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstFestival *festival;
   guint8 *p, *ep;
+  gint f;
   FILE *fd;
 
   festival = GST_FESTIVAL (GST_PAD_PARENT (pad));
 
   GST_LOG_OBJECT (festival, "Got text buffer, %u bytes", GST_BUFFER_SIZE (buf));
 
-  fd = fdopen (dup (festival->info->server_fd), "wb");
+  f = dup (festival->info->server_fd);
+  if (f < 0)
+    goto fail_open;
+  fd = fdopen (f, "wb");
+  if (fd == NULL) {
+    close (f);
+    goto fail_open;
+  }
 
   /* Copy text over to server, escaping any quotes */
   fprintf (fd, "(Parameter.set 'Audio_Required_Rate 16000)\n");
   fflush (fd);
   GST_DEBUG_OBJECT (festival, "issued Parameter.set command");
   if (read_response (festival) == FALSE) {
-    ret = GST_FLOW_ERROR;
-    goto out;
+    fclose (fd);
+    goto fail_read;
   }
 
   fprintf (fd, "(tts_textall \"");
@@ -331,11 +339,25 @@ gst_festival_chain (GstPad * pad, GstBuffer * buf)
 
   /* Read back info from server */
   if (read_response (festival) == FALSE)
-    ret = GST_FLOW_ERROR;
+    goto fail_read;
 
 out:
   gst_buffer_unref (buf);
   return ret;
+
+  /* ERRORS */
+fail_open:
+  {
+    GST_ELEMENT_ERROR (festival, RESOURCE, OPEN_WRITE, (NULL), (NULL));
+    ret = GST_FLOW_ERROR;
+    goto out;
+  }
+fail_read:
+  {
+    GST_ELEMENT_ERROR (festival, RESOURCE, READ, (NULL), (NULL));
+    ret = GST_FLOW_ERROR;
+    goto out;
+  }
 }
 
 static FT_Info *

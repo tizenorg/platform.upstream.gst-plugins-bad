@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>scaletempo</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-rtpmux.html" title="rtpmux">
 <link rel="next" href="gst-plugins-bad-plugins-sdlaudiosink.html" title="sdlaudiosink">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -66,10 +66,6 @@
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-scaletempo.description"></a><h2>Description</h2>
 <p>
-</p>
-<div class="refsect2">
-<a name="idp9372288"></a><h3>Example pipelines</h3>
-<p>
 Scale tempo while maintaining pitch
 (WSOLA-like technique with cross correlation)
 Inspired by SoundTouch library by Olli Parviainen
@@ -79,33 +75,58 @@ Use Sceletempo to apply playback rates without the chipmunk effect.
 </p>
 <p>
 </p>
-<pre class="programlisting">
-filesrc location=media.ext ! decodebin name=d \
-    d. ! queue ! audioconvert ! audioresample ! scaletempo ! audioconvert ! audioresample ! autoaudiosink \
-    d. ! queue ! ffmpegcolorspace ! autovideosink
-</pre>
+<div class="refsect2">
+<a name="idp19579248"></a><h3>Example pipelines</h3>
+<p>
+</p>
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2
+3</pre></td>
+        <td class="listing_code"><pre class="programlisting">filesrc location<span class="gtkdoc opt">=</span>media<span class="gtkdoc opt">.</span>ext <span class="gtkdoc opt">!</span> decodebin name<span class="gtkdoc opt">=</span>d \
+    d<span class="gtkdoc opt">. !</span> queue <span class="gtkdoc opt">!</span> audioconvert <span class="gtkdoc opt">!</span> audioresample <span class="gtkdoc opt">!</span> scaletempo <span class="gtkdoc opt">!</span> audioconvert <span class="gtkdoc opt">!</span> audioresample <span class="gtkdoc opt">!</span> autoaudiosink \
+    d<span class="gtkdoc opt">. !</span> queue <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> autovideosink</pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 OR
 </p>
-<pre class="programlisting">
-playbin uri=... audio_sink="scaletempo ! audioconvert ! audioresample ! autoaudiosink"
-</pre>
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1</pre></td>
+        <td class="listing_code"><pre class="programlisting">playbin uri<span class="gtkdoc opt">=...</span> audio_sink<span class="gtkdoc opt">=</span><span class="string">&quot;scaletempo ! audioconvert ! audioresample ! autoaudiosink&quot;</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 When an application sends a seek event with rate != 1.0, Scaletempo applies
 the rate change by scaling the tempo without scaling the pitch.
 </p>
 <p>
-Scaletempo works by producing audio in constant sized chunks (a "stride") but
-consuming chunks proportional to the playback rate.
+Scaletempo works by producing audio in constant sized chunks
+(<a class="link" href="gst-plugins-bad-plugins-scaletempo.html#GstScaletempo--stride" title='The "stride" property'><span class="type">"stride"</span></a>) but consuming chunks proportional to the playback
+rate.
 </p>
 <p>
 Scaletempo then smooths the output by blending the end of one stride with
-the next ("overlap").
+the next (<a class="link" href="gst-plugins-bad-plugins-scaletempo.html#GstScaletempo--overlap" title='The "overlap" property'><span class="type">"overlap"</span></a>).
 </p>
 <p>
 Scaletempo smooths the overlap further by searching within the input buffer
-for the best overlap position.  Scaletempo uses a statistical cross correlation
-(roughly a dot-product).  Scaletempo consumes most of its CPU cycles here.
+for the best overlap position.  Scaletempo uses a statistical cross
+correlation (roughly a dot-product).  Scaletempo consumes most of its CPU
+cycles here. One can use the <a class="link" href="gst-plugins-bad-plugins-scaletempo.html#GstScaletempo--search" title='The "search" property'><span class="type">"search"</span></a> propery to tune how far
+the algoritm looks.
 </p>
 </div>
 <p>
@@ -113,7 +134,7 @@ for the best overlap position.  Scaletempo uses a statistical cross correlation
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp6791696"></a><h3>Element Information</h3>
+<a name="idp21493200"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -136,7 +157,7 @@ for the best overlap position.  Scaletempo uses a statistical cross correlation
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp16602528"></a><h3>Element Pads</h3>
+<a name="idp18294848"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -238,6 +259,6 @@ for the best overlap position.  Scaletempo uses a statistical cross correlation
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

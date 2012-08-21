@@ -79,6 +79,9 @@ G_BEGIN_DECLS
  */
 #define GST_BASE_VIDEO_CODEC_FLOW_NEED_DATA GST_FLOW_CUSTOM_SUCCESS
 
+#define GST_BASE_VIDEO_CODEC_STREAM_LOCK(codec) g_static_rec_mutex_lock (&GST_BASE_VIDEO_CODEC (codec)->stream_lock)
+#define GST_BASE_VIDEO_CODEC_STREAM_UNLOCK(codec) g_static_rec_mutex_unlock (&GST_BASE_VIDEO_CODEC (codec)->stream_lock)
+
 typedef struct _GstVideoState GstVideoState;
 typedef struct _GstVideoFrame GstVideoFrame;
 typedef struct _GstBaseVideoCodec GstBaseVideoCodec;
@@ -86,6 +89,7 @@ typedef struct _GstBaseVideoCodecClass GstBaseVideoCodecClass;
 
 struct _GstVideoState
 {
+  GstCaps *caps;
   GstVideoFormat format;
   int width, height;
   int fps_n, fps_d;
@@ -100,9 +104,6 @@ struct _GstVideoState
 
   int bytes_per_picture;
 
-  //GstSegment segment;
-
-  int picture_number;
   GstBuffer *codec_data;
 
 };
@@ -128,9 +129,16 @@ struct _GstVideoFrame
   int n_fields;
 
   void *coder_hook;
+  GDestroyNotify coder_hook_destroy_notify;
+
   GstClockTime deadline;
 
   gboolean force_keyframe;
+  gboolean force_keyframe_headers;
+
+  /* Events that should be pushed downstream *before*
+   * the next src_buffer */
+  GList *events;
 };
 
 struct _GstBaseVideoCodec
@@ -141,16 +149,23 @@ struct _GstBaseVideoCodec
   GstPad *sinkpad;
   GstPad *srcpad;
 
+  /* protects all data processing, i.e. is locked
+   * in the chain function, finish_frame and when
+   * processing serialized events */
+  GStaticRecMutex stream_lock;
+
   guint64 system_frame_number;
 
-  GList *frames;
+  GList *frames;  /* Protected with OBJECT_LOCK */
   GstVideoState state;
   GstSegment segment;
 
-  GstCaps *caps;
-
   gdouble proportion;
   GstClockTime earliest_time;
+  gboolean discont;
+
+  gint64 bytes;
+  gint64 time;
 
   /* FIXME before moving to base */
   void *padding[GST_PADDING_LARGE];
@@ -160,15 +175,6 @@ struct _GstBaseVideoCodecClass
 {
   GstElementClass element_class;
 
-  gboolean (*start) (GstBaseVideoCodec *codec);
-  gboolean (*stop) (GstBaseVideoCodec *codec);
-  gboolean (*reset) (GstBaseVideoCodec *codec);
-  GstFlowReturn (*parse_data) (GstBaseVideoCodec *codec, gboolean at_eos);
-  int (*scan_for_sync) (GstAdapter *adapter, gboolean at_eos,
-      int offset, int n);
-  GstFlowReturn (*shape_output) (GstBaseVideoCodec *codec, GstVideoFrame *frame);
-  GstCaps *(*get_caps) (GstBaseVideoCodec *codec);
-
   /* FIXME before moving to base */
   void *padding[GST_PADDING_LARGE];
 };
@@ -177,17 +183,6 @@ GType gst_base_video_codec_get_type (void);
 
 GstVideoFrame * gst_base_video_codec_new_frame (GstBaseVideoCodec *base_video_codec);
 void gst_base_video_codec_free_frame (GstVideoFrame *frame);
-
-
-gboolean gst_base_video_rawvideo_convert (GstVideoState *state,
-    GstFormat src_format, gint64 src_value,
-    GstFormat * dest_format, gint64 *dest_value);
-gboolean gst_base_video_encoded_video_convert (GstVideoState *state,
-    GstFormat src_format, gint64 src_value,
-    GstFormat * dest_format, gint64 *dest_value);
-
-GstClockTime gst_video_state_get_timestamp (const GstVideoState *state,
-    GstSegment *segment, int frame_number);
 
 G_END_DECLS
 

@@ -99,8 +99,8 @@ gst_linsys_sdi_sink_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_linsys_sdi_sink_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_linsys_sdi_sink_sink_template);
 
   gst_element_class_set_details_simple (element_class, "SDI video sink",
       "Sink/Video", "Writes video from SDI transmit device",
@@ -202,6 +202,8 @@ gst_linsys_sdi_sink_dispose (GObject * object)
   linsyssdisink = GST_LINSYS_SDI_SINK (object);
 
   /* clean up as possible.  may be called multiple times */
+  g_free (linsyssdisink->device);
+  linsyssdisink->device = NULL;
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
 }
@@ -209,10 +211,7 @@ gst_linsys_sdi_sink_dispose (GObject * object)
 void
 gst_linsys_sdi_sink_finalize (GObject * object)
 {
-  GstLinsysSdiSink *linsyssdisink;
-
   g_return_if_fail (GST_IS_LINSYS_SDI_SINK (object));
-  linsyssdisink = GST_LINSYS_SDI_SINK (object);
 
   /* clean up object here */
 
@@ -332,7 +331,7 @@ sdi_mux (guint8 * data, GstBuffer * buffer)
   int j;
   int i;
   guint8 *dest;
-  int f, v, h;
+  int f, v;
   int line;
 
   for (j = 0; j < 525; j++) {
@@ -351,8 +350,6 @@ sdi_mux (guint8 * data, GstBuffer * buffer)
     } else {
       f = 0;
     }
-
-    h = 0;
 
     dest[0] = 0xff;
     dest[1] = 0;

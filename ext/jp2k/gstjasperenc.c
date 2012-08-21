@@ -65,11 +65,6 @@ static GstStaticPadTemplate gst_jasper_enc_src_template =
         "image/jp2")
     );
 
-static void gst_jasper_enc_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec);
-static void gst_jasper_enc_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec);
-
 static void gst_jasper_enc_reset (GstJasperEnc * enc);
 static GstStateChangeReturn gst_jasper_enc_change_state (GstElement * element,
     GstStateChange transition);
@@ -104,10 +99,10 @@ gst_jasper_enc_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_jasper_enc_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_jasper_enc_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_jasper_enc_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_jasper_enc_sink_template);
   gst_element_class_set_details_simple (element_class,
       "Jasper JPEG2000 image encoder", "Codec/Encoder/Image",
       "Encodes video to JPEG2000 using jasper",
@@ -118,17 +113,12 @@ gst_jasper_enc_base_init (gpointer g_class)
 static void
 gst_jasper_enc_class_init (GstJasperEncClass * klass)
 {
-  GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
 
-  gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
 
   GST_DEBUG_CATEGORY_INIT (gst_jasper_enc_debug, "jp2kenc", 0,
       "Jasper JPEG2000 encoder");
-
-  gobject_class->set_property = gst_jasper_enc_set_property;
-  gobject_class->get_property = gst_jasper_enc_get_property;
 
   /* FIXME add some encoder properties */
 
@@ -299,8 +289,6 @@ static gboolean
 gst_jasper_enc_sink_setcaps (GstPad * pad, GstCaps * caps)
 {
   GstJasperEnc *enc;
-  GstStructure *s;
-  const gchar *mimetype;
   GstVideoFormat format;
   gint width, height;
   gint fps_num, fps_den;
@@ -308,8 +296,6 @@ gst_jasper_enc_sink_setcaps (GstPad * pad, GstCaps * caps)
   gint i;
 
   enc = GST_JASPER_ENC (GST_PAD_PARENT (pad));
-  s = gst_caps_get_structure (caps, 0);
-  mimetype = gst_structure_get_name (s);
 
   /* get info from caps */
   if (!gst_video_format_parse_caps (caps, &format, &width, &height))
@@ -536,36 +522,6 @@ not_negotiated:
         ("format wasn't negotiated before chain function"));
     ret = GST_FLOW_NOT_NEGOTIATED;
     goto done;
-  }
-}
-
-static void
-gst_jasper_enc_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec)
-{
-  GstJasperEnc *filter;
-
-  filter = GST_JASPER_ENC (object);
-
-  switch (prop_id) {
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
-  }
-}
-
-static void
-gst_jasper_enc_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec)
-{
-  GstJasperEnc *filter;
-
-  filter = GST_JASPER_ENC (object);
-
-  switch (prop_id) {
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
   }
 }
 

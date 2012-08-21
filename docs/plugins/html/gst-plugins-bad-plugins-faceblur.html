@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>faceblur</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-faad.html" title="faad">
 <link rel="next" href="gst-plugins-bad-plugins-facedetect.html" title="facedetect">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -24,10 +24,6 @@
 <a href="#gst-plugins-bad-plugins-faceblur.synopsis" class="shortcut">Top</a>
                    | 
                   <a href="#gst-plugins-bad-plugins-faceblur.description" class="shortcut">Description</a>
-                   | 
-                  <a href="#gst-plugins-bad-plugins-faceblur.object-hierarchy" class="shortcut">Object Hierarchy</a>
-                   | 
-                  <a href="#gst-plugins-bad-plugins-faceblur.properties" class="shortcut">Properties</a>
 </td></tr>
 </table>
 <div class="refentry">
@@ -41,51 +37,14 @@
 </tr></table></div>
 <div class="refsynopsisdiv">
 <a name="gst-plugins-bad-plugins-faceblur.synopsis"></a><h2>Synopsis</h2>
-<a name="Gstfaceblur"></a><pre class="synopsis">struct              <a class="link" href="gst-plugins-bad-plugins-faceblur.html#Gstfaceblur-struct" title="struct Gstfaceblur">Gstfaceblur</a>;
-</pre>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-faceblur.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="synopsis">
-  <a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
-   +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
-         +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
-               +----Gstfaceblur
-</pre>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-faceblur.properties"></a><h2>Properties</h2>
-<pre class="synopsis">
-  "<a class="link" href="gst-plugins-bad-plugins-faceblur.html#Gstfaceblur--profile" title='The "profile" property'>profile</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write
-</pre>
+<pre class="synopsis"></pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-faceblur.description"></a><h2>Description</h2>
-<p>
-FIXME:Describe faceblur here.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp6900816"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch<span class="gtkdoc opt">-</span><span class="number">0.10</span> videotestsrc <span class="gtkdoc opt">!</span> decodebin <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> faceblur <span class="gtkdoc opt">!</span> ffmpegcolorspace <span class="gtkdoc opt">!</span> xvimagesink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp8925664"></a><h3>Element Information</h3>
+<a name="idp12796624"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -108,7 +67,7 @@ FIXME:Describe faceblur here.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp13285680"></a><h3>Element Pads</h3>
+<a name="idp6561248"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -158,25 +117,10 @@ FIXME:Describe faceblur here.
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-faceblur.details"></a><h2>Details</h2>
-<div class="refsect2">
-<a name="Gstfaceblur-struct"></a><h3>struct Gstfaceblur</h3>
-<pre class="programlisting">struct Gstfaceblur;</pre>
-<p>
-</p>
-</div>
-</div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-faceblur.property-details"></a><h2>Property Details</h2>
-<div class="refsect2">
-<a name="Gstfaceblur--profile"></a><h3>The <code class="literal">"profile"</code> property</h3>
-<pre class="programlisting">  "profile"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write</pre>
-<p>Location of Haar cascade file to use for face blurion.</p>
-<p>Default value: "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml"</p>
-</div>
 </div>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

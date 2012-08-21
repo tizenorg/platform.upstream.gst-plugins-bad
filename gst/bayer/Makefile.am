@@ -1,16 +1,26 @@
 plugin_LTLIBRARIES = libgstbayer.la
 
+ORC_SOURCE=gstbayerorc
+include $(top_srcdir)/common/orc.mak
+
+# orc-generated code creates warnings
+ERROR_CFLAGS=
+
 libgstbayer_la_SOURCES = \
 	gstbayer.c \
 	gstbayer2rgb.c \
 	gstrgb2bayer.c \
 	gstrgb2bayer.h
 libgstbayer_la_CFLAGS = $(GST_PLUGINS_BASE_CFLAGS) $(GST_BASE_CFLAGS) \
+    $(ORC_CFLAGS) \
     $(GST_CFLAGS)
 libgstbayer_la_LIBADD = $(GST_PLUGINS_BASE_LIBS) -lgstvideo-$(GST_MAJORMINOR) \
+    $(ORC_LIBS) \
     $(GST_BASE_LIBS)
 libgstbayer_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 libgstbayer_la_LIBTOOLFLAGS = --tag=disable-static
+nodist_libgstbayer_la_SOURCES = $(ORC_NODIST_SOURCES)
+
 
 Android.mk: Makefile.am $(BUILT_SOURCES)
 	androgenizer \
@@ -18,6 +28,7 @@ Android.mk: Makefile.am $(BUILT_SOURCES)
 	 -:TAGS eng debug \
          -:REL_TOP $(top_srcdir) -:ABS_TOP $(abs_top_srcdir) \
 	 -:SOURCES $(libgstbayer_la_SOURCES) \
+               $(nodist_libgstbayer_la_SOURCES) \
 	 -:CFLAGS $(DEFS) $(DEFAULT_INCLUDES) $(libgstbayer_la_CFLAGS) \
 	 -:LDFLAGS $(libgstbayer_la_LDFLAGS) \
 	           $(libgstbayer_la_LIBADD) \

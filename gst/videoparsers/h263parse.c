@@ -21,7 +21,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#  include "config.h"
+#include "config.h"
 #endif
 
 #include <gst/base/gstbitreader.h>
@@ -142,6 +142,8 @@ gst_h263_parse_get_params (H263Params * params, GstBuffer * buffer,
     /* Fill in width/height based on format */
     params->width = sizetable[params->format][0];
     params->height = sizetable[params->format][1];
+    GST_DEBUG (" Picture width x height: %d x %d",
+        params->width, params->height);
 
     /* Default PAR is 12/11 */
     params->parnum = 12;
@@ -267,6 +269,36 @@ gst_h263_parse_get_params (H263Params * params, GstBuffer * buffer,
       guint32 cpfmt = 0;
 
       /* 5.1.5 CPFMT : Custom Picture Format (23 bits) */
+#ifdef GST_H263PARSE_MODIFICATION /* check format when parsing CPFMT */
+      if (params->format == 6) { /* 110. custom source format */
+        GST_DEBUG (" Source Format in OPPTYPE: %d (custom source format)", params->format);
+        if (!gst_bit_reader_get_bits_uint32 (&br, &cpfmt, 23))
+          goto more;
+        if (!(cpfmt & 0x200)) {
+          GST_WARNING ("Corrupted CPFMT (0x%x)", cpfmt);
+          goto beach;
+        }
+        temp8 = cpfmt >> 19; /* aspect_ratio_info */
+        params->height = (cpfmt & 0x1ff) * 4; /* 9bit */
+        params->width = (((cpfmt >> 10) & 0x1ff) + 1) * 4; /* 9bit */
+        if (temp8 == 0xf) { /* aspect extended: 15 */
+          guint32 epar = 0;
+          /* 5.1.6 EPAR : Extended Pixel Aspect Ratio (16bits) */
+          if (!gst_bit_reader_get_bits_uint32 (&br, &epar, 16))
+            goto more;
+          params->parnum = epar >> 8;
+          params->pardenom = epar & 0xf;
+        } else {
+          params->parnum = partable[temp8][0];
+          params->pardenom = partable[temp8][1];
+        }
+      } else {
+        params->width = sizetable[params->format][0];
+        params->height = sizetable[params->format][1];
+      }
+      GST_DEBUG (" Picture width x height: %d x %d",
+          params->width, params->height);
+#else
       if (!gst_bit_reader_get_bits_uint32 (&br, &cpfmt, 23))
         goto more;
       if (!(cpfmt & 0x200)) {
@@ -288,6 +320,7 @@ gst_h263_parse_get_params (H263Params * params, GstBuffer * buffer,
         params->parnum = partable[temp8][0];
         params->pardenom = partable[temp8][1];
       }
+#endif
 
       if (params->custompcfpresent) {
         /* 5.1.7 CPCFC : Custom Picture Clock Frequency Code (8bits) */
@@ -453,7 +486,7 @@ beach:
 gint
 gst_h263_parse_get_profile (const H263Params * params)
 {
-  gboolean c, d, d1, d21, d22, e, f, f2, g, h, i, j, k, k0, k1, k2, l, m, n, o,
+  gboolean c, d, d1, d21, e, f, f2, g, h, i, j, k, k0, k1, l, m, n, o,
       p, q, r, s, t, u, v, w;
 
   /* FIXME: some parts of Annex C can be discovered, others can not */
@@ -462,7 +495,7 @@ gst_h263_parse_get_profile (const H263Params * params)
   /* d1: Annex D.1; d21: Annex D.2 with UUI=1; d22: Annex D.2 with UUI=01 */
   d1 = (d && params->uui == UUI_ABSENT);
   d21 = (d && params->uui == UUI_IS_1);
-  d22 = (d && params->uui == UUI_IS_01);
+  /* d22 = (d && params->uui == UUI_IS_01); */
   e = (params->features & H263_OPTION_SAC_MODE) != 0;
   /* f:Annex  F.2 or F.3 may be used; f2: only Annex F.2 is used (we have no
    * way of detecting this right now */
@@ -476,7 +509,7 @@ gst_h263_parse_get_profile (const H263Params * params)
   /* k0: Annex K without submodes; k1: Annex K with ASO; k2: Annex K with RS */
   k0 = (k && params->sss == 0x0);
   k1 = (k && params->sss == 0x2);
-  k2 = (k && params->sss == 0x1);
+  /* k2 = (k && params->sss == 0x1); */
   l = FALSE;
   m = (params->type == PICTURE_IMPROVED_PB);
   n = (params->features & H263_OPTION_RPS_MODE) != 0;

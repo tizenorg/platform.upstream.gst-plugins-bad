@@ -9,4 +9,3 @@ Requires: gstreamer-@GST_MAJORMINOR@ gstreamer-base-@GST_MAJORMINOR@
 Version: @VERSION@
 Libs: -L${libdir} -lgstphotography-@GST_MAJORMINOR@
 Cflags: -I${includedir}
-

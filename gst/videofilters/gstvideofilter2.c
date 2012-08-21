@@ -1,5 +1,5 @@
 /* GStreamer
- * Copyright (C) 2011 FIXME <fixme@example.com>
+ * Copyright (C) 2011 David Schleef <ds@schleef.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,15 +19,6 @@
 /**
  * SECTION:element-gstvideofilter2
  *
- * The videofilter2 element does FIXME stuff.
- *
- * <refsect2>
- * <title>Example launch line</title>
- * |[
- * gst-launch -v fakesrc ! videofilter2 ! FIXME ! fakesink
- * ]|
- * FIXME Describe what the pipeline does.
- * </refsect2>
  */
 
 #ifdef HAVE_CONFIG_H
@@ -88,17 +79,22 @@ gst_video_filter2_base_init (gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
   int i;
   GstCaps *caps = NULL;
+  GstPadTemplate *pad_template;
 
   caps = gst_caps_new_empty ();
   for (i = GST_VIDEO_FORMAT_I420; i <= GST_VIDEO_FORMAT_I420; i++) {
     gst_caps_append (caps, gst_video_format_new_template_caps (i));
   }
 
-  gst_element_class_add_pad_template (element_class,
+  pad_template =
       gst_pad_template_new ("src", GST_PAD_SRC, GST_PAD_ALWAYS,
-          gst_caps_ref (caps)));
-  gst_element_class_add_pad_template (element_class,
-      gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS, caps));
+      gst_caps_ref (caps));
+  gst_element_class_add_pad_template (element_class, pad_template);
+  gst_object_unref (pad_template);
+  pad_template =
+      gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS, caps);
+  gst_element_class_add_pad_template (element_class, pad_template);
+  gst_object_unref (pad_template);
 }
 
 static void
@@ -139,10 +135,7 @@ void
 gst_video_filter2_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstVideoFilter2 *videofilter2;
-
   g_return_if_fail (GST_IS_VIDEO_FILTER2 (object));
-  videofilter2 = GST_VIDEO_FILTER2 (object);
 
   switch (property_id) {
     default:
@@ -155,10 +148,7 @@ void
 gst_video_filter2_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstVideoFilter2 *videofilter2;
-
   g_return_if_fail (GST_IS_VIDEO_FILTER2 (object));
-  videofilter2 = GST_VIDEO_FILTER2 (object);
 
   switch (property_id) {
     default:
@@ -170,10 +160,7 @@ gst_video_filter2_get_property (GObject * object, guint property_id,
 void
 gst_video_filter2_dispose (GObject * object)
 {
-  GstVideoFilter2 *videofilter2;
-
   g_return_if_fail (GST_IS_VIDEO_FILTER2 (object));
-  videofilter2 = GST_VIDEO_FILTER2 (object);
 
   /* clean up as possible.  may be called multiple times */
 
@@ -183,10 +170,7 @@ gst_video_filter2_dispose (GObject * object)
 void
 gst_video_filter2_finalize (GObject * object)
 {
-  GstVideoFilter2 *videofilter2;
-
   g_return_if_fail (GST_IS_VIDEO_FILTER2 (object));
-  videofilter2 = GST_VIDEO_FILTER2 (object);
 
   /* clean up object here */
 

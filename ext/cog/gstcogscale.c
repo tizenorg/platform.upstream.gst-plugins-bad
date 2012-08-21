@@ -207,10 +207,10 @@ gst_cog_scale_base_init (gpointer g_class)
       "Filter/Effect/Video",
       "Resizes video", "Wim Taymans <wim.taymans@chello.be>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_cog_scale_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_cog_scale_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_cog_scale_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_cog_scale_sink_template);
 }
 
 static void
@@ -296,15 +296,12 @@ static GstCaps *
 gst_cog_scale_transform_caps (GstBaseTransform * trans,
     GstPadDirection direction, GstCaps * caps)
 {
-  GstCogScale *videoscale;
   GstCaps *ret;
   GstStructure *structure;
   const GValue *par;
 
   /* this function is always called with a simple caps */
   g_return_val_if_fail (GST_CAPS_IS_SIMPLE (caps), NULL);
-
-  videoscale = GST_COG_SCALE (trans);
 
   structure = gst_caps_get_structure (caps, 0);
 
@@ -371,13 +368,10 @@ static gboolean
 gst_cog_scale_get_unit_size (GstBaseTransform * trans, GstCaps * caps,
     guint * size)
 {
-  GstCogScale *videoscale;
   GstVideoFormat format;
   gint width, height;
 
   g_assert (size);
-
-  videoscale = GST_COG_SCALE (trans);
 
   if (!gst_video_format_parse_caps (caps, &format, &width, &height))
     return FALSE;

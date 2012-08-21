@@ -55,7 +55,7 @@ struct _GstSchroDec
 
   SchroDecoder *decoder;
 
-  GstBuffer *seq_header_buffer;
+  gboolean seq_header_buffer_seen;
 };
 
 struct _GstSchroDecClass
@@ -78,10 +78,6 @@ enum
 };
 
 static void gst_schro_dec_finalize (GObject * object);
-static void gst_schro_dec_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec);
-static void gst_schro_dec_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec);
 
 static gboolean gst_schro_dec_sink_query (GstPad * pad, GstQuery * query);
 
@@ -118,10 +114,10 @@ gst_schro_dec_base_init (gpointer g_class)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_schro_dec_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_schro_dec_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_schro_dec_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_schro_dec_sink_template);
 
   gst_element_class_set_details_simple (element_class, "Dirac Decoder",
       "Codec/Decoder/Video",
@@ -137,8 +133,6 @@ gst_schro_dec_class_init (GstSchroDecClass * klass)
   gobject_class = G_OBJECT_CLASS (klass);
   base_video_decoder_class = GST_BASE_VIDEO_DECODER_CLASS (klass);
 
-  gobject_class->set_property = gst_schro_dec_set_property;
-  gobject_class->get_property = gst_schro_dec_get_property;
   gobject_class->finalize = gst_schro_dec_finalize;
 
   base_video_decoder_class->start = GST_DEBUG_FUNCPTR (gst_schro_dec_start);
@@ -172,21 +166,16 @@ static gint64
 granulepos_to_frame (gint64 granulepos)
 {
   guint64 pt;
-  int dist_h;
-  int dist_l;
-  int dist;
-  int delay;
-  guint64 dt;
 
   if (granulepos == -1)
     return -1;
 
   pt = ((granulepos >> 22) + (granulepos & OGG_DIRAC_GRANULE_LOW_MASK)) >> 9;
-  dist_h = (granulepos >> 22) & 0xff;
-  dist_l = granulepos & 0xff;
-  dist = (dist_h << 8) | dist_l;
-  delay = (granulepos >> 9) & 0x1fff;
-  dt = pt - delay;
+  /* dist_h = (granulepos >> 22) & 0xff;
+   * dist_l = granulepos & 0xff;
+   * dist = (dist_h << 8) | dist_l;
+   * delay = (granulepos >> 9) & 0x1fff;
+   * dt = pt - delay; */
 
   return pt >> 1;
 }
@@ -309,38 +298,6 @@ gst_schro_dec_finalize (GObject * object)
 }
 
 static void
-gst_schro_dec_set_property (GObject * object, guint prop_id,
-    const GValue * value, GParamSpec * pspec)
-{
-  GstSchroDec *src;
-
-  g_return_if_fail (GST_IS_SCHRO_DEC (object));
-  src = GST_SCHRO_DEC (object);
-
-  GST_DEBUG ("gst_schro_dec_set_property");
-  switch (prop_id) {
-    default:
-      break;
-  }
-}
-
-static void
-gst_schro_dec_get_property (GObject * object, guint prop_id, GValue * value,
-    GParamSpec * pspec)
-{
-  GstSchroDec *src;
-
-  g_return_if_fail (GST_IS_SCHRO_DEC (object));
-  src = GST_SCHRO_DEC (object);
-
-  switch (prop_id) {
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
-  }
-}
-
-static void
 parse_sequence_header (GstSchroDec * schro_dec, guint8 * data, int size)
 {
   SchroVideoFormat video_format;
@@ -351,8 +308,7 @@ parse_sequence_header (GstSchroDec * schro_dec, guint8 * data, int size)
 
   state = gst_base_video_decoder_get_state (GST_BASE_VIDEO_DECODER (schro_dec));
 
-  schro_dec->seq_header_buffer = gst_buffer_new_and_alloc (size);
-  memcpy (GST_BUFFER_DATA (schro_dec->seq_header_buffer), data, size);
+  schro_dec->seq_header_buffer_seen = TRUE;
 
   ret = schro_parse_decode_sequence_header (data + 13, size - 13,
       &video_format);
@@ -382,9 +338,7 @@ parse_sequence_header (GstSchroDec * schro_dec, guint8 * data, int size)
     state->par_d = video_format.aspect_ratio_denominator;
     GST_DEBUG ("Pixel aspect ratio is %d/%d", state->par_n, state->par_d);
 
-    /* FIXME state points to what is actually in the decoder */
-    //gst_base_video_decoder_set_state (GST_BASE_VIDEO_DECODER (schro_dec),
-    //    state);
+    gst_base_video_decoder_set_src_caps (GST_BASE_VIDEO_DECODER (schro_dec));
   } else {
     GST_WARNING ("Failed to get frame rate from sequence header");
   }
@@ -507,7 +461,7 @@ gst_schro_dec_parse_data (GstBaseVideoDecoder * base_video_decoder,
     g_free (data);
   }
 
-  if (schro_decoder->seq_header_buffer == NULL) {
+  if (!schro_decoder->seq_header_buffer_seen) {
     gst_adapter_flush (base_video_decoder->input_adapter, next);
     return GST_FLOW_OK;
   }
@@ -617,6 +571,8 @@ gst_schro_dec_process (GstSchroDec * schro_dec, gboolean eos)
 
           schro_frame_unref (schro_frame);
         }
+        if (tag)
+          schro_tag_free (tag);
         if (!eos) {
           go = FALSE;
         }
@@ -644,7 +600,6 @@ gst_schro_dec_handle_frame (GstBaseVideoDecoder * base_video_decoder,
     GstVideoFrame * frame)
 {
   GstSchroDec *schro_dec;
-  int schro_ret;
   SchroBuffer *input_buffer;
 
   schro_dec = GST_SCHRO_DEC (base_video_decoder);
@@ -656,7 +611,7 @@ gst_schro_dec_handle_frame (GstBaseVideoDecoder * base_video_decoder,
 
   input_buffer->tag = schro_tag_new (frame, NULL);
 
-  schro_ret = schro_decoder_autoparse_push (schro_dec->decoder, input_buffer);
+  schro_decoder_autoparse_push (schro_dec->decoder, input_buffer);
 
   return gst_schro_dec_process (schro_dec, FALSE);
 }

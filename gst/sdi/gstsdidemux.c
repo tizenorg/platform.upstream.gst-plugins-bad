@@ -105,10 +105,10 @@ gst_sdi_demux_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_sdi_demux_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_sdi_demux_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_sdi_demux_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_sdi_demux_sink_template);
 
   gst_element_class_set_details_simple (element_class,
       "SDI Demuxer",
@@ -160,10 +160,7 @@ void
 gst_sdi_demux_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstSdiDemux *sdidemux;
-
   g_return_if_fail (GST_IS_SDI_DEMUX (object));
-  sdidemux = GST_SDI_DEMUX (object);
 
   switch (property_id) {
     default:
@@ -176,10 +173,7 @@ void
 gst_sdi_demux_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstSdiDemux *sdidemux;
-
   g_return_if_fail (GST_IS_SDI_DEMUX (object));
-  sdidemux = GST_SDI_DEMUX (object);
 
   switch (property_id) {
     default:
@@ -191,10 +185,7 @@ gst_sdi_demux_get_property (GObject * object, guint property_id,
 void
 gst_sdi_demux_dispose (GObject * object)
 {
-  GstSdiDemux *sdidemux;
-
   g_return_if_fail (GST_IS_SDI_DEMUX (object));
-  sdidemux = GST_SDI_DEMUX (object);
 
   /* clean up as possible.  may be called multiple times */
 
@@ -204,10 +195,7 @@ gst_sdi_demux_dispose (GObject * object)
 void
 gst_sdi_demux_finalize (GObject * object)
 {
-  GstSdiDemux *sdidemux;
-
   g_return_if_fail (GST_IS_SDI_DEMUX (object));
-  sdidemux = GST_SDI_DEMUX (object);
 
   /* clean up object here */
 
@@ -308,7 +296,6 @@ copy_line (GstSdiDemux * sdidemux, guint8 * line)
   if (sdidemux->line == format->lines) {
     ret = gst_pad_push (sdidemux->srcpad, sdidemux->output_buffer);
     gst_sdi_demux_get_output_buffer (sdidemux);
-    output_data = GST_BUFFER_DATA (sdidemux->output_buffer);
     sdidemux->line = 0;
   }
 
@@ -330,7 +317,6 @@ gst_sdi_demux_chain (GstPad * pad, GstBuffer * buffer)
   int offset = 0;
   guint8 *data = GST_BUFFER_DATA (buffer);
   int size = GST_BUFFER_SIZE (buffer);
-  guint8 *output_data;
   GstFlowReturn ret = GST_FLOW_OK;
   GstSdiFormat *format;
 
@@ -378,8 +364,6 @@ gst_sdi_demux_chain (GstPad * pad, GstBuffer * buffer)
   if (sdidemux->output_buffer == NULL) {
     gst_sdi_demux_get_output_buffer (sdidemux);
   }
-  output_data = GST_BUFFER_DATA (sdidemux->output_buffer);
-
 #if 0
   if (sdidemux->offset) {
     int n;
@@ -500,7 +484,7 @@ out:
 static gboolean
 gst_sdi_demux_sink_event (GstPad * pad, GstEvent * event)
 {
-  gboolean res;
+  gboolean res = TRUE;
   GstSdiDemux *sdidemux;
 
   sdidemux = GST_SDI_DEMUX (gst_pad_get_parent (pad));
@@ -526,7 +510,7 @@ gst_sdi_demux_sink_event (GstPad * pad, GstEvent * event)
   }
 
   gst_object_unref (sdidemux);
-  return TRUE;
+  return res;
 }
 
 static gboolean
@@ -549,5 +533,5 @@ gst_sdi_demux_src_event (GstPad * pad, GstEvent * event)
   }
 
   gst_object_unref (sdidemux);
-  return TRUE;
+  return res;
 }

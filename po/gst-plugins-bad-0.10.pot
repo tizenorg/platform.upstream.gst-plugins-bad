@@ -5,9 +5,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: gst-plugins-bad 0.10.22\n"
+"Project-Id-Version: gst-plugins-bad 0.10.23\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2011-05-10 10:28+0100\n"
+"POT-Creation-Date: 2012-02-21 02:01+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -39,11 +39,11 @@ msgstr ""
 msgid "Could not read DVD."
 msgstr ""
 
-#: ext/sndfile/gstsfsink.c:277 ext/sndfile/gstsfsrc.c:341
+#: ext/sndfile/gstsfsink.c:277 ext/sndfile/gstsfsrc.c:346
 msgid "No file name specified for writing."
 msgstr ""
 
-#: ext/sndfile/gstsfsink.c:290 ext/sndfile/gstsfsrc.c:347
+#: ext/sndfile/gstsfsink.c:290 ext/sndfile/gstsfsrc.c:352
 #, c-format
 msgid "Could not open file \"%s\" for writing."
 msgstr ""
@@ -57,26 +57,26 @@ msgstr ""
 msgid "Could not write to file \"%s\"."
 msgstr ""
 
-#: gst/aiff/aiffparse.c:1276
+#: gst/aiff/aiffparse.c:1319
 msgid "Internal data flow error."
 msgstr ""
 
-#: sys/dvb/gstdvbsrc.c:728 sys/dvb/gstdvbsrc.c:821
+#: sys/dvb/gstdvbsrc.c:741 sys/dvb/gstdvbsrc.c:834
 #, c-format
 msgid "Device \"%s\" does not exist."
 msgstr ""
 
-#: sys/dvb/gstdvbsrc.c:732
+#: sys/dvb/gstdvbsrc.c:745
 #, c-format
 msgid "Could not open frontend device \"%s\"."
 msgstr ""
 
-#: sys/dvb/gstdvbsrc.c:744
+#: sys/dvb/gstdvbsrc.c:757
 #, c-format
 msgid "Could not get settings from frontend device \"%s\"."
 msgstr ""
 
-#: sys/dvb/gstdvbsrc.c:825
+#: sys/dvb/gstdvbsrc.c:838
 #, c-format
 msgid "Could not open file \"%s\" for reading."
 msgstr ""

@@ -139,10 +139,10 @@ gst_jpeg_parse_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_jpeg_parse_src_pad_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_jpeg_parse_sink_pad_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_jpeg_parse_src_pad_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_jpeg_parse_sink_pad_template);
   gst_element_class_set_details_simple (element_class,
       "JPEG stream parser",
       "Video/Parser",
@@ -438,8 +438,8 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstByteReader * reader)
   guint8 numcomps = 0;          /* Number of components in image
                                    (1 for gray, 3 for YUV, etc.) */
   guint8 precision;             /* precision (in bits) for the samples */
-  guint8 compId[3];             /* unique value identifying each component */
-  guint8 qtId[3];               /* quantization table ID to use for this comp */
+  guint8 compId[3] G_GNUC_UNUSED;       /* unique value identifying each component */
+  guint8 qtId[3] G_GNUC_UNUSED; /* quantization table ID to use for this comp */
   guint8 blockWidth[3];         /* Array[numComponents] giving the number of
                                    blocks (horiz) in this component */
   guint8 blockHeight[3];        /* Same for the vertical part of this component */
@@ -464,7 +464,7 @@ gst_jpeg_parse_sof (GstJpegParse * parse, GstByteReader * reader)
   if (!gst_byte_reader_get_uint8 (reader, &numcomps))
     return FALSE;
 
-  if (numcomps > 3)
+  if (numcomps > 3)             /* FIXME */
     return FALSE;
 
   /* Get decimation and quantization table id for each component */

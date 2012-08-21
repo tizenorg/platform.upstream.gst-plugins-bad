@@ -22,6 +22,12 @@ endif
 # CDROM_DIR=
 # endif
 
+if USE_DIRECT3D
+D3DVIDEOSINK_DIR=d3dvideosink
+else
+D3DVIDEOSINK_DIR=
+endif
+
 if USE_DECKLINK
 DECKLINK_DIR=decklink
 else
@@ -95,15 +101,28 @@ else
 VDPAU_DIR=
 endif
 
+
 if USE_SHM
 SHM_DIR=shm
 else
 SHM_DIR=
 endif
 
-SUBDIRS = $(ACM_DIR) $(APPLE_MEDIA_DIR) $(DECKLINK_DIR) $(DIRECTDRAW_DIR) $(DIRECTSOUND_DIR) $(DVB_DIR) $(FBDEV_DIR) $(LINSYS_DIR) $(OSX_VIDEO_DIR) $(QT_DIR) $(SHM_DIR) $(VCD_DIR) $(VDPAU_DIR) $(WININET_DIR)
+if USE_AVC
+AVC_DIR=avc
+else
+AVC_DIR=
+endif
 
-DIST_SUBDIRS = acmenc acmmp3dec applemedia decklink directdraw directsound dvb linsys fbdev dshowdecwrapper dshowsrcwrapper dshowvideosink \
-		osxvideo qtwrapper shm vcd vdpau wasapi wininet winks winscreencap
+if USE_PVR
+PVR_DIR=pvr2d
+else
+PVR_DIR=
+endif
+
+SUBDIRS = $(ACM_DIR) $(APPLE_MEDIA_DIR) $(AVC_DIR) $(D3DVIDEOSINK_DIR) $(DECKLINK_DIR) $(DIRECTDRAW_DIR) $(DIRECTSOUND_DIR) $(DVB_DIR) $(FBDEV_DIR) $(LINSYS_DIR) $(OSX_VIDEO_DIR) $(QT_DIR) $(SHM_DIR) $(VCD_DIR) $(VDPAU_DIR) $(WININET_DIR) $(PVR_DIR)
+
+DIST_SUBDIRS = acmenc acmmp3dec applemedia avc d3dvideosink decklink directdraw directsound dvb linsys fbdev dshowdecwrapper dshowsrcwrapper dshowvideosink \
+		osxvideo qtwrapper shm vcd vdpau wasapi wininet winks winscreencap pvr2d
 
 include $(top_srcdir)/common/parallel-subdirs.mak

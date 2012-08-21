@@ -91,7 +91,8 @@ static GstStaticPadTemplate gst_chroma_hold_sink_template =
 } G_STMT_END
 
 #define GST_CHROMA_HOLD_UNLOCK(self) G_STMT_START { \
-  GST_LOG_OBJECT (self, "Unlocking chromahold from thread %p", g_thread_self ()); \
+  GST_LOG_OBJECT (self, "Unlocking chromahold from thread %p", \
+      g_thread_self ()); \
   g_static_mutex_unlock (&self->lock); \
 } G_STMT_END
 
@@ -127,10 +128,10 @@ gst_chroma_hold_base_init (gpointer g_class)
       "Removes all color information except for one color",
       "Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_chroma_hold_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_chroma_hold_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_chroma_hold_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_chroma_hold_src_template);
 
   GST_DEBUG_CATEGORY_INIT (gst_chroma_hold_debug, "chromahold", 0,
       "chromahold - Removes all color information except for one color");

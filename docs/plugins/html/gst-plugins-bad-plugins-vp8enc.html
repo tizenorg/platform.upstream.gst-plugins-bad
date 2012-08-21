@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>vp8enc</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-vp8dec.html" title="vp8dec">
-<link rel="next" href="ch02.html" title="gst-plugins-bad Plugins">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<link rel="next" href="gst-plugins-bad-plugins-wavescope.html" title="wavescope">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -18,7 +18,7 @@
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
 <th width="100%" align="center">GStreamer Bad Plugins 0.10 Plugins Reference Manual</th>
-<td><a accesskey="n" href="ch02.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
+<td><a accesskey="n" href="gst-plugins-bad-plugins-wavescope.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
 </tr>
 <tr><td colspan="5" class="shortcuts">
 <a href="#gst-plugins-bad-plugins-vp8enc.synopsis" class="shortcut">Top</a>
@@ -77,47 +77,26 @@ GstVP8Enc implements
   "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--multipass-cache-file" title='The "multipass-cache-file" property'>multipass-cache-file</a>"     <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write
   "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--multipass-mode" title='The "multipass-mode" property'>multipass-mode</a>"           <span class="type">GstVP8EncMultipassMode</span>  : Read / Write
   "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--auto-alt-ref-frames" title='The "auto-alt-ref-frames" property'>auto-alt-ref-frames</a>"      <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--max-quantizer" title='The "max-quantizer" property'>max-quantizer</a>"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--min-quantizer" title='The "min-quantizer" property'>min-quantizer</a>"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--drop-frame" title='The "drop-frame" property'>drop-frame</a>"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--lag-in-frames" title='The "lag-in-frames" property'>lag-in-frames</a>"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--maxsection-pct" title='The "maxsection-pct" property'>maxsection-pct</a>"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--minsection-pct" title='The "minsection-pct" property'>minsection-pct</a>"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--noise-sensitivity" title='The "noise-sensitivity" property'>noise-sensitivity</a>"        <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--resize-allowed" title='The "resize-allowed" property'>resize-allowed</a>"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--sharpness" title='The "sharpness" property'>sharpness</a>"                <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--static-threshold" title='The "static-threshold" property'>static-threshold</a>"         <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--token-parts" title='The "token-parts" property'>token-parts</a>"              <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-vp8enc.html#GstVP8Enc--tune" title='The "tune" property'>tune</a>"                     <span class="type">GstVP8EncTune</span>         : Read / Write
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-vp8enc.description"></a><h2>Description</h2>
-<p>
-This element encodes raw video into a VP8 stream.
-<a class="ulink" href="http://www.webmproject.org" target="_top">VP8</a> is a royalty-free
-video codec maintained by <a class="ulink" href="http://www.google.com/" target="_top">Google
-</a>. It's the successor of On2 VP3, which was the base of the
-Theora video codec.
-</p>
-<p>
-To control the quality of the encoding, the <span class="type">"bitrate"</span> and
-<span class="type">"quality"</span> properties can be used. These two properties are
-mutualy exclusive. Setting the bitrate property will produce a constant
-bitrate (CBR) stream while setting the quality property will produce a
-variable bitrate (VBR) stream.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp19679664"></a><h3>Example pipeline</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch <span class="gtkdoc opt">-</span>v videotestsrc num<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">1000</span> <span class="gtkdoc opt">!</span> vp8enc <span class="gtkdoc opt">!</span> webmmux <span class="gtkdoc opt">!</span> filesink location<span class="gtkdoc opt">=</span>videotestsrc<span class="gtkdoc opt">.</span>webm</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- This example pipeline will encode a test video source to VP8 muxed in an
-WebM container.
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp19682496"></a><h3>Element Information</h3>
+<a name="idp24487584"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -140,7 +119,7 @@ WebM container.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp19689952"></a><h3>Element Pads</h3>
+<a name="idp24495040"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -240,7 +219,7 @@ WebM container.
 <div class="refsect2">
 <a name="GstVP8Enc--quality"></a><h3>The <code class="literal">"quality"</code> property</h3>
 <pre class="programlisting">  "quality"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a>               : Read / Write</pre>
-<p>Quality.</p>
+<p>Quality. This parameter sets a constant quantizer.</p>
 <p>Allowed values: [0,10]</p>
 <p>Default value: 5</p>
 </div>
@@ -249,7 +228,7 @@ WebM container.
 <a name="GstVP8Enc--speed"></a><h3>The <code class="literal">"speed"</code> property</h3>
 <pre class="programlisting">  "speed"                    <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
 <p>Speed.</p>
-<p>Allowed values: [0,2]</p>
+<p>Allowed values: [0,7]</p>
 <p>Default value: 0</p>
 </div>
 <hr>
@@ -265,7 +244,7 @@ WebM container.
 <a name="GstVP8Enc--multipass-cache-file"></a><h3>The <code class="literal">"multipass-cache-file"</code> property</h3>
 <pre class="programlisting">  "multipass-cache-file"     <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write</pre>
 <p>Multipass cache file.</p>
-<p>Default value: NULL</p>
+<p>Default value: "multipass.cache"</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -281,14 +260,104 @@ WebM container.
 <p>Automatically create alternative reference frames.</p>
 <p>Default value: FALSE</p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--max-quantizer"></a><h3>The <code class="literal">"max-quantizer"</code> property</h3>
+<pre class="programlisting">  "max-quantizer"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Maximum (worst) quantizer.</p>
+<p>Allowed values: [0,63]</p>
+<p>Default value: 63</p>
 </div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-vp8enc.see-also"></a><h2>See Also</h2>
-vp8dec, webmmux, oggmux
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--min-quantizer"></a><h3>The <code class="literal">"min-quantizer"</code> property</h3>
+<pre class="programlisting">  "min-quantizer"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Minimum (best) quantizer.</p>
+<p>Allowed values: [0,63]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--drop-frame"></a><h3>The <code class="literal">"drop-frame"</code> property</h3>
+<pre class="programlisting">  "drop-frame"               <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Drop Frame.</p>
+<p>Allowed values: [0,100]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--lag-in-frames"></a><h3>The <code class="literal">"lag-in-frames"</code> property</h3>
+<pre class="programlisting">  "lag-in-frames"            <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write</pre>
+<p>If set, this value allows the encoder to consume a number of input frames before producing output frames.</p>
+<p>Allowed values: &lt;= 64</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--maxsection-pct"></a><h3>The <code class="literal">"maxsection-pct"</code> property</h3>
+<pre class="programlisting">  "maxsection-pct"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write</pre>
+<p>The numbers represent a percentage of the average allocation per section (frame).</p>
+<p>Allowed values: [200,800]</p>
+<p>Default value: 800</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--minsection-pct"></a><h3>The <code class="literal">"minsection-pct"</code> property</h3>
+<pre class="programlisting">  "minsection-pct"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write</pre>
+<p>The numbers represent a percentage of the average allocation per section (frame).</p>
+<p>Allowed values: &lt;= 20</p>
+<p>Default value: 5</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--noise-sensitivity"></a><h3>The <code class="literal">"noise-sensitivity"</code> property</h3>
+<pre class="programlisting">  "noise-sensitivity"        <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Noise Sensitivity.</p>
+<p>Allowed values: [0,6]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--resize-allowed"></a><h3>The <code class="literal">"resize-allowed"</code> property</h3>
+<pre class="programlisting">  "resize-allowed"           <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write</pre>
+<p>Resize Allowed.</p>
+<p>Default value: TRUE</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--sharpness"></a><h3>The <code class="literal">"sharpness"</code> property</h3>
+<pre class="programlisting">  "sharpness"                <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Sharpness.</p>
+<p>Allowed values: [0,7]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--static-threshold"></a><h3>The <code class="literal">"static-threshold"</code> property</h3>
+<pre class="programlisting">  "static-threshold"         <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Static Threshold.</p>
+<p>Allowed values: [0,1000]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--token-parts"></a><h3>The <code class="literal">"token-parts"</code> property</h3>
+<pre class="programlisting">  "token-parts"              <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
+<p>Token Parts.</p>
+<p>Allowed values: [0,3]</p>
+<p>Default value: 0</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstVP8Enc--tune"></a><h3>The <code class="literal">"tune"</code> property</h3>
+<pre class="programlisting">  "tune"                     <span class="type">GstVP8EncTune</span>         : Read / Write</pre>
+<p>Tune.</p>
+<p>Default value: Tune for PSNR</p>
+</div>
 </div>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

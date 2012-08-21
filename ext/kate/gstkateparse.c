@@ -103,10 +103,10 @@ gst_kate_parse_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_kate_parse_src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_kate_parse_sink_factory));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_kate_parse_src_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_kate_parse_sink_factory);
   gst_element_class_set_details_simple (element_class, "Kate stream parser",
       "Codec/Parser/Subtitle",
       "parse raw kate streams",
@@ -189,7 +189,8 @@ gst_kate_parse_push_headers (GstKateParse * parse)
         GST_BUFFER_DATA (outbuf));
     ret = kate_decode_headerin (&parse->ki, &parse->kc, &packet);
     if (G_UNLIKELY (ret < 0)) {
-      GST_WARNING_OBJECT (parse, "kate_decode_headerin returned %d", ret);
+      GST_WARNING_OBJECT (parse, "Failed to decode header: %s",
+          gst_kate_util_get_error_message (ret));
     }
     /* takes ownership of outbuf, which was previously in parse->streamheader */
     outbuf_list = g_list_append (outbuf_list, outbuf);

@@ -149,10 +149,10 @@ gst_modplug_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&modplug_sink_template_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&modplug_src_template_factory));
+  gst_element_class_add_static_pad_template (element_class,
+      &modplug_sink_template_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &modplug_src_template_factory);
 
   gst_element_class_set_details_simple (element_class, "ModPlug",
       "Codec/Decoder/Audio", "Module decoder based on modplug engine",
@@ -370,15 +370,19 @@ gst_modplug_src_event (GstPad * pad, GstEvent * event)
       GstSeekType cur_type, stop_type;
       gboolean flush;
       gint64 cur, stop;
+/* FIXME timestamp is set but not used */
+#if 0
       guint64 timestamp;
+#endif
 
       if (modplug->frequency == 0) {
         GST_DEBUG_OBJECT (modplug, "no song loaded yet");
         break;
       }
-
+#if 0
       timestamp = gst_util_uint64_scale_int (modplug->offset, GST_SECOND,
           modplug->frequency);
+#endif
 
       gst_event_parse_seek (event, &rate, &format, &flags,
           &cur_type, &cur, &stop_type, &stop);
@@ -461,10 +465,10 @@ gst_modplug_fixate (GstPad * pad, GstCaps * caps)
   GstStructure *structure;
 
   structure = gst_caps_get_structure (caps, 0);
-  if (gst_structure_fixate_field_nearest_int (structure, "rate", 44100))
-    return;
-  if (gst_structure_fixate_field_nearest_int (structure, "channels", 2))
-    return;
+  if (!gst_structure_fixate_field_nearest_int (structure, "rate", 44100))
+    GST_WARNING_OBJECT (pad, "Failed to fixate rate to 44100");
+  if (!gst_structure_fixate_field_nearest_int (structure, "channels", 2))
+    GST_WARNING_OBJECT (pad, "Failed to fixate number of channels to stereo");
 }
 
 static gboolean
@@ -486,13 +490,15 @@ gst_modplug_load_song (GstModPlug * modplug)
         gst_caps_copy_nth (gst_pad_get_pad_template_caps (modplug->srcpad), 0);
   }
   gst_pad_fixate_caps (modplug->srcpad, newcaps);
-  gst_pad_set_caps (modplug->srcpad, newcaps);
 
   /* set up modplug to output the negotiated format */
   structure = gst_caps_get_structure (newcaps, 0);
   gst_structure_get_int (structure, "depth", &modplug->bits);
   gst_structure_get_int (structure, "channels", &modplug->channel);
   gst_structure_get_int (structure, "rate", &modplug->frequency);
+
+  gst_pad_set_caps (modplug->srcpad, newcaps);
+  gst_caps_unref (newcaps);
 
   modplug->read_samples = 1152;
   modplug->read_bytes =

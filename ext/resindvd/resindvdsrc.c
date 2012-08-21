@@ -193,8 +193,7 @@ rsn_dvdsrc_base_init (gpointer gclass)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
   gst_element_class_set_details_simple (element_class, "Resin DVD Src",
       "Source/DVD", "DVD source element", "Jan Schmidt <thaytan@noraisin.net>");
 }
@@ -269,6 +268,7 @@ rsn_dvdsrc_finalize (GObject * object)
   g_mutex_free (src->dvd_lock);
   g_mutex_free (src->branch_lock);
   g_cond_free (src->still_cond);
+  g_free (src->device);
 
   gst_buffer_replace (&src->alloc_buf, NULL);
   gst_buffer_replace (&src->next_buf, NULL);
@@ -1119,7 +1119,7 @@ rsn_dvdsrc_step (resinDvdSrc * src, gboolean have_dvd_lock)
       break;
   }
 
-  if (src->highlight_event && have_dvd_lock) {
+  if (src->highlight_event && have_dvd_lock && src->in_playing) {
     GstEvent *hl_event = src->highlight_event;
 
     src->highlight_event = NULL;
@@ -1410,8 +1410,12 @@ rsn_dvdsrc_create (GstBaseSrc * bsrc, guint64 offset,
     }
   }
 
-  highlight_event = src->highlight_event;
-  src->highlight_event = NULL;
+  if (src->in_playing) {
+    highlight_event = src->highlight_event;
+    src->highlight_event = NULL;
+  } else {
+    highlight_event = NULL;
+  }
 
   /* Schedule a clock callback for the any pending nav packet */
   rsn_dvdsrc_check_nav_blocks (src);
@@ -2759,7 +2763,12 @@ rsn_dvdsrc_do_seek (GstBaseSrc * bsrc, GstSegment * segment)
         if (dvdnav_current_title_info (src->dvdnav, &title, &x) ==
             DVDNAV_STATUS_OK) {
           if (segment->start + 1 == x) {
-            dvdnav_prev_pg_search (src->dvdnav);
+            /* if already on the first part, don't try to get before it */
+            if (segment->start == 0) {
+              dvdnav_part_play (src->dvdnav, title, 1);
+            } else {
+              dvdnav_prev_pg_search (src->dvdnav);
+            }
             ret = TRUE;
             src->discont = TRUE;
           } else if (segment->start == x + 1) {

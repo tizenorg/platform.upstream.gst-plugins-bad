@@ -124,14 +124,14 @@ gst_nuv_demux_base_init (gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&audio_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &audio_src_template);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &video_src_template);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &sink_template);
   gst_element_class_set_details_simple (element_class, "Nuv demuxer",
       "Codec/Demuxer",
       "Demultiplex a MythTV NuppleVideo .nuv file into audio and video",
@@ -488,7 +488,7 @@ gst_nuv_demux_stream_data (GstNuvDemux * nuv)
   switch (h->i_type) {
     case 'V':
     {
-      if (h->i_length == 0)
+      if (!buf)
         break;
 
       GST_BUFFER_OFFSET (buf) = nuv->video_offset;
@@ -499,7 +499,7 @@ gst_nuv_demux_stream_data (GstNuvDemux * nuv)
     }
     case 'A':
     {
-      if (h->i_length == 0)
+      if (!buf)
         break;
 
       GST_BUFFER_OFFSET (buf) = nuv->audio_offset;
@@ -637,7 +637,7 @@ gst_nuv_demux_stream_extend_header (GstNuvDemux * nuv)
     nuv->state = GST_NUV_DEMUX_INVALID_DATA;
     GST_ELEMENT_ERROR (nuv, STREAM, DEMUX, (NULL),
         ("Unsupported extended header (0x%02x)", buf->data[0]));
-    g_object_unref (buf);
+    gst_buffer_unref (buf);
     return GST_FLOW_ERROR;
   }
   return res;

@@ -222,12 +222,11 @@ mpegts_parse_base_init (gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&program_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &sink_template);
+  gst_element_class_add_static_pad_template (element_class, &src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &program_template);
 
   gst_element_class_set_details_simple (element_class,
       "MPEG transport stream parser", "Codec/Parser",
@@ -874,6 +873,8 @@ mpegts_parse_is_psi (MpegTSParse * parse, MpegTSPacketizerPacket * packet)
 {
   gboolean retval = FALSE;
   guint8 table_id;
+  guint8 *data;
+  guint8 pointer;
   int i;
   static const guint8 si_tables[] =
       { 0x00, 0x01, 0x02, 0x03, 0x40, 0x41, 0x42, 0x46, 0x4A, 0x4E, 0x4F, 0x50,
@@ -891,7 +892,18 @@ mpegts_parse_is_psi (MpegTSParse * parse, MpegTSPacketizerPacket * packet)
     return FALSE;
   if (!retval) {
     if (packet->payload_unit_start_indicator) {
-      table_id = *(packet->data);
+      data = packet->data;
+      pointer = *data++;
+      data += pointer;
+      /* 'pointer' value may be invalid on malformed packet
+       * so we need to avoid out of range
+       */
+      if (!(data < packet->data_end)) {
+        GST_WARNING_OBJECT (parse,
+            "Wrong offset when retrieving table id: 0x%x", pointer);
+        return FALSE;
+      }
+      table_id = *data;
       i = 0;
       while (si_tables[i] != TABLE_ID_UNSET) {
         if (G_UNLIKELY (si_tables[i] == table_id)) {
@@ -1262,6 +1274,8 @@ mpegts_parse_get_tags_from_sdt (MpegTSParse * parse, GstStructure * sdt_info)
      * which looks like service-%d */
     sid_str = gst_structure_get_name (service);
     tmp = g_strstr_len (sid_str, -1, "-");
+    if (!tmp)
+      continue;
     program_number = atoi (++tmp);
 
     program = mpegts_parse_get_program (parse, program_number);

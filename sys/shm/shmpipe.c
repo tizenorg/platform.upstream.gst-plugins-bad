@@ -78,7 +78,6 @@ enum
 };
 
 typedef struct _ShmArea ShmArea;
-typedef struct _ShmBuffer ShmBuffer;
 
 struct _ShmArea
 {
@@ -112,6 +111,8 @@ struct _ShmBuffer
 
   int num_clients;
   int clients[0];
+
+  uint64_t tag;
 };
 
 
@@ -262,7 +263,7 @@ static ShmArea *
 sp_open_shm (char *path, int id, mode_t perms, size_t size)
 {
   ShmArea *area = spalloc_new (ShmArea);
-  char tmppath[PATH_MAX];
+  char tmppath[32];
   int flags;
   int prot;
   int i = 0;
@@ -285,7 +286,7 @@ sp_open_shm (char *path, int id, mode_t perms, size_t size)
     area->shm_fd = shm_open (path, flags, perms);
   } else {
     do {
-      snprintf (tmppath, PATH_MAX, "/shmpipe.5%d.%5d", getpid (), i++);
+      snprintf (tmppath, sizeof (tmppath), "/shmpipe.%5d.%5d", getpid (), i++);
       area->shm_fd = shm_open (tmppath, flags, perms);
     } while (area->shm_fd < 0 && errno == EEXIST);
   }
@@ -542,7 +543,7 @@ sp_writer_free_block (ShmBlock * block)
 /* Returns the number of client this has successfully been sent to */
 
 int
-sp_writer_send_buf (ShmPipe * self, char *buf, size_t size)
+sp_writer_send_buf (ShmPipe * self, char *buf, size_t size, uint64_t tag)
 {
   ShmArea *area = NULL;
   unsigned long offset = 0;
@@ -577,6 +578,7 @@ sp_writer_send_buf (ShmPipe * self, char *buf, size_t size)
   sb->size = size;
   sb->num_clients = self->num_clients;
   sb->ablock = ablock;
+  sb->tag = tag;
 
   for (client = self->clients; client; client = client->next) {
     struct CommandBuffer cb = { 0 };
@@ -621,7 +623,7 @@ long int
 sp_client_recv (ShmPipe * self, char **buf)
 {
   char *area_name = NULL;
-  ShmArea *newarea, *oldarea;
+  ShmArea *newarea;
   ShmArea *area;
   struct CommandBuffer cb;
   int retval;
@@ -648,13 +650,8 @@ sp_client_recv (ShmPipe * self, char **buf)
       if (!newarea)
         return -4;
 
-      oldarea = self->shm_area;
       newarea->next = self->shm_area;
       self->shm_area = newarea;
-      /*
-         if (oldarea)
-         sp_shm_area_dec (self, oldarea);
-       */
       break;
 
     case COMMAND_CLOSE_SHM_AREA:
@@ -896,4 +893,22 @@ const char *
 sp_writer_get_path (ShmPipe * pipe)
 {
   return pipe->socket_path;
+}
+
+ShmBuffer *
+sp_writer_get_pending_buffers (ShmPipe * self)
+{
+  return self->buffers;
+}
+
+ShmBuffer *
+sp_writer_get_next_buffer (ShmBuffer * buffer)
+{
+  return buffer->next;
+}
+
+uint64_t
+sp_writer_buf_get_tag (ShmBuffer * buffer)
+{
+  return buffer->tag;
 }

@@ -3,17 +3,17 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>gst-plugins-bad Plugins</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
-<link rel="prev" href="gst-plugins-bad-plugins-vp8enc.html" title="vp8enc">
+<link rel="prev" href="gst-plugins-bad-plugins-wavescope.html" title="wavescope">
 <link rel="next" href="gst-plugins-bad-plugins-plugin-aiff.html" title="aiff">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
 <table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2"><tr valign="middle">
-<td><a accesskey="p" href="gst-plugins-bad-plugins-vp8enc.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
+<td><a accesskey="p" href="gst-plugins-bad-plugins-wavescope.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
 <td> </td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
 <th width="100%" align="center">GStreamer Bad Plugins 0.10 Plugins Reference Manual</th>
@@ -21,19 +21,19 @@
 </tr></table>
 <div class="chapter">
 <div class="titlepage"><div><div><h2 class="title">
-<a name="idp4779904"></a>gst-plugins-bad Plugins</h2></div></div></div>
+<a name="idp4783168"></a>gst-plugins-bad Plugins</h2></div></div></div>
 <div class="toc"><dl>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-aiff.html">aiff</a></span><span class="refpurpose"> — <a name="plugin-aiff"></a>Create and parse Audio Interchange File Format (AIFF) files</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-audiovisualizers.html">audiovisualizers</a></span><span class="refpurpose"> — <a name="plugin-audiovisualizers"></a>Creates video visualizations of audio input</span>
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-autoconvert.html">autoconvert</a></span><span class="refpurpose"> — <a name="plugin-autoconvert"></a>Selects convertor element based on caps</span>
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-legacyresample.html">legacyresample</a></span><span class="refpurpose"> — <a name="plugin-legacyresample"></a>Resamples audio</span>
-</dt>
-<dt>
-<span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-amrwbenc.html">amrwbenc</a></span><span class="refpurpose"> — <a name="plugin-amrwbenc"></a>Adaptive Multi-Rate Wide-Band Encoder</span>
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-assrender.html">assrender</a></span><span class="refpurpose"> — <a name="plugin-assrender"></a>ASS/SSA subtitle renderer</span>
@@ -46,6 +46,9 @@
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-camerabin.html">camerabin</a></span><span class="refpurpose"> — <a name="plugin-camerabin"></a>High level api for DC (Digital Camera) application</span>
+</dt>
+<dt>
+<span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-camerabin2.html">camerabin2</a></span><span class="refpurpose"> — <a name="plugin-camerabin2"></a>camerabin2</span>
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-cdaudio.html">cdaudio</a></span><span class="refpurpose"> — <a name="plugin-cdaudio"></a>Play CD audio through the CD Drive</span>
@@ -216,6 +219,9 @@
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-rsvg.html">rsvg</a></span><span class="refpurpose"> — <a name="plugin-rsvg"></a>RSVG plugin library</span>
 </dt>
 <dt>
+<span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-rtmp.html">rtmp</a></span><span class="refpurpose"> — <a name="plugin-rtmp"></a>RTMP source and sink</span>
+</dt>
+<dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-rtpmux.html">rtpmux</a></span><span class="refpurpose"> — <a name="plugin-rtpmux"></a>RTP Muxer plugins</span>
 </dt>
 <dt>
@@ -273,15 +279,19 @@
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-xvid.html">xvid</a></span><span class="refpurpose"> — <a name="plugin-xvid"></a>XviD plugin library</span>
 </dt>
 <dt>
+<span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-voaacenc.html">voaacenc</a></span><span class="refpurpose"> — <a name="plugin-voaacenc"></a>AAC audio encoder</span>
+</dt>
+<dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-vp8.html">vp8</a></span><span class="refpurpose"> — <a name="plugin-vp8"></a>VP8 plugin</span>
 </dt>
 <dt>
 <span class="refentrytitle"><a href="gst-plugins-bad-plugins-plugin-zbar.html">zbar</a></span><span class="refpurpose"> — <a name="plugin-zbar"></a>zbar barcode scanner</span>
 </dt>
 </dl></div>
+<span style="color: red">&lt;xi:include&gt;&lt;/xi:include&gt;</span>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

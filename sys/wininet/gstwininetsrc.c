@@ -83,8 +83,7 @@ gst_win_inet_src_base_init (gpointer gclass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_template));
+  gst_element_class_add_static_pad_template (element_class, &src_template);
 
   gst_element_class_set_details_simple (element_class,
       "Windows Network Source", "Source/Network",
@@ -408,7 +407,7 @@ gst_win_inet_src_uri_get_protocols (void)
   return (gchar **) protocols;
 }
 
-static G_CONST_RETURN gchar *
+static const gchar *
 gst_win_inet_src_uri_get_uri (GstURIHandler * handler)
 {
   GstWinInetSrc *src = GST_WIN_INET_SRC (handler);

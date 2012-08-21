@@ -97,13 +97,12 @@ gst_mxf_mux_base_init (gpointer g_class)
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
   const GstPadTemplate **p;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_templ));
+  gst_element_class_add_static_pad_template (element_class, &src_templ);
 
   p = mxf_essence_element_writer_get_pad_templates ();
   while (p && *p) {
     gst_element_class_add_pad_template (element_class,
-        (GstPadTemplate *) gst_object_ref (GST_OBJECT (*p)));
+        (GstPadTemplate *) (GST_OBJECT (*p)));
     p++;
   }
 
@@ -409,8 +408,11 @@ gst_mxf_mux_request_new_pad (GstElement * element,
     GST_ERROR_OBJECT (mux, "Not our template");
     return NULL;
   }
-
+#if GLIB_CHECK_VERSION(2,29,5)
+  pad_number = g_atomic_int_add ((gint *) & mux->n_pads, 1);
+#else
   pad_number = g_atomic_int_exchange_and_add ((gint *) & mux->n_pads, 1);
+#endif
   name = gst_mxf_mux_create_pad_name (templ, pad_number);
 
   GST_DEBUG_OBJECT (mux, "Creating pad '%s'", name);

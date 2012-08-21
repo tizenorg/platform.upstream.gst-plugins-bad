@@ -2,6 +2,9 @@
  * mpegtsbase.h - GStreamer MPEG transport stream base class
  * Copyright (C) 2009 Edward Hervey <edward.hervey@collabora.co.uk>
  *               2007 Alessandro Decina
+ * Copyright (C) 2011, Hewlett-Packard Development Company, L.P.
+ *  Author: Youness Alaoui <youness.alaoui@collabora.co.uk>, Collabora Ltd.
+ *  Author: Sebastian Dröge <sebastian.droege@collabora.co.uk>, Collabora Ltd.
  *
  * Authors:
  *   Alessandro Decina <alessandro@nnva.org>
@@ -64,17 +67,25 @@ struct _MpegTSBaseProgram
   guint16 pcr_pid;
   GstStructure *pmt_info;
   MpegTSBaseStream **streams;
+  GList *stream_list;
   gint patcount;
 
   /* Pending Tags for the program */
   GstTagList *tags;
   guint event_id;
+
+  /* TRUE if the program is currently being used */
+  gboolean active;
 };
 
 typedef enum {
-  BASE_MODE_SCANNING,
-  BASE_MODE_SEEKING,
-  BASE_MODE_STREAMING
+  /* PULL MODE */
+  BASE_MODE_SCANNING,		/* Looking for PAT/PMT */
+  BASE_MODE_SEEKING,		/* Seeking */
+  BASE_MODE_STREAMING,		/* Normal mode (pushing out data) */
+
+  /* PUSH MODE */
+  BASE_MODE_PUSHING
 } MpegTSBaseMode;
 
 struct _MpegTSBase {
@@ -101,10 +112,10 @@ struct _MpegTSBase {
   GstStructure *pat;
   MpegTSPacketizer2 *packetizer;
 
-  /* arrays that say whether a pid is a known psi pid or a pes pid
-   * FIXME: Make these bit arrays so we can make them 8 times smaller */
-  gboolean *known_psi;
-  gboolean *is_pes;
+  /* arrays that say whether a pid is a known psi pid or a pes pid */
+  /* Use MPEGTS_BIT_* to set/unset/check the values */
+  guint8 *known_psi;
+  guint8 *is_pes;
 
   gboolean disposed;
 
@@ -116,16 +127,28 @@ struct _MpegTSBase {
    * by subclasses if they have their own MpegTSBaseStream subclasses */
   gsize stream_size;
 
-  /*Offset from the origin to the first PAT (pullmode) */
+  /* Whether we saw a PAT yet */
+  gboolean seen_pat;
+
+  /* Offset from the origin to the first PAT (pullmode) */
   guint64    first_pat_offset;
+
+  /* interpolation gap between the upstream timestamp and the pts */
+  GstClockTime in_gap;
+  GstClockTime first_buf_ts;
+
+  /* Upstream segment */
+  GstSegment segment;
 };
 
 struct _MpegTSBaseClass {
   GstElementClass parent_class;
 
   /* Virtual methods */
+  void (*reset) (MpegTSBase *base);
   GstFlowReturn (*push) (MpegTSBase *base, MpegTSPacketizerPacket *packet, MpegTSPacketizerSection * section);
   gboolean (*push_event) (MpegTSBase *base, GstEvent * event);
+
   /* program_started gets called when program's pmt arrives for first time */
   void (*program_started) (MpegTSBase *base, MpegTSBaseProgram *program);
   /* program_stopped gets called when pat no longer has program's pmt */
@@ -137,7 +160,13 @@ struct _MpegTSBaseClass {
   void (*stream_removed) (MpegTSBase *base, MpegTSBaseStream *stream);
 
   /* find_timestamps is called to find PCR */
- GstFlowReturn (*find_timestamps) (MpegTSBase * base, guint64 initoff, guint64 *offset);
+  GstFlowReturn (*find_timestamps) (MpegTSBase * base, guint64 initoff, guint64 *offset);
+
+  /* seek is called to wait for seeking */
+  GstFlowReturn (*seek) (MpegTSBase * base, GstEvent * event, guint16 pid);
+
+  /* flush all streams */
+  void (*flush) (MpegTSBase * base);
 
   /* signals */
   void (*pat_info) (GstStructure *pat);
@@ -147,6 +176,10 @@ struct _MpegTSBaseClass {
   void (*eit_info) (GstStructure *eit);
 };
 
+#define MPEGTS_BIT_SET(field, offs)    ((field)[(offs) / 8] |=  (1 << ((offs) % 8)))
+#define MPEGTS_BIT_UNSET(field, offs)  ((field)[(offs) / 8] &= ~(1 << ((offs) % 8)))
+#define MPEGTS_BIT_IS_SET(field, offs) ((field)[(offs) / 8] &   (1 << ((offs) % 8)))
+
 GType mpegts_base_get_type(void);
 
 MpegTSBaseProgram *mpegts_base_get_program (MpegTSBase * base, gint program_number);
@@ -155,6 +188,8 @@ MpegTSBaseProgram *mpegts_base_add_program (MpegTSBase * base, gint program_numb
 guint8 *mpegts_get_descriptor_from_stream (MpegTSBaseStream * stream, guint8 tag);
 guint8 *mpegts_get_descriptor_from_program (MpegTSBaseProgram * program, guint8 tag);
 
+gboolean
+mpegts_base_handle_seek_event(MpegTSBase * base, GstPad * pad, GstEvent * event);
 
 gboolean gst_mpegtsbase_plugin_init (GstPlugin * plugin);
 

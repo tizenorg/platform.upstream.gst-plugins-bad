@@ -98,6 +98,7 @@ static gboolean gst_neonhttp_src_get_size (GstBaseSrc * bsrc, guint64 * size);
 static gboolean gst_neonhttp_src_is_seekable (GstBaseSrc * bsrc);
 static gboolean gst_neonhttp_src_do_seek (GstBaseSrc * bsrc,
     GstSegment * segment);
+static gboolean gst_neonhttp_src_query (GstBaseSrc * bsrc, GstQuery * query);
 
 static gboolean gst_neonhttp_src_set_proxy (GstNeonhttpSrc * src,
     const gchar * uri);
@@ -134,8 +135,7 @@ gst_neonhttp_src_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&srctemplate));
+  gst_element_class_add_static_pad_template (element_class, &srctemplate);
 
   gst_element_class_set_details_simple (element_class, "HTTP client source",
       "Source/Network",
@@ -268,6 +268,7 @@ gst_neonhttp_src_class_init (GstNeonhttpSrcClass * klass)
   gstbasesrc_class->is_seekable =
       GST_DEBUG_FUNCPTR (gst_neonhttp_src_is_seekable);
   gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR (gst_neonhttp_src_do_seek);
+  gstbasesrc_class->query = GST_DEBUG_FUNCPTR (gst_neonhttp_src_query);
 
   gstpushsrc_class->create = GST_DEBUG_FUNCPTR (gst_neonhttp_src_create);
 
@@ -775,6 +776,28 @@ gst_neonhttp_src_do_seek (GstBaseSrc * bsrc, GstSegment * segment)
   }
 
   return FALSE;
+}
+
+static gboolean
+gst_neonhttp_src_query (GstBaseSrc * bsrc, GstQuery * query)
+{
+  GstNeonhttpSrc *src = GST_NEONHTTP_SRC (bsrc);
+  gboolean ret;
+
+  switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_URI:
+      gst_query_set_uri (query, src->location);
+      ret = TRUE;
+      break;
+    default:
+      ret = FALSE;
+      break;
+  }
+
+  if (!ret)
+    ret = GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query);
+
+  return ret;
 }
 
 static gboolean

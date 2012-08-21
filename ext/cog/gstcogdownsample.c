@@ -132,10 +132,10 @@ gst_cogdownsample_base_init (gpointer g_class)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_cogdownsample_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_cogdownsample_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_cogdownsample_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_cogdownsample_sink_template);
 
   gst_element_class_set_details_simple (element_class,
       "Scale down video by factor of 2", "Filter/Effect/Video",
@@ -170,10 +170,7 @@ static void
 gst_cogdownsample_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstCogdownsample *src;
-
   g_return_if_fail (GST_IS_COGDOWNSAMPLE (object));
-  src = GST_COGDOWNSAMPLE (object);
 
   GST_DEBUG ("gst_cogdownsample_set_property");
   switch (prop_id) {
@@ -186,10 +183,7 @@ static void
 gst_cogdownsample_get_property (GObject * object, guint prop_id, GValue * value,
     GParamSpec * pspec)
 {
-  GstCogdownsample *src;
-
   g_return_if_fail (GST_IS_COGDOWNSAMPLE (object));
-  src = GST_COGDOWNSAMPLE (object);
 
   switch (prop_id) {
     default:
@@ -308,14 +302,12 @@ static GstFlowReturn
 gst_cogdownsample_transform (GstBaseTransform * base_transform,
     GstBuffer * inbuf, GstBuffer * outbuf)
 {
-  GstCogdownsample *compress;
   CogFrame *outframe;
   int width, height;
   uint32_t format;
   CogFrame *frame;
 
   g_return_val_if_fail (GST_IS_COGDOWNSAMPLE (base_transform), GST_FLOW_ERROR);
-  compress = GST_COGDOWNSAMPLE (base_transform);
 
   gst_structure_get_fourcc (gst_caps_get_structure (inbuf->caps, 0),
       "format", &format);

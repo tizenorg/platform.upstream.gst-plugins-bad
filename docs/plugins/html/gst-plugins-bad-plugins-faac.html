@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>faac</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-edgedetect.html" title="edgedetect">
 <link rel="next" href="gst-plugins-bad-plugins-faad.html" title="faad">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -52,7 +52,8 @@
   <a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
    +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstObject.html">GstObject</a>
          +----<a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html">GstElement</a>
-               +----GstFaac
+               +----GstAudioEncoder
+                     +----GstFaac
 </pre>
 </div>
 <div class="refsect1">
@@ -64,53 +65,22 @@ GstFaac implements
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-faac.properties"></a><h2>Properties</h2>
 <pre class="synopsis">
-  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--bitrate" title='The "bitrate" property'>bitrate</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--midside" title='The "midside" property'>midside</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--bitrate" title='The "bitrate" property'>bitrate</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write / Construct
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--midside" title='The "midside" property'>midside</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write / Construct
   "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--outputformat" title='The "outputformat" property'>outputformat</a>"             <span class="type">GstFaacOutputFormat</span>   : Read / Write
   "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--profile" title='The "profile" property'>profile</a>"                  <span class="type">GstFaacProfile</span>        : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--shortctl" title='The "shortctl" property'>shortctl</a>"                 <span class="type">GstFaacShortCtl</span>       : Read / Write
-  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--tns" title='The "tns" property'>tns</a>"                      <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--shortctl" title='The "shortctl" property'>shortctl</a>"                 <span class="type">GstFaacShortCtl</span>       : Read / Write / Construct
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--tns" title='The "tns" property'>tns</a>"                      <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write / Construct
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--quality" title='The "quality" property'>quality</a>"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write / Construct
+  "<a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--rate-control" title='The "rate-control" property'>rate-control</a>"             <span class="type">GstFaacBrtype</span>         : Read / Write / Construct
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-faac.description"></a><h2>Description</h2>
-<p>
-faac encodes raw audio to AAC (MPEG-4 part 3) streams.
-</p>
-<p>
-The <a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--outputformat" title='The "outputformat" property'><span class="type">"outputformat"</span></a> property determines whether or not the
-AAC data needs additional framing provided by a container
-(such as Matroska or Quicktime).
-This is required for raw data, whereas ADTS formatted AAC already provides
-framing and needs no container.
-</p>
-<p>
-The <a class="link" href="gst-plugins-bad-plugins-faac.html#GstFaac--profile" title='The "profile" property'><span class="type">"profile"</span></a> property determines the AAC profile, where the default
-LC (Low Complexity) profile is most widely used, supported and suitable for
-general use. The other profiles are very rarely used and often not supported.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp12535600"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch audiotestsrc wave<span class="gtkdoc opt">=</span>sine num<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">100</span> <span class="gtkdoc opt">!</span> audioconvert <span class="gtkdoc opt">!</span> faac <span class="gtkdoc opt">!</span> matroskamux <span class="gtkdoc opt">!</span> filesink location<span class="gtkdoc opt">=</span>sine<span class="gtkdoc opt">.</span>mkv</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- Encode a sine beep as aac and write to matroska container.
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp13332240"></a><h3>Element Information</h3>
+<a name="idp12677840"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -133,7 +103,7 @@ general use. The other profiles are very rarely used and often not supported.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp13339648"></a><h3>Element Pads</h3>
+<a name="idp12685248"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -151,7 +121,7 @@ general use. The other profiles are very rarely used and often not supported.
 </tr>
 <tr>
 <td><p><span class="term">details</span></p></td>
-<td>audio/x-raw-int, endianness=(int)1234, signed=(boolean)true, width=(int)16, depth=(int)16, rate=(int)[ 8000, 96000 ], channels=(int)[ 1, 6 ]</td>
+<td>audio/x-raw-int, endianness=(int)1234, signed=(boolean)true, width=(int)16, depth=(int)16, rate=(int){ 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000 }, channels=(int)[ 1, 6 ]</td>
 </tr>
 </tbody>
 </table></div>
@@ -172,7 +142,11 @@ general use. The other profiles are very rarely used and often not supported.
 </tr>
 <tr>
 <td><p><span class="term">details</span></p></td>
-<td>audio/mpeg, mpegversion=(int){ 4, 2 }, channels=(int)[ 1, 6 ], rate=(int)[ 8000, 96000 ], stream-format=(string){ adts, raw }</td>
+<td>audio/mpeg, mpegversion=(int)4, channels=(int)[ 1, 6 ], rate=(int){ 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000 }, stream-format=(string){ adts, raw }, base-profile=(string){ main, lc, ssr, ltp }</td>
+</tr>
+<tr>
+<td><p><span class="term"></span></p></td>
+<td> audio/mpeg, mpegversion=(int)2, channels=(int)[ 1, 6 ], rate=(int){ 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 96000 }, stream-format=(string){ adts, raw }, profile=(string){ main, lc }</td>
 </tr>
 </tbody>
 </table></div>
@@ -194,15 +168,15 @@ general use. The other profiles are very rarely used and often not supported.
 <a name="gst-plugins-bad-plugins-faac.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="GstFaac--bitrate"></a><h3>The <code class="literal">"bitrate"</code> property</h3>
-<pre class="programlisting">  "bitrate"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write</pre>
-<p>Bitrate in bits/sec.</p>
+<pre class="programlisting">  "bitrate"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write / Construct</pre>
+<p>Average Bitrate (ABR) in bits/sec.</p>
 <p>Allowed values: [8000,320000]</p>
 <p>Default value: 128000</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="GstFaac--midside"></a><h3>The <code class="literal">"midside"</code> property</h3>
-<pre class="programlisting">  "midside"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write</pre>
+<pre class="programlisting">  "midside"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write / Construct</pre>
 <p>Allow mid/side encoding.</p>
 <p>Default value: TRUE</p>
 </div>
@@ -223,25 +197,36 @@ general use. The other profiles are very rarely used and often not supported.
 <hr>
 <div class="refsect2">
 <a name="GstFaac--shortctl"></a><h3>The <code class="literal">"shortctl"</code> property</h3>
-<pre class="programlisting">  "shortctl"                 <span class="type">GstFaacShortCtl</span>       : Read / Write</pre>
+<pre class="programlisting">  "shortctl"                 <span class="type">GstFaacShortCtl</span>       : Read / Write / Construct</pre>
 <p>Block type encorcing.</p>
 <p>Default value: SHORTCTL_NORMAL</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="GstFaac--tns"></a><h3>The <code class="literal">"tns"</code> property</h3>
-<pre class="programlisting">  "tns"                      <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write</pre>
+<pre class="programlisting">  "tns"                      <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read / Write / Construct</pre>
 <p>Use temporal noise shaping.</p>
 <p>Default value: FALSE</p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="GstFaac--quality"></a><h3>The <code class="literal">"quality"</code> property</h3>
+<pre class="programlisting">  "quality"                  <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a>                  : Read / Write / Construct</pre>
+<p>Variable bitrate (VBR) quantizer quality in %.</p>
+<p>Allowed values: [1,1000]</p>
+<p>Default value: 100</p>
 </div>
-<div class="refsect1">
-<a name="gst-plugins-bad-plugins-faac.see-also"></a><h2>See Also</h2>
-faad
+<hr>
+<div class="refsect2">
+<a name="GstFaac--rate-control"></a><h3>The <code class="literal">"rate-control"</code> property</h3>
+<pre class="programlisting">  "rate-control"             <span class="type">GstFaacBrtype</span>         : Read / Write / Construct</pre>
+<p>Encoding bitrate type (VBR/ABR).</p>
+<p>Default value: VBR</p>
+</div>
 </div>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

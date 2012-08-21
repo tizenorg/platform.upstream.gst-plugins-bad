@@ -1,6 +1,7 @@
 /*
  * GStreamer
  * Copyright (C) 2010 Texas Instruments, Inc
+ * Copyright (C) 2011 Thiago Santos <thiago.sousa.santos@collabora.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -29,8 +30,6 @@
 
 #include <gst/gst.h>
 #include <gst/gstbin.h>
-#include <gst/interfaces/photography.h>
-#include <gst/interfaces/colorbalance.h>
 #include "gstcamerabin-enum.h"
 #include "gstcamerabinpreview.h"
 
@@ -77,7 +76,6 @@ struct _GstBaseCameraSrc
   gboolean post_preview;
   GstElement *preview_filter;
   GstCameraBinPreviewPipelineData *preview_pipeline;
-  gboolean preview_filter_changed;
 
   /* Resolution of the buffers configured to camerabin */
   gint width;
@@ -92,7 +90,7 @@ struct _GstBaseCameraSrc
 
 /**
  * GstBaseCameraSrcClass:
- * @construct_pipeline: construct pipeline must be implemented by derived class
+ * @construct_pipeline: construct pipeline
  * @setup_pipeline: configure pipeline for the chosen settings
  * @set_zoom: set the zoom
  * @set_mode: set the mode
@@ -101,29 +99,27 @@ struct _GstBaseCameraSrcClass
 {
   GstBinClass parent;
 
-  /* construct pipeline must be implemented by derived class */
+  /* Construct pipeline. (called in GST_STATE_CHANGE_NULL_TO_READY) Optional. */
   gboolean    (*construct_pipeline)  (GstBaseCameraSrc *self);
 
-  /* optional */
+  /* (called in GST_STATE_CHANGE_READY_TO_PAUSED). Optional. */
   gboolean    (*setup_pipeline)      (GstBaseCameraSrc *self);
 
-  /* set the zoom */
+  /* Set the zoom. If set, called when changing 'zoom' property. Optional. */
   void        (*set_zoom)            (GstBaseCameraSrc *self, gfloat zoom);
 
-  /* set the mode */
+  /* Set the mode. If set, called when changing 'mode' property. Optional. */
   gboolean    (*set_mode)            (GstBaseCameraSrc *self,
                                       GstCameraBinMode mode);
 
-  /* set preview caps */
+  /* Set preview caps. If set, called called when setting new 'preview-caps'. Optional. */
   gboolean    (*set_preview)         (GstBaseCameraSrc *self,
                                       GstCaps *preview_caps);
 
-  /* */
-  GstCaps *   (*get_allowed_input_caps) (GstBaseCameraSrc * self);
-
-  void (*private_start_capture) (GstBaseCameraSrc * src);
-  void (*private_stop_capture) (GstBaseCameraSrc * src);
+  /* Called by the handler for 'start-capture'. Mandatory. */
   gboolean (*start_capture) (GstBaseCameraSrc * src);
+
+  /* Called by the handler for 'stop-capture'. Mandatory. */
   void (*stop_capture) (GstBaseCameraSrc * src);
 
   gpointer _gst_reserved[GST_PADDING_LARGE];
@@ -134,13 +130,9 @@ struct _GstBaseCameraSrcClass
 #define MAX_ZOOM 10.0f
 #define ZOOM_1X MIN_ZOOM
 
-GstPhotography * gst_base_camera_src_get_photography (GstBaseCameraSrc *self);
-GstColorBalance * gst_base_camera_src_get_color_balance (GstBaseCameraSrc *self);
-
 gboolean gst_base_camera_src_set_mode (GstBaseCameraSrc *self, GstCameraBinMode mode);
 void gst_base_camera_src_setup_zoom (GstBaseCameraSrc * self);
 void gst_base_camera_src_setup_preview (GstBaseCameraSrc * self, GstCaps * preview_caps);
-GstCaps * gst_base_camera_src_get_allowed_input_caps (GstBaseCameraSrc * self);
 void gst_base_camera_src_finish_capture (GstBaseCameraSrc *self);
 
 

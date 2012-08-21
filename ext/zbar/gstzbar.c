@@ -17,13 +17,6 @@
  * Boston, MA 02111-1307, USA.
  */
 
-/*
- * This file was (probably) generated from
- * gstvideotemplate.c,v 1.12 2004/01/07 21:07:12 ds Exp 
- * and
- * make_filter,v 1.6 2004/01/07 21:33:01 ds Exp 
- */
-
 /**
  * SECTION:element-zbar
  *
@@ -152,10 +145,10 @@ gst_zbar_base_init (gpointer g_class)
       "Detect bar codes in the video streams",
       "Stefan Kost <ensonic@users.sf.net>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_zbar_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_zbar_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_zbar_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_zbar_src_template);
 }
 
 static void
@@ -284,7 +277,7 @@ gst_zbar_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
 {
   GstZBar *zbar = GST_ZBAR (base);
   guint8 *data;
-  guint size, rowstride;
+  guint rowstride;
   zbar_image_t *image;
   const zbar_symbol_t *symbol;
   int n;
@@ -293,7 +286,6 @@ gst_zbar_transform_ip (GstBaseTransform * base, GstBuffer * outbuf)
     goto done;
 
   data = GST_BUFFER_DATA (outbuf);
-  size = GST_BUFFER_SIZE (outbuf);
 
   image = zbar_image_create ();
 

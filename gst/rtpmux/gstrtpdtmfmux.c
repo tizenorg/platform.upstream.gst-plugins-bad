@@ -64,6 +64,8 @@ static GstStateChangeReturn gst_rtp_dtmf_mux_change_state (GstElement * element,
 
 static gboolean gst_rtp_dtmf_mux_accept_buffer_locked (GstRTPMux * rtp_mux,
     GstRTPMuxPadPrivate * padpriv, GstBuffer * buffer);
+static gboolean gst_rtp_dtmf_mux_src_event (GstRTPMux * rtp_mux,
+    GstEvent * event);
 
 GST_BOILERPLATE (GstRTPDTMFMux, gst_rtp_dtmf_mux, GstRTPMux, GST_TYPE_RTP_MUX);
 
@@ -77,8 +79,8 @@ gst_rtp_dtmf_mux_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&priority_sink_factory));
+  gst_element_class_add_static_pad_template (element_class,
+      &priority_sink_factory);
 
   gst_element_class_set_details_simple (element_class, "RTP muxer",
       "Codec/Muxer",
@@ -100,6 +102,7 @@ gst_rtp_dtmf_mux_class_init (GstRTPDTMFMuxClass * klass)
   gstelement_class->change_state =
       GST_DEBUG_FUNCPTR (gst_rtp_dtmf_mux_change_state);
   gstrtpmux_class->accept_buffer_locked = gst_rtp_dtmf_mux_accept_buffer_locked;
+  gstrtpmux_class->src_event = gst_rtp_dtmf_mux_src_event;
 }
 
 static gboolean
@@ -171,6 +174,28 @@ gst_rtp_dtmf_mux_request_new_pad (GstElement * element, GstPadTemplate * templ,
   }
 
   return pad;
+}
+
+static gboolean
+gst_rtp_dtmf_mux_src_event (GstRTPMux * rtp_mux, GstEvent * event)
+{
+  if (GST_EVENT_TYPE (event) == GST_EVENT_CUSTOM_UPSTREAM) {
+    const GstStructure *s = gst_event_get_structure (event);
+
+    if (s && gst_structure_has_name (s, "dtmf-event")) {
+      GST_OBJECT_LOCK (rtp_mux);
+      if (GST_CLOCK_TIME_IS_VALID (rtp_mux->last_stop)) {
+        event = (GstEvent *)
+            gst_mini_object_make_writable (GST_MINI_OBJECT_CAST (event));
+        s = gst_event_get_structure (event);
+        gst_structure_set ((GstStructure *) s,
+            "last-stop", G_TYPE_UINT64, rtp_mux->last_stop, NULL);
+      }
+      GST_OBJECT_UNLOCK (rtp_mux);
+    }
+  }
+
+  return GST_RTP_MUX_CLASS (parent_class)->src_event (rtp_mux, event);
 }
 
 

@@ -130,10 +130,10 @@ gst_logoinsert_base_init (gpointer g_class)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_logoinsert_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_logoinsert_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_logoinsert_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_logoinsert_sink_template);
 
   gst_element_class_set_details_simple (element_class,
       "Overlay image onto video", "Filter/Effect/Video",
@@ -223,10 +223,7 @@ gst_logoinsert_get_property (GObject * object, guint prop_id, GValue * value,
 void
 gst_logoinsert_dispose (GObject * object)
 {
-  GstLogoinsert *logoinsert;
-
   g_return_if_fail (GST_IS_LOGOINSERT (object));
-  logoinsert = GST_LOGOINSERT (object);
 
   /* clean up as possible.  may be called multiple times */
 
@@ -426,7 +423,6 @@ cog_frame_new_from_png (void *data, int size)
   png_bytep *rows;
   CogFrame *frame;
   guchar *frame_data;
-  int rowbytes;
   int j;
   int width, height;
   int color_type;
@@ -458,7 +454,6 @@ cog_frame_new_from_png (void *data, int size)
   frame = cog_frame_new_from_data_ARGB (frame_data, width, height);
   frame->regions[0] = frame_data;
 
-  rowbytes = png_get_rowbytes (png_ptr, info_ptr);
   rows = (png_bytep *) g_malloc (sizeof (png_bytep) * height);
 
   for (j = 0; j < height; j++) {

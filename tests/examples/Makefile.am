@@ -10,13 +10,9 @@ else
 DIRECTFB_DIR=
 endif
 
-if BUILD_EXPERIMENTAL
-CAMERABIN2=camerabin2
-else
-CAMERABIN2=
-endif
+OPENCV_EXAMPLES=opencv
 
-SUBDIRS= $(DIRECTFB_DIR) $(GTK_EXAMPLES)
-DIST_SUBDIRS= camerabin camerabin2 directfb mxf scaletempo
+SUBDIRS= $(DIRECTFB_DIR) $(GTK_EXAMPLES) $(OPENCV_EXAMPLES)
+DIST_SUBDIRS= camerabin camerabin2 directfb mxf scaletempo opencv
 
 include $(top_srcdir)/common/parallel-subdirs.mak

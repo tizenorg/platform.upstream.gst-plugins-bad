@@ -3,7 +3,7 @@
   <description>Various geometric image transform elements</description>
   <filename>../../gst/geometrictransform/.libs/libgstgeometrictransform.so</filename>
   <basename>libgstgeometrictransform.so</basename>
-  <version>0.10.22</version>
+  <version>0.10.23</version>
   <license>LGPL</license>
   <source>gst-plugins-bad</source>
   <package>GStreamer Bad Plug-ins source release</package>
@@ -77,7 +77,7 @@
       <longname>fisheye</longname>
       <class>Transform/Effect/Video</class>
       <description>Split the image into two halves and reflect one over each other</description>
-      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com</author>
+      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>
@@ -140,7 +140,7 @@
       <longname>mirror</longname>
       <class>Transform/Effect/Video</class>
       <description>Split the image into two halves and reflect one over each other</description>
-      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com</author>
+      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>
@@ -181,7 +181,7 @@
       <name>rotate</name>
       <longname>rotate</longname>
       <class>Transform/Effect/Video</class>
-      <description>Warps the picture into an arc shaped form</description>
+      <description>Rotates the picture by an arbitrary angle</description>
       <author>Thiago Santos&lt;thiago.sousa.santos@collabora.co.uk&gt;</author>
       <pads>
         <caps>
@@ -224,7 +224,7 @@
       <longname>square</longname>
       <class>Transform/Effect/Video</class>
       <description>Distort center part of the image into a square</description>
-      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com</author>
+      <author>Filippo Argiolas &lt;filippo.argiolas@gmail.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>

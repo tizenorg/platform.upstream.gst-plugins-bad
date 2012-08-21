@@ -35,15 +35,22 @@ typedef struct
 
   GstElement *appsrc;
   GstElement *filter;
-  GstElement *capsfilter;
   GstElement *appsink;
+  GstElement *vscale;
 
   GstElement *element;
+
+  GstCaps *pending_preview_caps;
+  guint processing;
+  GMutex *processing_lock;
+  GCond *processing_cond;
+
 } GstCameraBinPreviewPipelineData;
 
 GstCameraBinPreviewPipelineData *gst_camerabin_create_preview_pipeline (GstElement * element, GstElement * filter);
 void gst_camerabin_destroy_preview_pipeline (GstCameraBinPreviewPipelineData * preview);
 gboolean gst_camerabin_preview_pipeline_post (GstCameraBinPreviewPipelineData * preview, GstBuffer * buffer);
 void gst_camerabin_preview_set_caps (GstCameraBinPreviewPipelineData * preview, GstCaps * caps);
+gboolean gst_camerabin_preview_set_filter (GstCameraBinPreviewPipelineData * preview, GstElement * filter);
 
 #endif /* #ifndef __CAMERABIN_PREVIEW_H_ */

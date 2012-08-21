@@ -53,6 +53,10 @@
 
 #include <gst/gst.h>
 
+#ifdef G_OS_WIN32
+#include <winsock2.h>
+#endif
+
 GST_DEBUG_CATEGORY_STATIC (rtmpsrc_debug);
 #define GST_CAT_DEFAULT rtmpsrc_debug
 
@@ -98,6 +102,8 @@ _do_init (GType gtype)
   };
 
   g_type_add_interface_static (gtype, GST_TYPE_URI_HANDLER, &urihandler_info);
+
+  GST_DEBUG_CATEGORY_INIT (rtmpsrc_debug, "rtmpsrc", 0, "RTMP Source");
 }
 
 GST_BOILERPLATE_FULL (GstRTMPSrc, gst_rtmp_src, GstPushSrc, GST_TYPE_PUSH_SRC,
@@ -108,8 +114,7 @@ gst_rtmp_src_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&srctemplate));
+  gst_element_class_add_static_pad_template (element_class, &srctemplate);
 
   gst_element_class_set_details_simple (element_class,
       "RTMP Source",
@@ -151,6 +156,14 @@ gst_rtmp_src_class_init (GstRTMPSrcClass * klass)
 static void
 gst_rtmp_src_init (GstRTMPSrc * rtmpsrc, GstRTMPSrcClass * klass)
 {
+#ifdef G_OS_WIN32
+  WSADATA wsa_data;
+
+  if (WSAStartup (MAKEWORD (2, 2), &wsa_data) != 0) {
+    GST_ERROR_OBJECT (rtmpsrc, "WSAStartup failed: 0x%08x", WSAGetLastError ());
+  }
+#endif
+
   rtmpsrc->cur_offset = 0;
   rtmpsrc->last_timestamp = 0;
 
@@ -164,6 +177,10 @@ gst_rtmp_src_finalize (GObject * object)
 
   g_free (rtmpsrc->uri);
   rtmpsrc->uri = NULL;
+
+#ifdef G_OS_WIN32
+  WSACleanup ();
+#endif
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -581,18 +598,3 @@ gst_rtmp_src_stop (GstBaseSrc * basesrc)
 
   return TRUE;
 }
-
-static gboolean
-plugin_init (GstPlugin * plugin)
-{
-  GST_DEBUG_CATEGORY_INIT (rtmpsrc_debug, "rtmpsrc", 0, "RTMP Source");
-
-  return gst_element_register (plugin, "rtmpsrc", GST_RANK_PRIMARY,
-      GST_TYPE_RTMP_SRC);
-}
-
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "rtmpsrc",
-    "RTMP source",
-    plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN);

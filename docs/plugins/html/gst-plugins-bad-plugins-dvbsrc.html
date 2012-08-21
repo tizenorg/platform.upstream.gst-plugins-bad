@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>dvbsrc</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-dtsdec.html" title="dtsdec">
 <link rel="next" href="gst-plugins-bad-plugins-dvdspu.html" title="dvdspu">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -41,7 +41,7 @@
 </tr></table></div>
 <div class="refsynopsisdiv">
 <a name="gst-plugins-bad-plugins-dvbsrc.synopsis"></a><h2>Synopsis</h2>
-<a name="GstDvbSrc"></a><pre class="synopsis">struct              <a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc-struct" title="struct GstDvbSrc">GstDvbSrc</a>;
+<a name="GstDvbSrc"></a><pre class="synopsis">                    <a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc-struct" title="GstDvbSrc">GstDvbSrc</a>;
 </pre>
 </div>
 <div class="refsect1">
@@ -80,57 +80,15 @@
   "<a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc--polarity" title='The "polarity" property'>polarity</a>"                 <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write / Construct
   "<a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc--symbol-rate" title='The "symbol-rate" property'>symbol-rate</a>"              <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write
   "<a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc--stats-reporting-interval" title='The "stats-reporting-interval" property'>stats-reporting-interval</a>" <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a>                 : Read / Write
+  "<a class="link" href="gst-plugins-bad-plugins-dvbsrc.html#GstDvbSrc--timeout" title='The "timeout" property'>timeout</a>"                  <span class="type">guint64</span>               : Read / Write
 </pre>
 </div>
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dvbsrc.description"></a><h2>Description</h2>
-<p>
-dvbsrc can be used to capture video from DVB cards, DVB-T, DVB-S or DVB-T.
-</p>
-<p>
-</p>
-<div class="refsect2">
-<a name="idp12596832"></a><h3>Example launch line</h3>
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch dvbsrc modulation<span class="gtkdoc opt">=</span><span class="string">&quot;QAM 64&quot;</span> trans<span class="gtkdoc opt">-</span>mode<span class="gtkdoc opt">=</span><span class="number">8</span>k bandwidth<span class="gtkdoc opt">=</span><span class="number">8</span> frequency<span class="gtkdoc opt">=</span><span class="number">514000000</span> code<span class="gtkdoc opt">-</span>rate<span class="gtkdoc opt">-</span>lp<span class="gtkdoc opt">=</span>AUTO code<span class="gtkdoc opt">-</span>rate<span class="gtkdoc opt">-</span>hp<span class="gtkdoc opt">=</span><span class="number">2</span><span class="gtkdoc opt">/</span><span class="number">3</span> guard<span class="gtkdoc opt">=</span><span class="number">4</span>  hierarchy<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mpegtsdemux name<span class="gtkdoc opt">=</span>demux <span class="gtkdoc opt">!</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mpeg2dec <span class="gtkdoc opt">!</span> xvimagesink demux<span class="gtkdoc opt">. !</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mad <span class="gtkdoc opt">!</span> alsasink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- Captures a full transport stream from dvb card 0 that is a DVB-T card at tuned frequency 514000000 with other parameters as seen in the pipeline and renders the first tv program on the transport stream.
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch dvbsrc modulation<span class="gtkdoc opt">=</span><span class="string">&quot;QAM 64&quot;</span> trans<span class="gtkdoc opt">-</span>mode<span class="gtkdoc opt">=</span><span class="number">8</span>k bandwidth<span class="gtkdoc opt">=</span><span class="number">8</span> frequency<span class="gtkdoc opt">=</span><span class="number">514000000</span> code<span class="gtkdoc opt">-</span>rate<span class="gtkdoc opt">-</span>lp<span class="gtkdoc opt">=</span>AUTO code<span class="gtkdoc opt">-</span>rate<span class="gtkdoc opt">-</span>hp<span class="gtkdoc opt">=</span><span class="number">2</span><span class="gtkdoc opt">/</span><span class="number">3</span> guard<span class="gtkdoc opt">=</span><span class="number">4</span>  hierarchy<span class="gtkdoc opt">=</span><span class="number">0</span> pids<span class="gtkdoc opt">=</span><span class="number">100</span><span class="gtkdoc opt">:</span><span class="number">256</span><span class="gtkdoc opt">:</span><span class="number">257</span> <span class="gtkdoc opt">!</span> mpegtsdemux name<span class="gtkdoc opt">=</span>demux <span class="gtkdoc opt">!</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mpeg2dec <span class="gtkdoc opt">!</span> xvimagesink demux<span class="gtkdoc opt">. !</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mad <span class="gtkdoc opt">!</span> alsasink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- Captures and renders a transport stream from dvb card 0 that is a DVB-T card for a program at tuned frequency 514000000 with PMT pid 100 and elementary stream pids of 256, 257 with other parameters as seen in the pipeline.
-<div class="informalexample">
-  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
-    <tbody>
-      <tr>
-        <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting">gst<span class="gtkdoc opt">-</span>launch dvbsrc polarity<span class="gtkdoc opt">=</span><span class="string">&quot;h&quot;</span> frequency<span class="gtkdoc opt">=</span><span class="number">11302000</span> symbol<span class="gtkdoc opt">-</span>rate<span class="gtkdoc opt">=</span><span class="number">27500</span> diseqc<span class="gtkdoc opt">-</span>src<span class="gtkdoc opt">=</span><span class="number">0</span> pids<span class="gtkdoc opt">=</span><span class="number">50</span><span class="gtkdoc opt">:</span><span class="number">102</span><span class="gtkdoc opt">:</span><span class="number">103</span> <span class="gtkdoc opt">!</span> mpegtsdemux name<span class="gtkdoc opt">=</span>demux <span class="gtkdoc opt">!</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mpeg2dec <span class="gtkdoc opt">!</span> xvimagesink demux<span class="gtkdoc opt">. !</span> queue max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>buffers<span class="gtkdoc opt">=</span><span class="number">0</span> max<span class="gtkdoc opt">-</span>size<span class="gtkdoc opt">-</span>time<span class="gtkdoc opt">=</span><span class="number">0</span> <span class="gtkdoc opt">!</span> mad <span class="gtkdoc opt">!</span> alsasink</pre></td>
-      </tr>
-    </tbody>
-  </table>
-</div>
- Captures and renders a transport stream from dvb card 0 that is a DVB-S card for a program at tuned frequency 11302000 Hz, symbol rate of 27500 kHz with PMT pid of 50 and elementary stream pids of 102 and 103.
-</div>
-<p>
-</p>
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp12602624"></a><h3>Element Information</h3>
+<a name="idp12840400"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -153,7 +111,7 @@ dvbsrc can be used to capture video from DVB cards, DVB-T, DVB-S or DVB-T.
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp12610144"></a><h3>Element Pads</h3>
+<a name="idp12847920"></a><h3>Element Pads</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -183,8 +141,8 @@ dvbsrc can be used to capture video from DVB cards, DVB-T, DVB-S or DVB-T.
 <div class="refsect1">
 <a name="gst-plugins-bad-plugins-dvbsrc.details"></a><h2>Details</h2>
 <div class="refsect2">
-<a name="GstDvbSrc-struct"></a><h3>struct GstDvbSrc</h3>
-<pre class="programlisting">struct GstDvbSrc;</pre>
+<a name="GstDvbSrc-struct"></a><h3>GstDvbSrc</h3>
+<pre class="programlisting">typedef struct _GstDvbSrc GstDvbSrc;</pre>
 <p>
 </p>
 </div>
@@ -349,10 +307,17 @@ dvbsrc can be used to capture video from DVB cards, DVB-T, DVB-S or DVB-T.
 <p>The number of reads before reporting frontend stats.</p>
 <p>Default value: 100</p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="GstDvbSrc--timeout"></a><h3>The <code class="literal">"timeout"</code> property</h3>
+<pre class="programlisting">  "timeout"                  <span class="type">guint64</span>               : Read / Write</pre>
+<p>Post a message after timeout microseconds (0 = disabled).</p>
+<p>Default value: 1000000</p>
+</div>
 </div>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

@@ -109,10 +109,10 @@ gst_patchdetect_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_patchdetect_sink_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_patchdetect_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_patchdetect_sink_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_patchdetect_src_template);
 
   gst_element_class_set_details_simple (element_class, "Color Patch Detector",
       "Video/Analysis", "Detects color patches from a color calibration chart",
@@ -147,22 +147,13 @@ static void
 gst_patchdetect_init (GstPatchdetect * patchdetect,
     GstPatchdetectClass * patchdetect_class)
 {
-
-  patchdetect->sinkpad =
-      gst_pad_new_from_static_template (&gst_patchdetect_sink_template, "sink");
-
-  patchdetect->srcpad =
-      gst_pad_new_from_static_template (&gst_patchdetect_src_template, "src");
 }
 
 void
 gst_patchdetect_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstPatchdetect *patchdetect;
-
   g_return_if_fail (GST_IS_PATCHDETECT (object));
-  patchdetect = GST_PATCHDETECT (object);
 
   switch (property_id) {
     default:
@@ -175,10 +166,7 @@ void
 gst_patchdetect_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstPatchdetect *patchdetect;
-
   g_return_if_fail (GST_IS_PATCHDETECT (object));
-  patchdetect = GST_PATCHDETECT (object);
 
   switch (property_id) {
     default:
@@ -190,10 +178,7 @@ gst_patchdetect_get_property (GObject * object, guint property_id,
 void
 gst_patchdetect_dispose (GObject * object)
 {
-  GstPatchdetect *patchdetect;
-
   g_return_if_fail (GST_IS_PATCHDETECT (object));
-  patchdetect = GST_PATCHDETECT (object);
 
   /* clean up as possible.  may be called multiple times */
 
@@ -203,10 +188,7 @@ gst_patchdetect_dispose (GObject * object)
 void
 gst_patchdetect_finalize (GObject * object)
 {
-  GstPatchdetect *patchdetect;
-
   g_return_if_fail (GST_IS_PATCHDETECT (object));
-  patchdetect = GST_PATCHDETECT (object);
 
   /* clean up object here */
 

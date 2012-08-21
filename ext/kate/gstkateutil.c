@@ -24,6 +24,9 @@
 #endif
 
 #include <string.h>
+#ifdef HAVE_TIGER
+#include <tiger/tiger.h>
+#endif
 #include <gst/tag/tag.h>
 #include "gstkate.h"
 #include "gstkateutil.h"
@@ -226,6 +229,18 @@ gst_kate_util_decoder_base_get_property (GstKateDecoderBase * decoder,
   return res;
 }
 
+static inline gboolean
+gst_kate_util_is_utf8_string (const char *value, size_t len)
+{
+  if (len == 0)
+    return FALSE;
+  if (memchr (value, 0, len - 1))
+    return FALSE;
+  if (value[len - 1])
+    return FALSE;
+  return (kate_text_validate (kate_utf8, value, len) >= 0);
+}
+
 GstFlowReturn
 gst_kate_util_decoder_base_chain_kate_packet (GstKateDecoderBase * decoder,
     GstElement * element, GstPad * pad, GstBuffer * buf, GstPad * srcpad,
@@ -254,7 +269,8 @@ gst_kate_util_decoder_base_chain_kate_packet (GstKateDecoderBase * decoder,
   ret = kate_high_decode_packetin (&decoder->k, &kp, ev);
   if (G_UNLIKELY (ret < 0)) {
     GST_ELEMENT_ERROR (element, STREAM, DECODE, (NULL),
-        ("Failed to decode Kate packet: %d", ret));
+        ("Failed to decode Kate packet: %s",
+            gst_kate_util_get_error_message (ret)));
     return GST_FLOW_ERROR;
   }
 
@@ -371,6 +387,40 @@ gst_kate_util_decoder_base_chain_kate_packet (GstKateDecoderBase * decoder,
         break;
     }
   }
+#if ((KATE_VERSION_MAJOR<<16)|(KATE_VERSION_MINOR<<8)|KATE_VERSION_PATCH) >= 0x000400
+  else if (*ev && (*ev)->meta) {
+    int count = kate_meta_query_count ((*ev)->meta);
+    if (count > 0) {
+      GstTagList *evtags = gst_tag_list_new ();
+      int idx;
+      GST_DEBUG_OBJECT (decoder, "Kate event has %d attached metadata", count);
+      for (idx = 0; idx < count; ++idx) {
+        const char *tag, *value;
+        size_t len;
+        if (kate_meta_query ((*ev)->meta, idx, &tag, &value, &len) < 0) {
+          GST_WARNING_OBJECT (decoder, "Failed to retrieve metadata %d", idx);
+        } else {
+          if (gst_kate_util_is_utf8_string (value, len)) {
+            gchar *compound = g_strdup_printf ("%s=%s", tag, value);
+            GST_DEBUG_OBJECT (decoder, "Metadata %d: %s=%s (%zu bytes)", idx,
+                tag, value, len);
+            gst_tag_list_add (evtags, GST_TAG_MERGE_APPEND,
+                GST_TAG_EXTENDED_COMMENT, compound, NULL);
+            g_free (compound);
+          } else {
+            GST_INFO_OBJECT (decoder,
+                "Metadata %d, (%s, %zu bytes) is binary, ignored", idx, tag,
+                len);
+          }
+        }
+      }
+      if (gst_tag_list_is_empty (evtags))
+        gst_tag_list_free (evtags);
+      else
+        gst_element_found_tags_for_pad (element, tagpad, evtags);
+    }
+  }
+#endif
 
   return rflow;
 }
@@ -390,8 +440,8 @@ gst_kate_decoder_base_change_state (GstKateDecoderBase * decoder,
       GST_DEBUG_OBJECT (element, "READY -> PAUSED, initializing kate state");
       ret = kate_high_decode_init (&decoder->k);
       if (ret < 0) {
-        GST_WARNING_OBJECT (element, "failed to initialize kate state: %d",
-            ret);
+        GST_WARNING_OBJECT (element, "failed to initialize kate state: %s",
+            gst_kate_util_get_error_message (ret));
       }
       gst_segment_init (&decoder->kate_segment, GST_FORMAT_UNDEFINED);
       decoder->kate_flushing = FALSE;
@@ -587,5 +637,52 @@ gst_kate_decoder_base_sink_query (GstKateDecoderBase * decoder,
     }
     default:
       return gst_pad_query_default (pad, query);
+  }
+}
+
+const char *
+gst_kate_util_get_error_message (int ret)
+{
+  switch (ret) {
+    case KATE_E_NOT_FOUND:
+      return "value not found";
+    case KATE_E_INVALID_PARAMETER:
+      return "invalid parameter";
+    case KATE_E_OUT_OF_MEMORY:
+      return "out of memory";
+    case KATE_E_BAD_GRANULE:
+      return "bad granule";
+    case KATE_E_INIT:
+      return "initialization error";
+    case KATE_E_BAD_PACKET:
+      return "bad packet";
+    case KATE_E_TEXT:
+      return "invalid/truncated text";
+    case KATE_E_LIMIT:
+      return "a limit was exceeded";
+    case KATE_E_VERSION:
+      return "unsupported bitstream version";
+    case KATE_E_NOT_KATE:
+      return "not a kate bitstream";
+    case KATE_E_BAD_TAG:
+      return "bad tag";
+    case KATE_E_IMPL:
+      return "not implemented";
+
+#ifdef HAVE_TIGER
+    case TIGER_E_NOT_FOUND:
+      return "value not found";
+    case TIGER_E_INVALID_PARAMETER:
+      return "invalid parameter";
+    case TIGER_E_OUT_OF_MEMORY:
+      return "out of memory";
+    case TIGER_E_CAIRO_ERROR:
+      return "Cairo error";
+    case TIGER_E_BAD_SURFACE_TYPE:
+      return "bad surface type";
+#endif
+
+    default:
+      return "unknown error";
   }
 }

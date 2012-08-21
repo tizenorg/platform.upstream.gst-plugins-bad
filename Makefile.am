@@ -52,6 +52,7 @@ CRUFT_FILES = \
 	$(top_builddir)/gst/audioparsers/.libs/*.{so,dll,DLL,dylib} \
 	$(top_builddir)/gst/flacparse/.libs/*.{so,dll,DLL,dylib} \
 	$(top_builddir)/gst/imagefreeze/.libs/*.{so,dll,DLL,dylib} \
+	$(top_builddir)/gst/mpeg4videoparse/.libs/*.{so,dll,DLL,dylib} \
 	$(top_builddir)/gst/qtmux/.libs/*.{so,dll,DLL,dylib} \
 	$(top_builddir)/gst/selector/.libs/*.{so,dll,DLL,dylib} \
 	$(top_builddir)/gst/shapewipe/.libs/*.{so,dll,DLL,dylib} \
@@ -78,6 +79,8 @@ CRUFT_DIRS = \
 	$(top_srcdir)/gst/amrparse \
 	$(top_srcdir)/gst/flacparse \
 	$(top_srcdir)/gst/imagefreeze \
+	$(top_srcdir)/gst/invtelecine \
+	$(top_srcdir)/gst/mpeg4videoparse \
 	$(top_srcdir)/gst/qtmux \
 	$(top_srcdir)/gst/selector \
 	$(top_srcdir)/gst/shapewipe \
@@ -87,6 +90,7 @@ CRUFT_DIRS = \
 	$(top_srcdir)/tests/examples/switch \
 	$(top_srcdir)/tests/examples/jack \
 	$(top_srcdir)/ext/alsaspdif \
+	$(top_srcdir)/ext/amrwbenc \
 	$(top_srcdir)/ext/ivorbis \
 	$(top_srcdir)/ext/jack \
 	$(top_srcdir)/ext/metadata \

@@ -103,8 +103,8 @@ gst_linsys_sdi_src_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_linsys_sdi_src_src_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_linsys_sdi_src_src_template);
 
   gst_element_class_set_details_simple (element_class, "SDI video source",
       "Source/Video", "Reads video from SDI capture device",
@@ -212,12 +212,12 @@ gst_linsys_sdi_src_get_property (GObject * object, guint property_id,
 void
 gst_linsys_sdi_src_dispose (GObject * object)
 {
-  GstLinsysSdiSrc *linsyssdisrc;
-
-  g_return_if_fail (GST_IS_LINSYS_SDI_SRC (object));
-  linsyssdisrc = GST_LINSYS_SDI_SRC (object);
+  GstLinsysSdiSrc *linsyssdisrc = GST_LINSYS_SDI_SRC (object);
+  g_return_if_fail (linsyssdisrc != NULL);
 
   /* clean up as possible.  may be called multiple times */
+  g_free (linsyssdisrc->device);
+  linsyssdisrc->device = NULL;
 
   G_OBJECT_CLASS (parent_class)->dispose (object);
 }
@@ -225,10 +225,7 @@ gst_linsys_sdi_src_dispose (GObject * object)
 void
 gst_linsys_sdi_src_finalize (GObject * object)
 {
-  GstLinsysSdiSrc *linsyssdisrc;
-
   g_return_if_fail (GST_IS_LINSYS_SDI_SRC (object));
-  linsyssdisrc = GST_LINSYS_SDI_SRC (object);
 
   /* clean up object here */
 

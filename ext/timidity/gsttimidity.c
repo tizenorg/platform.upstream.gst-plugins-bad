@@ -95,10 +95,8 @@ gst_timidity_base_init (gpointer gclass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
   gst_element_class_set_details_simple (element_class, "Timidity",
       "Codec/Decoder/Audio",
       "Midi Synthesizer Element", "Wouter Paesen <wouter@blue-gate.be>");
@@ -108,12 +106,9 @@ gst_timidity_base_init (gpointer gclass)
 static void
 gst_timidity_class_init (GstTimidityClass * klass)
 {
-  GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
 
-  gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
-
   gstelement_class->change_state = gst_timidity_change_state;
 }
 

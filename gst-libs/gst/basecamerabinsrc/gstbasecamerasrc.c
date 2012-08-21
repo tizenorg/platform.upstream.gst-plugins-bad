@@ -111,57 +111,6 @@ GST_STATIC_PAD_TEMPLATE (GST_BASE_CAMERA_SRC_VIDEO_PAD_NAME,
  */
 
 /**
- * gst_base_camera_src_get_photography:
- * @self: the camerasrc bin
- *
- * Get object implementing photography interface, if there is one.  Otherwise
- * returns NULL.
- */
-GstPhotography *
-gst_base_camera_src_get_photography (GstBaseCameraSrc * self)
-{
-  GstElement *elem;
-
-  if (GST_IS_PHOTOGRAPHY (self)) {
-    elem = GST_ELEMENT (self);
-  } else {
-    elem = gst_bin_get_by_interface (GST_BIN (self), GST_TYPE_PHOTOGRAPHY);
-  }
-
-  if (elem) {
-    return GST_PHOTOGRAPHY (elem);
-  }
-
-  return NULL;
-}
-
-
-/**
- * gst_base_camera_src_get_colorbalance:
- * @self: the camerasrc bin
- *
- * Get object implementing colorbalance interface, if there is one.  Otherwise
- * returns NULL.
- */
-GstColorBalance *
-gst_base_camera_src_get_color_balance (GstBaseCameraSrc * self)
-{
-  GstElement *elem;
-
-  if (GST_IS_COLOR_BALANCE (self)) {
-    elem = GST_ELEMENT (self);
-  } else {
-    elem = gst_bin_get_by_interface (GST_BIN (self), GST_TYPE_COLOR_BALANCE);
-  }
-
-  if (elem) {
-    return GST_COLOR_BALANCE (self);
-  }
-
-  return NULL;
-}
-
-/**
  * gst_base_camera_src_set_mode:
  * @self: the camerasrc bin
  * @mode: the mode
@@ -220,24 +169,6 @@ gst_base_camera_src_setup_preview (GstBaseCameraSrc * self,
 
   if (bclass->set_preview)
     bclass->set_preview (self, preview_caps);
-}
-
-/**
- * gst_base_camera_src_get_allowed_input_caps:
- * @self: the camerasrc bin
- *
- * Retrieve caps from videosrc describing formats it supports
- *
- * Returns: caps object from videosrc
- */
-GstCaps *
-gst_base_camera_src_get_allowed_input_caps (GstBaseCameraSrc * self)
-{
-  GstBaseCameraSrcClass *bclass = GST_BASE_CAMERA_SRC_GET_CLASS (self);
-
-  g_return_val_if_fail (bclass->get_allowed_input_caps, NULL);
-
-  return bclass->get_allowed_input_caps (self);
 }
 
 static void
@@ -368,7 +299,11 @@ gst_base_camera_src_set_property (GObject * object,
       if (self->preview_filter)
         gst_object_unref (self->preview_filter);
       self->preview_filter = g_value_dup_object (value);
-      self->preview_filter_changed = TRUE;
+      if (!gst_camerabin_preview_set_filter (self->preview_pipeline,
+              self->preview_filter)) {
+        GST_WARNING_OBJECT (self,
+            "Cannot change preview filter, is element in NULL state?");
+      }
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (self, prop_id, pspec);
@@ -452,19 +387,11 @@ gst_base_camera_src_change_state (GstElement * element,
       if (!construct_pipeline (self))
         return GST_STATE_CHANGE_FAILURE;
 
-      /* recreate the preview pipeline */
-      if (self->preview_pipeline && self->preview_filter_changed) {
-        gst_camerabin_destroy_preview_pipeline (self->preview_pipeline);
-        self->preview_pipeline = NULL;
+      if (self->preview_pipeline == NULL) {
+        /* failed to create preview pipeline, fail state change */
+        return GST_STATE_CHANGE_FAILURE;
       }
 
-      if (self->preview_pipeline == NULL)
-        self->preview_pipeline =
-            gst_camerabin_create_preview_pipeline (GST_ELEMENT_CAST (self),
-            self->preview_filter);
-
-      g_assert (self->preview_pipeline != NULL);
-      self->preview_filter_changed = FALSE;
       if (self->preview_caps) {
         GST_DEBUG_OBJECT (self,
             "Setting preview pipeline caps %" GST_PTR_FORMAT,
@@ -476,6 +403,8 @@ gst_base_camera_src_change_state (GstElement * element,
     case GST_STATE_CHANGE_READY_TO_PAUSED:
       if (!setup_pipeline (self))
         return GST_STATE_CHANGE_FAILURE;
+      /* without this the preview pipeline will not post buffer
+       * messages on the pipeline */
       gst_element_set_state (self->preview_pipeline->pipeline,
           GST_STATE_PLAYING);
       break;
@@ -486,6 +415,9 @@ gst_base_camera_src_change_state (GstElement * element,
   ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
 
   switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      gst_element_set_state (self->preview_pipeline->pipeline, GST_STATE_READY);
+      break;
     case GST_STATE_CHANGE_READY_TO_NULL:
       gst_element_set_state (self->preview_pipeline->pipeline, GST_STATE_NULL);
       break;
@@ -508,14 +440,13 @@ gst_base_camera_src_base_init (gpointer g_class)
       "Base class for camerabin src bin", "Source/Video",
       "Abstracts capture device for camerabin2", "Rob Clark <rob@ti.com>");
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&vfsrc_template));
+  gst_element_class_add_static_pad_template (gstelement_class, &vfsrc_template);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&imgsrc_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &imgsrc_template);
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&vidsrc_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &vidsrc_template);
 }
 
 static void
@@ -589,25 +520,18 @@ gst_base_camera_src_class_init (GstBaseCameraSrcClass * klass)
 
   /* Signals */
   basecamerasrc_signals[START_CAPTURE_SIGNAL] =
-      g_signal_new ("start-capture",
+      g_signal_new_class_handler ("start-capture",
       G_TYPE_FROM_CLASS (klass),
       G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
-      G_STRUCT_OFFSET (GstBaseCameraSrcClass, private_start_capture),
+      G_CALLBACK (gst_base_camera_src_start_capture),
       NULL, NULL, g_cclosure_marshal_VOID__VOID, G_TYPE_NONE, 0);
 
   basecamerasrc_signals[STOP_CAPTURE_SIGNAL] =
-      g_signal_new ("stop-capture",
+      g_signal_new_class_handler ("stop-capture",
       G_TYPE_FROM_CLASS (klass),
       G_SIGNAL_RUN_LAST | G_SIGNAL_ACTION,
-      G_STRUCT_OFFSET (GstBaseCameraSrcClass, private_stop_capture),
+      G_CALLBACK (gst_base_camera_src_stop_capture),
       NULL, NULL, g_cclosure_marshal_VOID__VOID, G_TYPE_NONE, 0);
-
-  /* TODO these should be moved to a private struct
-   * that is allocated sequentially to the main struct as said at:
-   * http://library.gnome.org/devel/gobject/unstable/gobject-Type-Information.html#g-type-add-class-private
-   */
-  klass->private_start_capture = gst_base_camera_src_start_capture;
-  klass->private_stop_capture = gst_base_camera_src_stop_capture;
 
   gstelement_class->change_state = gst_base_camera_src_change_state;
 }
@@ -626,6 +550,9 @@ gst_base_camera_src_init (GstBaseCameraSrc * self,
   self->capturing_mutex = g_mutex_new ();
 
   self->post_preview = DEFAULT_POST_PREVIEW;
+
+  self->preview_pipeline =
+      gst_camerabin_create_preview_pipeline (GST_ELEMENT_CAST (self), NULL);
 }
 
 void

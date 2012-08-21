@@ -135,12 +135,12 @@ gst_mse_base_init (gpointer klass)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_framestore_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_framestore_sink_ref_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_framestore_sink_test_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_framestore_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_framestore_sink_ref_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_framestore_sink_test_template);
 
   gst_element_class_set_details_simple (element_class, "Calculate MSE",
       "Filter/Effect",
@@ -203,8 +203,14 @@ gst_mse_finalize (GObject * object)
 {
   GstMSE *fs = GST_MSE (object);
 
+  gst_object_unref (fs->srcpad);
+  gst_object_unref (fs->sinkpad_ref);
+  gst_object_unref (fs->sinkpad_test);
   g_mutex_free (fs->lock);
   g_cond_free (fs->cond);
+  gst_buffer_replace (&fs->buffer_ref, NULL);
+
+  GST_CALL_PARENT (G_OBJECT_CLASS, finalize, (object));
 }
 
 static GstCaps *
@@ -240,7 +246,7 @@ gst_mse_getcaps (GstPad * pad)
   }
 
   if (pad != fs->sinkpad_test) {
-    peercaps = gst_pad_peer_get_caps (fs->sinkpad_ref);
+    peercaps = gst_pad_peer_get_caps (fs->sinkpad_test);
     if (peercaps) {
       icaps = gst_caps_intersect (caps, peercaps);
       gst_caps_unref (caps);
@@ -307,6 +313,7 @@ gst_mse_reset (GstMSE * fs)
   fs->luma_mse_sum = 0;
   fs->chroma_mse_sum = 0;
   fs->n_frames = 0;
+  fs->cancel = FALSE;
 
   if (fs->buffer_ref) {
     gst_buffer_unref (fs->buffer_ref);
@@ -432,9 +439,11 @@ gst_mse_sink_event (GstPad * pad, GstEvent * event)
       break;
     case GST_EVENT_FLUSH_START:
       GST_DEBUG ("flush start");
+      fs->cancel = TRUE;
       break;
     case GST_EVENT_FLUSH_STOP:
       GST_DEBUG ("flush stop");
+      fs->cancel = FALSE;
       break;
     default:
       break;

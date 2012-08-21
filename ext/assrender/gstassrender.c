@@ -117,12 +117,11 @@ gst_ass_render_base_init (gpointer gclass)
 {
   GstElementClass *element_class = (GstElementClass *) gclass;
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&video_sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&text_sink_factory));
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &video_sink_factory);
+  gst_element_class_add_static_pad_template (element_class,
+      &text_sink_factory);
 
   gst_element_class_set_details_simple (element_class, "ASS/SSA Render",
       "Mixer/Video/Overlay/Subtitle",
@@ -570,10 +569,13 @@ blit_i420 (GstAssRender * render, ASS_Image * ass_image, GstBuffer * buffer)
   const guint8 *src;
   guint8 *dst_y, *dst_u, *dst_v;
   gint x, y, w, h;
+/* FIXME ignoring source image stride might be wrong here */
+#if 0
   gint w2;
+  gint src_stride;
+#endif
   gint width = render->width;
   gint height = render->height;
-  gint src_stride;
   gint y_offset, y_stride;
   gint u_offset, u_stride;
   gint v_offset, v_stride;
@@ -609,9 +611,11 @@ blit_i420 (GstAssRender * render, ASS_Image * ass_image, GstBuffer * buffer)
     w = MIN (ass_image->w, width - ass_image->dst_x);
     h = MIN (ass_image->h, height - ass_image->dst_y);
 
+#if 0
     w2 = (w + 1) / 2;
 
     src_stride = ass_image->stride;
+#endif
 
     src = ass_image->bitmap;
     dst_y =
@@ -1135,7 +1139,7 @@ gst_ass_render_chain_text (GstPad * pad, GstBuffer * buffer)
     g_mutex_lock (render->subtitle_mutex);
     if (G_UNLIKELY (render->subtitle_flushing)) {
       GST_DEBUG_OBJECT (render, "Text pad flushing");
-      gst_object_unref (buffer);
+      gst_buffer_unref (buffer);
       g_mutex_unlock (render->subtitle_mutex);
       return GST_FLOW_WRONG_STATE;
     }

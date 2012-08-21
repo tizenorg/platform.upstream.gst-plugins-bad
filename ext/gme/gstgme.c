@@ -114,10 +114,8 @@ gst_gme_dec_base_init (gpointer g_class)
       "Chris Lee <clee@kde.org>, Brian Koropoff <bkoropoff@gmail.com>, "
       "Michael Pyne <mpyne@kde.org>, Sebastian Dröge <sebastian.droege@collabora.co.uk>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_factory));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_factory));
+  gst_element_class_add_static_pad_template (element_class, &sink_factory);
+  gst_element_class_add_static_pad_template (element_class, &src_factory);
 }
 
 static void
@@ -174,6 +172,8 @@ gst_gme_dec_dispose (GObject * object)
     g_object_unref (gme->adapter);
     gme->adapter = NULL;
   }
+
+  GST_CALL_PARENT (G_OBJECT_CLASS, dispose, (object));
 }
 
 static GstFlowReturn
@@ -375,7 +375,7 @@ gst_gme_play (GstPad * pad)
         gme_play (gme->player, NUM_SAMPLES * 2,
         (short *) GST_BUFFER_DATA (out));
     if (gme_err) {
-      GST_ELEMENT_ERROR (gme, STREAM, DEMUX, (NULL), (gme_err));
+      GST_ELEMENT_ERROR (gme, STREAM, DEMUX, (NULL), ("%s", gme_err));
       gst_pad_pause_task (pad);
       gst_pad_push_event (pad, gst_event_new_eos ());
       gst_object_unref (gme);
@@ -445,7 +445,7 @@ gme_setup (GstGmeDec * gme)
       gme->player = NULL;
     }
 
-    GST_ELEMENT_ERROR (gme, STREAM, DEMUX, (NULL), (gme_err));
+    GST_ELEMENT_ERROR (gme, STREAM, DEMUX, (NULL), ("%s", gme_err));
 
     return FALSE;
   }

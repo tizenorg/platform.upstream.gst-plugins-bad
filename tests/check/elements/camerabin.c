@@ -26,6 +26,7 @@
 
 #include <unistd.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <gst/gst.h>
 #include <gst/check/gstcheck.h>
 #include <gst/interfaces/photography.h>
@@ -157,7 +158,7 @@ static void
 setup_camerabin_elements (GstElement * camera)
 {
   GstElement *vfsink, *audiosrc, *videosrc, *audioenc, *videoenc, *imageenc,
-      *videomux, *viewfinder_filter, *imagepp, *videopp;
+      *videomux, *viewfinder_filter, *imagepp, *videopp, *formatter;
   GstCaps *audiocaps, *videocaps;
 
   /* Use fakesink for view finder */
@@ -181,6 +182,7 @@ setup_camerabin_elements (GstElement * camera)
   viewfinder_filter = gst_element_factory_make ("identity", NULL);
   imagepp = gst_element_factory_make ("identity", NULL);
   videopp = gst_element_factory_make ("identity", NULL);
+  formatter = gst_element_factory_make ("jifmux", NULL);
 
   if (set_and_check_camerabin_element (camera, "viewfinder-sink", vfsink)
       && set_and_check_camerabin_element (camera, "audio-source", audiosrc)
@@ -194,7 +196,8 @@ setup_camerabin_elements (GstElement * camera)
       && set_and_check_camerabin_element (camera, "image-post-processing",
           imagepp)
       && set_and_check_camerabin_element (camera, "video-post-processing",
-          videopp)) {
+          videopp)
+      && set_and_check_camerabin_element (camera, "image-formatter", formatter)) {
     GST_INFO ("element properties set and checked");
   } else {
     GST_WARNING ("error setting up test plugins");
@@ -499,6 +502,16 @@ check_file_validity (const gchar * filename, gint num, GstTagList * taglist)
   return TRUE;
 }
 
+static void
+remove_file (const gchar * fn_template, guint num)
+{
+  const gchar *fn;
+
+  fn = make_test_file_name (fn_template, num);
+  GST_INFO ("removing %s", fn);
+  g_unlink (fn);
+}
+
 GST_START_TEST (test_single_image_capture)
 {
   gboolean ready = FALSE;
@@ -542,6 +555,7 @@ GST_START_TEST (test_single_image_capture)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (SINGLE_IMAGE_FILENAME, 0, NULL);
+  remove_file (SINGLE_IMAGE_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -566,6 +580,7 @@ GST_START_TEST (test_single_image_capture_with_flags)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (SINGLE_IMAGE_WITH_FLAGS_FILENAME, 0, NULL);
+  remove_file (SINGLE_IMAGE_WITH_FLAGS_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -615,6 +630,7 @@ GST_START_TEST (test_video_recording)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (VIDEO_WITH_FLAGS_FILENAME, 0, NULL);
+  remove_file (VIDEO_WITH_FLAGS_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -651,6 +667,7 @@ GST_START_TEST (test_video_recording_with_flags)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (VIDEO_FILENAME, 0, NULL);
+  remove_file (VIDEO_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -702,6 +719,7 @@ GST_START_TEST (test_video_recording_pause)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (VIDEO_PAUSE_FILENAME, 0, NULL);
+  remove_file (VIDEO_PAUSE_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -738,6 +756,7 @@ GST_START_TEST (test_video_recording_no_audio)
   gst_element_set_state (GST_ELEMENT (camera), GST_STATE_NULL);
 
   check_file_validity (VIDEO_NOAUDIO_FILENAME, 0, NULL);
+  remove_file (VIDEO_NOAUDIO_FILENAME, 0);
 }
 
 GST_END_TEST;
@@ -765,7 +784,9 @@ GST_START_TEST (test_image_video_cycle)
   /* validate all the files */
   for (i = 2; i > 0; i--) {
     check_file_validity (CYCLE_IMAGE_FILENAME, i, NULL);
+    remove_file (CYCLE_IMAGE_FILENAME, i);
     check_file_validity (CYCLE_VIDEO_FILENAME, i, NULL);
+    remove_file (CYCLE_VIDEO_FILENAME, i);
   }
 }
 
@@ -794,6 +815,7 @@ GST_START_TEST (test_image_tags_setting)
   for (i = 0; i < SEQUENTIAL_IMAGES_COUNT; i++) {
     check_file_validity (SEQUENTIAL_IMAGES_FILENAME, i,
         taglists[i % TAGLISTS_COUNT]);
+    remove_file (SEQUENTIAL_IMAGES_FILENAME, i);
   }
 }
 

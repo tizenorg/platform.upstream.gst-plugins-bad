@@ -132,10 +132,10 @@ gst_colorconvert_base_init (gpointer g_class)
 
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_colorconvert_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_colorconvert_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_colorconvert_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_colorconvert_sink_template);
 
   gst_element_class_set_details_simple (element_class, "Convert colorspace",
       "Filter/Effect/Video",
@@ -148,11 +148,9 @@ gst_colorconvert_class_init (gpointer g_class, gpointer class_data)
 {
   GObjectClass *gobject_class;
   GstBaseTransformClass *base_transform_class;
-  GstColorconvertClass *filter_class;
 
   gobject_class = G_OBJECT_CLASS (g_class);
   base_transform_class = GST_BASE_TRANSFORM_CLASS (g_class);
-  filter_class = GST_COLORCONVERT_CLASS (g_class);
 
   gobject_class->set_property = gst_colorconvert_set_property;
   gobject_class->get_property = gst_colorconvert_get_property;
@@ -172,10 +170,7 @@ static void
 gst_colorconvert_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstColorconvert *src;
-
   g_return_if_fail (GST_IS_COLORCONVERT (object));
-  src = GST_COLORCONVERT (object);
 
   GST_DEBUG ("gst_colorconvert_set_property");
   switch (prop_id) {
@@ -188,10 +183,7 @@ static void
 gst_colorconvert_get_property (GObject * object, guint prop_id, GValue * value,
     GParamSpec * pspec)
 {
-  GstColorconvert *src;
-
   g_return_if_fail (GST_IS_COLORCONVERT (object));
-  src = GST_COLORCONVERT (object);
 
   switch (prop_id) {
     default:

@@ -62,6 +62,8 @@
 
 #define QTWRAPPER_ADEC_PARAMS_QDATA g_quark_from_static_string("qtwrapper-adec-params")
 
+#define NO_MORE_INPUT_DATA 42
+
 static GstStaticPadTemplate src_templ = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
@@ -745,9 +747,9 @@ process_buffer_cb (ComponentInstance inAudioConverter,
     return noErr;
   }
 
-  GST_LOG_OBJECT (qtwrapper, "No remaining input data, returning 42 for hack");
+  GST_LOG_OBJECT (qtwrapper, "No remaining input data, returning NO_MORE_INPUT_DATA");
 
-  return 42;
+  return NO_MORE_INPUT_DATA;
 }
 
 static GstFlowReturn
@@ -805,8 +807,7 @@ qtwrapper_audio_decoder_chain (GstPad * pad, GstBuffer * buf)
         (SCAudioInputDataProc) process_buffer_cb,
         qtwrapper, (UInt32 *) & outsamples, qtwrapper->bufferlist, NULL);
 
-    /* TODO: What's this '42' crap?? It does seem to be needed, though. */
-    if ((status != noErr) && (status != 42)) {
+    if ((status != noErr) && (status != NO_MORE_INPUT_DATA)) {
       if (status < 0)
         GST_WARNING_OBJECT (qtwrapper,
             "Error in SCAudioFillBuffer() : %d", (gint32) status);
@@ -864,7 +865,7 @@ qtwrapper_audio_decoder_chain (GstPad * pad, GstBuffer * buf)
 
     GST_DEBUG_OBJECT (qtwrapper,
         "Read %d bytes, could have read up to %d bytes", realbytes, savedbytes);
-  } while (realbytes == savedbytes);
+  } while (status != NO_MORE_INPUT_DATA);
 
 beach:
   gst_buffer_unref (buf);
@@ -969,8 +970,7 @@ qtwrapper_audio_decoder_base_init (QTWrapperAudioDecoderClass * klass)
   klass->sinktempl = gst_pad_template_new ("sink", GST_PAD_SINK,
       GST_PAD_ALWAYS, params->sinkcaps);
   gst_element_class_add_pad_template (element_class, klass->sinktempl);
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_templ));
+  gst_element_class_add_static_pad_template (element_class, &src_templ);
 
   /* Store class-global values */
   klass->componentSubType = desc.componentSubType;

@@ -141,20 +141,16 @@ gst_nsfdec_base_init (gpointer g_class)
       "Using nosefart to decode NSF audio tunes",
       "Johan Dahlin <johan@gnome.org>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&src_templ));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_templ));
+  gst_element_class_add_static_pad_template (element_class, &src_templ);
+  gst_element_class_add_static_pad_template (element_class, &sink_templ);
 }
 
 static void
 gst_nsfdec_class_init (GstNsfDec * klass)
 {
   GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
 
   gobject_class = (GObjectClass *) klass;
-  gstelement_class = (GstElementClass *) klass;
 
   parent_class = GST_ELEMENT_CLASS (g_type_class_peek_parent (klass));
 

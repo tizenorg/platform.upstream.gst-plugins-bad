@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>camerabin</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="GStreamer Bad Plugins 0.10 Plugins Reference Manual">
 <link rel="up" href="ch01.html" title="gst-plugins-bad Elements">
 <link rel="prev" href="gst-plugins-bad-plugins-burn.html" title="burn">
-<link rel="next" href="gst-plugins-bad-plugins-celtdec.html" title="celtdec">
-<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
+<link rel="next" href="gst-plugins-bad-plugins-camerabin2.html" title="camerabin2">
+<meta name="generator" content="GTK-Doc V1.18 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -18,7 +18,7 @@
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
 <th width="100%" align="center">GStreamer Bad Plugins 0.10 Plugins Reference Manual</th>
-<td><a accesskey="n" href="gst-plugins-bad-plugins-celtdec.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
+<td><a accesskey="n" href="gst-plugins-bad-plugins-camerabin2.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
 </tr>
 <tr><td colspan="5" class="shortcuts">
 <a href="#gst-plugins-bad-plugins-camerabin.synopsis" class="shortcut">Top</a>
@@ -107,6 +107,7 @@ GstCameraBin implements
   "<a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--idle" title='The "idle" property'>idle</a>"                     <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read
   "<a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--preview-source-filter" title='The "preview-source-filter" property'>preview-source-filter</a>"    <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>*           : Read / Write
   "<a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--ready-for-capture" title='The "ready-for-capture" property'>ready-for-capture</a>"        <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>              : Read
+  "<a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--image-formatter" title='The "image-formatter" property'>image-formatter</a>"          <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>*           : Read / Write
 </pre>
 </div>
 <div class="refsect1">
@@ -143,7 +144,7 @@ three main data paths: view-finder, image capture and video capture.
 <p>
 </p>
 <div class="refsect2">
-<a name="idp9878256"></a><h3>Example launch line</h3>
+<a name="idp9814912"></a><h3>Example launch line</h3>
 <div class="informalexample">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
     <tbody>
@@ -160,7 +161,7 @@ three main data paths: view-finder, image capture and video capture.
 </p>
 <hr>
 <div class="refsect2">
-<a name="idp9880016"></a><h3>Image capture</h3>
+<a name="idp9816672"></a><h3>Image capture</h3>
 <p>
 Image capture is selected by switching <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--mode" title='The "mode" property'><span class="type">"mode"</span></a> to <a class="link" href="gst-plugins-bad-plugins-camerabin.html#MODE-IMAGE:CAPS"><code class="literal">MODE_IMAGE</code></a>.
 Taking still images is initiated with the <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin-capture-start" title='The "capture-start" signal'><span class="type">"capture-start"</span></a> action
@@ -188,7 +189,7 @@ functions and properties for setting photography parameters. One can use
 </p>
 <hr>
 <div class="refsect2">
-<a name="idp9891200"></a><h3>Video capture</h3>
+<a name="idp9827856"></a><h3>Video capture</h3>
 <p>
 Video capture is selected by switching <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--mode" title='The "mode" property'><span class="type">"mode"</span></a> to <a class="link" href="gst-plugins-bad-plugins-camerabin.html#MODE-VIDEO:CAPS"><code class="literal">MODE_VIDEO</code></a>.
 The capture is started with the <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin-capture-start" title='The "capture-start" signal'><span class="type">"capture-start"</span></a> action signal
@@ -206,7 +207,7 @@ frame rate and resolution for the video recording and view finder as well.
 </p>
 <hr>
 <div class="refsect2">
-<a name="idp9899328"></a><h3>States</h3>
+<a name="idp9835984"></a><h3>States</h3>
 <p>
 Elements within GstCameraBin are created and destroyed when switching
 between NULL and READY states. Therefore element properties should be set
@@ -214,13 +215,15 @@ in NULL state. User set elements are not unreffed until GstCameraBin is
 unreffed or replaced by a new user set element. Initially only elements
 needed for view finder mode are created to speed up startup. Image bin and
 video bin elements are created when setting the mode or starting capture.
+GstCameraBin must be in the PLAYING state before <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin-capture-start" title='The "capture-start" signal'><span class="type">"capture-start"</span></a>
+is called.
 </p>
 </div>
 <p>
 </p>
 <hr>
 <div class="refsect2">
-<a name="idp9901088"></a><h3>Video and image previews</h3>
+<a name="idp9838656"></a><h3>Video and image previews</h3>
 <p>
 GstCameraBin contains <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin--preview-caps" title='The "preview-caps" property'><span class="type">"preview-caps"</span></a> property, which is used to
 determine whether the application wants a preview image of the captured
@@ -241,7 +244,7 @@ mode.
 </p>
 <hr>
 <div class="refsect2">
-<a name="idp9905248"></a><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;">
+<a name="idp9842736"></a><div class="note" style="margin-left: 0.5in; margin-right: 0.5in;">
 <h3 class="title">Note</h3>
 <p>
 Since the muxers tested so far have problems with discontinous buffers, QoS
@@ -258,7 +261,7 @@ colorspace (i.e. rgb or yuv i420 or whatelse).
 <div class="refsynopsisdiv">
 <h2>Synopsis</h2>
 <div class="refsect2">
-<a name="idp9907920"></a><h3>Element Information</h3>
+<a name="idp9845408"></a><h3>Element Information</h3>
 <div class="variablelist"><table border="0">
 <col align="left" valign="top">
 <tbody>
@@ -281,7 +284,7 @@ colorspace (i.e. rgb or yuv i420 or whatelse).
 </div>
 <hr>
 <div class="refsect2">
-<a name="idp9915328"></a><h3>Element Pads</h3>
+<a name="idp9852816"></a><h3>Element Pads</h3>
 </div>
 </div>
 <p>
@@ -299,8 +302,7 @@ The opaque <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCamer
 <hr>
 <div class="refsect2">
 <a name="GstCameraBinMode"></a><h3>enum GstCameraBinMode</h3>
-<pre class="programlisting">typedef enum
-{
+<pre class="programlisting">typedef enum {
   MODE_IMAGE = 0,
   MODE_VIDEO
 } GstCameraBinMode;
@@ -561,7 +563,7 @@ The ownership of the element will be taken by <a class="link" href="gst-plugins-
 <p>
 Control the behaviour of camerabin.
 </p>
-<p>Default value: Enable source crop and scale|Enable scale for viewfinder|Enable audio conversion for video capture|Enable colorspace conversion for still image|Enable colorspace conversion for video capture</p>
+<p>Default value: Enable source crop and scale|Enable colorspace conversion for viewfinder|Enable scale for viewfinder|Enable audio conversion for video capture|Enable colorspace conversion for still image|Enable colorspace conversion for video capture</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -684,6 +686,16 @@ When TRUE new capture can be prepared. If FALSE capturing is ongoing
 and starting a new capture immediately is not possible.
 </p>
 <p>Default value: TRUE</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="GstCameraBin--image-formatter"></a><h3>The <code class="literal">"image-formatter"</code> property</h3>
+<pre class="programlisting">  "image-formatter"          <a href="http://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstElement.html"><span class="type">GstElement</span></a>*           : Read / Write</pre>
+<p>
+Set up an image formatter (for example, jifmux) element.
+This property can only be set while <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin"><span class="type">GstCameraBin</span></a> is in NULL state.
+The ownership of the element will be taken by <a class="link" href="gst-plugins-bad-plugins-camerabin.html#GstCameraBin"><span class="type">GstCameraBin</span></a>.
+</p>
 </div>
 </div>
 <div class="refsect1">
@@ -1015,6 +1027,6 @@ already updates the caps to force use this resolution and framerate.
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.17</div>
+          Generated by GTK-Doc V1.18</div>
 </body>
 </html>

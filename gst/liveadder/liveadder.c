@@ -158,10 +158,10 @@ gst_live_adder_base_init (gpointer klass)
 {
   GstElementClass *gstelement_class = (GstElementClass *) klass;
 
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_live_adder_src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_live_adder_sink_template));
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_live_adder_src_template);
+  gst_element_class_add_static_pad_template (gstelement_class,
+      &gst_live_adder_sink_template);
   gst_element_class_set_details_simple (gstelement_class, "Live Adder element",
       "Generic/Audio",
       "Mixes live/discontinuous audio streams",
@@ -1091,10 +1091,11 @@ gst_live_live_adder_chain (GstPad * pad, GstBuffer * buffer)
     if (skip) {
       GstClockTime subbuffer_duration = GST_BUFFER_DURATION (buffer) - skip;
       GstClockTime subbuffer_ts = GST_BUFFER_TIMESTAMP (buffer) + skip;
-
-      buffer = gst_buffer_create_sub (buffer,
+      GstBuffer *new_buffer = gst_buffer_create_sub (buffer,
           gst_live_adder_length_from_duration (adder, skip),
           gst_live_adder_length_from_duration (adder, subbuffer_duration));
+      gst_buffer_unref (buffer);
+      buffer = new_buffer;
       GST_BUFFER_TIMESTAMP (buffer) = subbuffer_ts;
       GST_BUFFER_DURATION (buffer) = subbuffer_duration;
     }
@@ -1377,7 +1378,11 @@ gst_live_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
   adder = GST_LIVE_ADDER (element);
 
   /* increment pad counter */
+#if GLIB_CHECK_VERSION(2,29,5)
+  padcount = g_atomic_int_add (&adder->padcount, 1);
+#else
   padcount = g_atomic_int_exchange_and_add (&adder->padcount, 1);
+#endif
 
   name = g_strdup_printf ("sink%d", padcount);
   newpad = gst_pad_new_from_template (templ, name);

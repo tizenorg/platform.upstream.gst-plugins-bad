@@ -24,12 +24,26 @@
 #define __M3U8_H__
 
 #include <glib.h>
+#include <openssl/evp.h>
 
 G_BEGIN_DECLS typedef struct _GstM3U8 GstM3U8;
 typedef struct _GstM3U8MediaFile GstM3U8MediaFile;
+typedef struct _GstM3U8Key GstM3U8Key;
 typedef struct _GstM3U8Client GstM3U8Client;
 
+#define GST_M3U8(m) ((GstM3U8*)m)
+#define GST_M3U8_KEY(k) ((GstM3U8Key*)k)
 #define GST_M3U8_MEDIA_FILE(f) ((GstM3U8MediaFile*)f)
+
+#define GST_M3U8_CLIENT_LOCK(c) g_mutex_lock (c->lock);
+#define GST_M3U8_CLIENT_UNLOCK(c) g_mutex_unlock (c->lock);
+
+#define GST_M3U8_IV_LEN 16
+
+typedef enum {
+  GST_M3U8_ENCRYPTED_NONE,
+  GST_M3U8_ENCRYPTED_AES_128,
+} GstM3U8EncryptionMethod;
 
 struct _GstM3U8
 {
@@ -37,7 +51,7 @@ struct _GstM3U8
 
   gboolean endlist;             /* if ENDLIST has been reached */
   gint version;                 /* last EXT-X-VERSION */
-  gint targetduration;          /* last EXT-X-TARGETDURATION */
+  GstClockTime targetduration;  /* last EXT-X-TARGETDURATION */
   gchar *allowcache;            /* last EXT-X-ALLOWCACHE */
 
   gint bandwidth;
@@ -46,20 +60,32 @@ struct _GstM3U8
   gint width;
   gint height;
   GList *files;
+  GList *keys;
 
   /*< private > */
   gchar *last_data;
   GList *lists;                 /* list of GstM3U8 from the main playlist */
+  GList *current_variant;       /* Current variant playlist used */
   GstM3U8 *parent;              /* main playlist (if any) */
   guint mediasequence;          /* EXT-X-MEDIA-SEQUENCE & increased with new media file */
+  EVP_CIPHER_CTX *cipher_ctx;
 };
 
 struct _GstM3U8MediaFile
 {
   gchar *title;
-  gint duration;
+  GstClockTime duration;
   gchar *uri;
   guint sequence;               /* the sequence nb of this file */
+};
+
+struct _GstM3U8Key
+{
+  GstM3U8EncryptionMethod method;
+  gchar *uri;
+  guint8 *iv;
+  guint sequence;
+  guint8 *data;
 };
 
 struct _GstM3U8Client
@@ -68,6 +94,7 @@ struct _GstM3U8Client
   GstM3U8 *current;
   guint update_failed_count;
   gint sequence;                /* the next sequence for this client */
+  GMutex *lock;
 };
 
 
@@ -76,11 +103,22 @@ void gst_m3u8_client_free (GstM3U8Client * client);
 gboolean gst_m3u8_client_update (GstM3U8Client * client, gchar * data);
 void gst_m3u8_client_set_current (GstM3U8Client * client, GstM3U8 * m3u8);
 gboolean gst_m3u8_client_get_next_fragment (GstM3U8Client * client,
-    gboolean * discontinuity, const gchar ** uri, GstClockTime * duration);
+    gboolean * discontinuity, const gchar ** uri, GstClockTime * duration,
+    GstClockTime * timestamp, GstM3U8Key ** key);
+void gst_m3u8_client_get_current_position (GstM3U8Client * client,
+    GstClockTime * timestamp);
 GstClockTime gst_m3u8_client_get_duration (GstM3U8Client * client);
+GstClockTime gst_m3u8_client_get_target_duration (GstM3U8Client * client);
 const gchar *gst_m3u8_client_get_uri(GstM3U8Client * client);
+const gchar *gst_m3u8_client_get_current_uri(GstM3U8Client * client);
 gboolean gst_m3u8_client_has_variant_playlist(GstM3U8Client * client);
 gboolean gst_m3u8_client_is_live(GstM3U8Client * client);
+GList * gst_m3u8_client_get_playlist_for_bitrate (GstM3U8Client * client,
+    guint bitrate);
+gboolean gst_m3u8_client_decrypt_init (GstM3U8Client * client,
+    GstM3U8Key * key);
+gboolean gst_m3u8_client_decrypt_update (GstM3U8Client * client,
+    guint8 * out_data, gint * out_size, guint8 * in_data, gint in_size);
 
 G_END_DECLS
 #endif /* __M3U8_H__ */

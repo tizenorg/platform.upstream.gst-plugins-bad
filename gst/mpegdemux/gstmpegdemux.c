@@ -112,8 +112,8 @@ static GstStaticPadTemplate audio_template =
     GST_STATIC_PAD_TEMPLATE ("audio_%02x",
     GST_PAD_SRC,
     GST_PAD_SOMETIMES,
-    GST_STATIC_CAPS ("audio/mpeg, "
-        "mpegversion = (int) { 1, 4 };"
+    GST_STATIC_CAPS ("audio/mpeg, mpegversion = (int) 1;"
+        "audio/mpeg, mpegversion = (int) 4, stream-format = (string) { adts, loas };"
         "audio/x-private1-lpcm; "
         "audio/x-private1-ac3;" "audio/x-private1-dts;" "audio/ac3")
     );
@@ -350,11 +350,19 @@ gst_flups_demux_create_stream (GstFluPSDemux * demux, gint id, gint stream_type)
     case ST_MHEG:
     case ST_DSMCC:
       break;
-    case ST_AUDIO_AAC:
+    case ST_AUDIO_AAC_ADTS:
       template = klass->audio_template;
       name = g_strdup_printf ("audio_%02x", id);
       caps = gst_caps_new_simple ("audio/mpeg",
-          "mpegversion", G_TYPE_INT, 4, NULL);
+          "mpegversion", G_TYPE_INT, 4,
+          "stream-format", G_TYPE_STRING, "adts", NULL);
+      break;
+    case ST_AUDIO_AAC_LOAS:    // LATM/LOAS AAC syntax
+      template = klass->audio_template;
+      name = g_strdup_printf ("audio_%02x", id);
+      caps = gst_caps_new_simple ("audio/mpeg",
+          "mpegversion", G_TYPE_INT, 4,
+          "stream-format", G_TYPE_STRING, "loas", NULL);
       break;
     case ST_VIDEO_H264:
       template = klass->video_template;
@@ -391,8 +399,13 @@ gst_flups_demux_create_stream (GstFluPSDemux * demux, gint id, gint stream_type)
       break;
   }
 
-  if (name == NULL || template == NULL || caps == NULL)
-    return NULL;
+  if (name == NULL || template == NULL || caps == NULL) {
+    if (name)
+      g_free (name);
+    if (caps)
+      gst_caps_unref (caps);
+    return FALSE;
+  }
 
   stream = g_new0 (GstFluPSStream, 1);
   stream->id = id;
@@ -1034,8 +1047,9 @@ gst_flups_demux_do_seek (GstFluPSDemux * demux, GstSegment * seeksegment)
   GST_INFO_OBJECT (demux, "sink segment configured %" GST_SEGMENT_FORMAT
       ", trying to go at SCR: %" G_GUINT64_FORMAT, &demux->sink_segment, scr);
 
-  offset = MIN (gst_util_uint64_scale (scr, scr_rate_n, scr_rate_d),
-      demux->sink_segment.stop);
+  offset =
+      MIN (gst_util_uint64_scale (scr - demux->first_scr, scr_rate_n,
+          scr_rate_d), demux->sink_segment.stop);
 
   found = gst_flups_demux_scan_forward_ts (demux, &offset, SCAN_SCR, &fscr);
   if (!found) {
@@ -1239,6 +1253,7 @@ gst_flups_demux_src_query (GstPad * pad, GstQuery * query)
   switch (GST_QUERY_TYPE (query)) {
     case GST_QUERY_POSITION:
     {
+      GstClockTime pos;
       GstFormat format;
 
       gst_query_parse_position (query, &format, NULL);
@@ -1249,10 +1264,9 @@ gst_flups_demux_src_query (GstPad * pad, GstQuery * query)
         goto not_supported;
       }
 
-      GST_LOG_OBJECT (demux, "Position at GStreamer Time:%" GST_TIME_FORMAT,
-          GST_TIME_ARGS (demux->src_segment.last_stop));
-
-      gst_query_set_position (query, format, demux->src_segment.last_stop);
+      pos = demux->src_segment.last_stop - demux->src_segment.start;
+      GST_LOG_OBJECT (demux, "Position %" GST_TIME_FORMAT, GST_TIME_ARGS (pos));
+      gst_query_set_position (query, format, pos);
       res = TRUE;
       break;
     }
@@ -1598,7 +1612,7 @@ gst_flups_demux_parse_pack_start (GstFluPSDemux * demux)
 
   /* adjustment of the SCR */
   if (G_LIKELY (demux->current_scr != G_MAXUINT64)) {
-    gint64 diff;
+    guint64 diff;
     guint64 old_scr, old_mux_rate, bss, adjust = 0;
 
     /* keep SCR of the previous packet */
@@ -2517,13 +2531,16 @@ gst_flups_sink_get_duration (GstFluPSDemux * demux)
       " in packet starting at %" G_GUINT64_FORMAT,
       demux->first_pts, GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->first_pts)),
       offset);
-  /* scan for last PTS in the stream */
-  offset = demux->sink_segment.stop;
-  gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_PTS, &demux->last_pts);
-  GST_DEBUG_OBJECT (demux, "Last PTS: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
-      " in packet starting at %" G_GUINT64_FORMAT,
-      demux->last_pts, GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->last_pts)),
-      offset);
+  if (demux->first_pts != G_MAXUINT64) {
+    /* scan for last PTS in the stream */
+    offset = demux->sink_segment.stop;
+    gst_flups_demux_scan_backward_ts (demux, &offset, SCAN_PTS,
+        &demux->last_pts);
+    GST_DEBUG_OBJECT (demux,
+        "Last PTS: %" G_GINT64_FORMAT " %" GST_TIME_FORMAT
+        " in packet starting at %" G_GUINT64_FORMAT, demux->last_pts,
+        GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->last_pts)), offset);
+  }
   /* Detect wrong SCR values */
   if (demux->first_scr > demux->last_scr) {
     GST_DEBUG_OBJECT (demux, "Wrong SCR values detected, searching for "

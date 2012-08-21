@@ -60,6 +60,10 @@ struct _GstVP8Enc
   /* properties */
   int bitrate;
   enum vpx_rc_mode mode;
+  unsigned int minsection_pct;
+  unsigned int maxsection_pct;
+  int min_quantizer;
+  int max_quantizer;
   double quality;
   gboolean error_resilient;
   int max_latency;
@@ -71,16 +75,24 @@ struct _GstVP8Enc
   GByteArray *first_pass_cache_content;
   vpx_fixed_buf_t last_pass_cache_content;
   gboolean auto_alt_ref_frames;
+  unsigned int lag_in_frames;
+  int sharpness;
+  int noise_sensitivity;
+#ifdef HAVE_VP8ENC_TUNING
+  vp8e_tuning tuning;
+#endif
+  int static_threshold;
+  gboolean drop_frame;
+  gboolean resize_allowed;
+  gboolean partitions;
 
   /* state */
-  gboolean force_keyframe;
   gboolean inited;
+
+  vpx_image_t image;
 
   int n_frames;
   int keyframe_distance;
-
-  /* FIXME: Get a event vfunc in BaseVideoEncoder */
-  GstPadEventFunction base_sink_event_func;
 };
 
 struct _GstVP8EncClass

@@ -94,10 +94,10 @@ gst_y4m_dec_base_init (gpointer g_class)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_y4m_dec_src_template));
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&gst_y4m_dec_sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_y4m_dec_src_template);
+  gst_element_class_add_static_pad_template (element_class,
+      &gst_y4m_dec_sink_template);
 
   gst_element_class_set_details_simple (element_class,
       "YUV4MPEG demuxer/decoder", "Codec/Demuxer",
@@ -146,10 +146,7 @@ void
 gst_y4m_dec_set_property (GObject * object, guint property_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstY4mDec *y4mdec;
-
   g_return_if_fail (GST_IS_Y4M_DEC (object));
-  y4mdec = GST_Y4M_DEC (object);
 
   switch (property_id) {
     default:
@@ -162,10 +159,7 @@ void
 gst_y4m_dec_get_property (GObject * object, guint property_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstY4mDec *y4mdec;
-
   g_return_if_fail (GST_IS_Y4M_DEC (object));
-  y4mdec = GST_Y4M_DEC (object);
 
   switch (property_id) {
     default:
@@ -194,10 +188,7 @@ gst_y4m_dec_dispose (GObject * object)
 void
 gst_y4m_dec_finalize (GObject * object)
 {
-  GstY4mDec *y4mdec;
-
   g_return_if_fail (GST_IS_Y4M_DEC (object));
-  y4mdec = GST_Y4M_DEC (object);
 
   /* clean up object here */
 
@@ -207,11 +198,9 @@ gst_y4m_dec_finalize (GObject * object)
 static GstStateChangeReturn
 gst_y4m_dec_change_state (GstElement * element, GstStateChange transition)
 {
-  GstY4mDec *y4mdec;
   GstStateChangeReturn ret;
 
   g_return_val_if_fail (GST_IS_Y4M_DEC (element), GST_STATE_CHANGE_FAILURE);
-  y4mdec = GST_Y4M_DEC (element);
 
   switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
@@ -541,7 +530,7 @@ gst_y4m_dec_chain (GstPad * pad, GstBuffer * buffer)
     GST_BUFFER_TIMESTAMP (buffer) =
         gst_y4m_dec_frames_to_timestamp (y4mdec, y4mdec->frame_index);
     GST_BUFFER_DURATION (buffer) =
-        gst_y4m_dec_frames_to_timestamp (y4mdec, y4mdec->frame_index) -
+        gst_y4m_dec_frames_to_timestamp (y4mdec, y4mdec->frame_index + 1) -
         GST_BUFFER_TIMESTAMP (buffer);
     if (y4mdec->interlaced && y4mdec->tff) {
       GST_BUFFER_FLAG_SET (buffer, GST_VIDEO_BUFFER_TFF);
@@ -602,6 +591,9 @@ gst_y4m_dec_sink_event (GstPad * pad, GstEvent * event)
       }
 
       res = TRUE;
+      /* not sure why it's not forwarded, but let's unref it so it
+         doesn't leak, remove the unref if it gets forwarded again */
+      gst_event_unref (event);
       //res = gst_pad_push_event (y4mdec->srcpad, event);
     }
       break;

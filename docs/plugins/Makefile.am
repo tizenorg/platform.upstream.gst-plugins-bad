@@ -13,41 +13,16 @@ FORMATS=html
 html: html-build.stamp
 include $(top_srcdir)/common/upload-doc.mak
 
-# generated basefiles
-#basefiles = \
-##		$(DOC_MODULE).types \
-#		$(DOC_MODULE)-sections.txt \
-#		$(DOC_MODULE)-docs.sgml
-
-# ugly hack to make -unused.sgml work
-#unused-build.stamp:
-#	BUILDDIR=`pwd` && \
-#	cd $(srcdir)/tmpl && \
-#	ln -sf gstreamer-libs-unused.sgml \
-#		$$BUILDDIR/tmpl/gstreamer-libs-@GST_MAJORMINOR@-unused.sgml
-#	touch unused-build.stamp
-
-# these rules are added to create parallel docs using GST_MAJORMINOR
-#$(basefiles): gstreamer-libs-@GST_MAJORMINOR@%: gstreamer-libs%
-#	cp $< $@
-
-#CLEANFILES = $(basefiles)
-
 # The top-level SGML file. Change it if you want.
 DOC_MAIN_SGML_FILE=$(DOC_MODULE)-docs.sgml
 
-# The directory containing the source code. Relative to $(top_srcdir).
+# The directory containing the source code.
 # gtk-doc will search all .c & .h files beneath here for inline comments
 # documenting functions and macros.
-DOC_SOURCE_DIR = $(top_srcdir)
+DOC_SOURCE_DIR = $(top_srcdir)/gst $(top_srcdir)/ext $(top_srcdir)/sys
 
 # Extra options to supply to gtkdoc-scan.
 SCAN_OPTIONS=
-
-# FIXME :
-# there's something wrong with gstreamer-sections.txt not being in the dist
-# maybe it doesn't resolve; we're adding it below for now
-#EXTRA_DIST = gstreamer.types.in gstreamer.hierarchy $(DOC_MODULE)-sections.txt gstreamer-sections.txt $(DOC_MAIN_SGML_FILE)
 
 # Extra options to supply to gtkdoc-mkdb.
 MKDB_OPTIONS=--sgml-mode --source-suffixes=c,h,cc,m
@@ -58,15 +33,12 @@ FIXXREF_OPTIONS=--extra-dir=$(GLIB_PREFIX)/share/gtk-doc/html \
 	--extra-dir=$(GSTPB_PREFIX)/share/gtk-doc/html
 
 # Used for dependencies.
-HFILE_GLOB=$(DOC_SOURCE_DIR)/*/*/*.h $(DOC_SOURCE_DIR)/*/*/*.hh
-CFILE_GLOB=$(DOC_SOURCE_DIR)/*/*/*.c $(DOC_SOURCE_DIR)/*/*/*.cc
-
-# this is a wingo addition
-# thomasvs: another nice wingo addition would be an explanation on why
-# this is useful ;)
-
-SCANOBJ_DEPS = \
-	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_MAJORMINOR@.la
+HFILE_GLOB= \
+  $(top_srcdir)/gst/*/*.h $(top_srcdir)/ext/*/*.h $(top_srcdir)/sys/*/*.h \
+  $(top_srcdir)/ext/*/*.hh
+CFILE_GLOB= \
+  $(top_srcdir)/gst/*/*.c $(top_srcdir)/ext/*/*.c $(top_srcdir)/sys/*/*.c \
+  $(top_srcdir)/ext/*/*.cc $(top_srcdir)/sys/*/*.m
 
 # Header files to ignore when scanning.
 IGNORE_HFILES =
@@ -91,7 +63,6 @@ EXAMPLE_CFILES = \
 
 EXTRA_HFILES = \
 	$(top_srcdir)/ext/assrender/gstassrender.h \
-	$(top_srcdir)/ext/amrwbenc/gstamrwbenc.h \
 	$(top_srcdir)/ext/celt/gstceltdec.h \
 	$(top_srcdir)/ext/celt/gstceltenc.h \
 	$(top_srcdir)/ext/curl/gstcurlsink.h \
@@ -131,13 +102,21 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/sdl/sdlvideosink.h \
 	$(top_srcdir)/ext/timidity/gsttimidity.h \
 	$(top_srcdir)/ext/timidity/gstwildmidi.h \
+	$(top_srcdir)/ext/voaacenc/gstvoaacenc.h \
+	$(top_srcdir)/ext/voamrwbenc/gstvoamrwbenc.h \
 	$(top_srcdir)/ext/vp8/gstvp8enc.h \
 	$(top_srcdir)/ext/vp8/gstvp8dec.h \
 	$(top_srcdir)/ext/zbar/gstzbar.h \
 	$(top_srcdir)/gst/aiff/aiffparse.h \
 	$(top_srcdir)/gst/aiff/aiffmux.h \
 	$(top_srcdir)/gst/autoconvert/gstautoconvert.h \
+	$(top_srcdir)/gst/audiovisualizers/gstbaseaudiovisualizer.h \
+	$(top_srcdir)/gst/audiovisualizers/gstspacescope.h \
+	$(top_srcdir)/gst/audiovisualizers/gstspectrascope.h \
+	$(top_srcdir)/gst/audiovisualizers/gstsynaescope.h \
+	$(top_srcdir)/gst/audiovisualizers/gstwavescope.h \
 	$(top_srcdir)/gst/camerabin/gstcamerabin.h \
+	$(top_srcdir)/gst/camerabin2/gstcamerabin2.h \
 	$(top_srcdir)/gst/coloreffects/gstcoloreffects.h \
 	$(top_srcdir)/gst/dataurisrc/gstdataurisrc.h \
 	$(top_srcdir)/gst/dccp/gstdccpclientsink.h \
@@ -212,7 +191,9 @@ extra_files =
 # CFLAGS and LDFLAGS for compiling scan program. Only needed if your app/lib
 # contains GtkObjects/GObjects and you want to document signals and properties.
 GTKDOC_CFLAGS = -DGST_USE_UNSTABLE_API $(GST_PLUGINS_BAD_CFLAGS) $(GST_BASE_CFLAGS) -I$(top_builddir)
-GTKDOC_LIBS = $(SCANOBJ_DEPS) $(GST_BASE_LIBS)
+GTKDOC_LIBS = \
+	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_MAJORMINOR@.la \
+	$(GST_BASE_LIBS)
 
 GTKDOC_CC=$(LIBTOOL) --tag=CC --mode=compile $(CC)
 GTKDOC_LD=$(LIBTOOL) --tag=CC --mode=link $(CC)

@@ -4,17 +4,21 @@ plugin_LTLIBRARIES = libgstfragmented.la
 libgstfragmented_la_SOURCES =			\
 	m3u8.c					\
 	gsthlsdemux.c				\
+	gstfragment.c				\
+	gsturidownloader.c			\
 	gstfragmentedplugin.c
 
-libgstfragmented_la_CFLAGS = $(GST_CFLAGS) $(GST_BASE_CFLAGS) $(SOUP_CFLAGS)
-libgstfragmented_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(SOUP_LIBS)
+libgstfragmented_la_CFLAGS = $(GST_PLUGINS_BAD_CFLAGS) $(GST_BASE_CFLAGS) $(GST_CFLAGS) $(SOUP_CFLAGS) $(CRYPTO_CFLAGS)
+libgstfragmented_la_LIBADD = $(GST_BASE_LIBS) $(GST_LIBS) $(SOUP_LIBS) $(CRYPTO_LIBS)
 libgstfragmented_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) -no-undefined
 libgstfragmented_la_LIBTOOLFLAGS = --tag=disable-static
 
 # headers we need but don't want installed
 noinst_HEADERS = 			\
 	gstfragmented.h		\
+	gstfragment.h				\
 	gsthlsdemux.h			\
+	gsturidownloader.h			\
 	m3u8.h
 
 Android.mk: Makefile.am $(BUILT_SOURCES)

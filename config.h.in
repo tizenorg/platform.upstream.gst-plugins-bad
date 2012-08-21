@@ -70,9 +70,6 @@
 /* Define to enable Windows ACM library (used by acm). */
 #undef HAVE_ACM
 
-/* Define to enable amrwb library (used by amrwbenc). */
-#undef HAVE_AMRWB
-
 /* Define to enable AirPort Express Wireless sink (used by apexsink). */
 #undef HAVE_APEXSINK
 
@@ -81,6 +78,9 @@
 
 /* Define to enable ASS/SSA renderer (used by assrender). */
 #undef HAVE_ASSRENDER
+
+/* Define to enable AVC Video Services (used by avcsrc). */
+#undef HAVE_AVC
 
 /* Define to enable bz2 library (used by bz2). */
 #undef HAVE_BZ2
@@ -168,6 +168,9 @@
 
 /* Define to enable dirac (used by dirac). */
 #undef HAVE_DIRAC
+
+/* Define to enable Direct3D plug-in (used by direct3dsink). */
+#undef HAVE_DIRECT3D
 
 /* Define to enable DirectDraw plug-in (used by directdrawsink). */
 #undef HAVE_DIRECTDRAW
@@ -331,8 +334,14 @@
 /* Define to enable ofa plugins (used by ofa). */
 #undef HAVE_OFA
 
+/* Define to enable OpenAL plugin (used by openal). */
+#undef HAVE_OPENAL
+
 /* Define to enable opencv plugins (used by opencv). */
 #undef HAVE_OPENCV
+
+/* Define to enable opus (used by opus). */
+#undef HAVE_OPUS
 
 /* Use Orc */
 #undef HAVE_ORC
@@ -345,6 +354,9 @@
 
 /* Define to 1 if you have the <pthread.h> header file. */
 #undef HAVE_PTHREAD_H
+
+/* Define to enable pvrvideosink (used by pvr). */
+#undef HAVE_PVR
 
 /* Define to enable QuickTime wrapper (used by qtwrapper). */
 #undef HAVE_QUICKTIME
@@ -378,6 +390,9 @@
 
 /* Defined if the available libSoundTouch is >= 1.4 */
 #undef HAVE_SOUNDTOUCH_1_4
+
+/* Define to enable Spandsp (used by spandsp). */
+#undef HAVE_SPANDSP
 
 /* Define to enable spc decoder (used by spc). */
 #undef HAVE_SPC
@@ -415,6 +430,9 @@
 /* Define to 1 if you have the <sys/utsname.h> header file. */
 #undef HAVE_SYS_UTSNAME_H
 
+/* Define to enable Teletext decoder (used by teletextdec). */
+#undef HAVE_TELETEXTDEC
+
 /* Define if libtiger is available */
 #undef HAVE_TIGER
 
@@ -433,8 +451,17 @@
 /* Define to enable VDPAU (used by vdpau). */
 #undef HAVE_VDPAU
 
+/* Define to enable vo-aacenc library (used by vo-aacenc). */
+#undef HAVE_VOAACENC
+
+/* Define to enable vo-amrwbenc library (used by vo-amrwbenc). */
+#undef HAVE_VOAMRWBENC
+
 /* Define to enable VP8 decoder (used by vp8). */
 #undef HAVE_VP8
+
+/* Defined if the VP8 encoder has tuning API */
+#undef HAVE_VP8ENC_TUNING
 
 /* Defined if the VP8 decoder is available */
 #undef HAVE_VP8_DECODER

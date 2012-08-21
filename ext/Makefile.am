@@ -4,10 +4,10 @@ else
 ASSRENDER_DIR =
 endif
 
-if USE_AMRWB
-AMRWB_DIR = amrwbenc
+if USE_VOAMRWBENC
+VOAMRWBENC_DIR = voamrwbenc
 else
-AMRWB_DIR =
+VOAMRWBENC_DIR =
 endif
 
 if USE_APEXSINK
@@ -116,6 +116,12 @@ if USE_FAAD
  FAAD_DIR=faad
 else
  FAAD_DIR=
+endif
+
+if USE_VOAACENC
+ VOAACENC_DIR=voaacenc
+else
+ VOAACENC_DIR=
 endif
 
 if USE_FLITE
@@ -244,10 +250,22 @@ else
 OFA_DIR=
 endif
 
+if USE_OPENAL
+OPENAL_DIR=openal
+else
+OPENAL_DIR=
+endif
+
 if USE_OPENCV
 OPENCV_DIR=opencv
 else
 OPENCV_DIR=
+endif
+
+if USE_OPUS
+OPUS_DIR=opus
+else
+OPUS_DIR=
 endif
 
 if USE_RSVG
@@ -306,6 +324,12 @@ else
 SOUNDTOUCH_DIR=
 endif
 
+if USE_SPANDSP
+SPANDSP_DIR = spandsp
+else
+SPANDSP_DIR =
+endif
+
 if USE_SPC
 SPC_DIR=spc
 else
@@ -322,6 +346,12 @@ if USE_SWFDEC
 #SWFDEC_DIR=swfdec
 else
 SWFDEC_DIR=
+endif
+
+if USE_TELETEXTDEC
+TELETEXTDEC_DIR=teletextdec
+else
+TELETEXTDEC_DIR=
 endif
 
 if USE_VP8
@@ -356,8 +386,9 @@ endif
 
 
 SUBDIRS=\
+	$(VOAACENC_DIR) \
 	$(ASSRENDER_DIR) \
-	$(AMRWB_DIR) \
+	$(VOAMRWBENC_DIR) \
 	$(APEXSINK_DIR) \
 	$(ARTS_DIR) \
 	$(ARTSC_DIR) \
@@ -398,7 +429,9 @@ SUBDIRS=\
 	$(NAS_DIR) \
 	$(NEON_DIR) \
 	$(OFA_DIR) \
+	$(OPENAL_DIR) \
 	$(OPENCV_DIR) \
+	$(OPUS_DIR) \
 	$(RSVG_DIR) \
 	$(SCHRO_DIR) \
 	$(SDL_DIR) \
@@ -406,9 +439,11 @@ SUBDIRS=\
 	$(SMOOTHWAVE_DIR) \
 	$(SNDFILE_DIR) \
 	$(SOUNDTOUCH_DIR) \
+	$(SPANDSP_DIR) \
 	$(GME_DIR) \
 	$(SPC_DIR) \
 	$(SWFDEC_DIR) \
+	$(TELETEXTDEC_DIR) \
 	$(TIMIDITY_DIR) \
 	$(VP8_DIR) \
 	$(XVID_DIR) \
@@ -416,7 +451,6 @@ SUBDIRS=\
 	$(RTMP_DIR)
 
 DIST_SUBDIRS = \
-	amrwbenc \
 	assrender \
 	apexsink \
 	bz2 \
@@ -449,17 +483,23 @@ DIST_SUBDIRS = \
 	nas \
 	neon \
 	ofa \
+	openal \
 	opencv \
+	opus \
 	rsvg \
 	resindvd \
 	schroedinger \
 	sdl \
 	sndfile \
 	soundtouch \
+	spandsp \
 	spc \
 	gme \
 	swfdec \
+	teletextdec \
 	timidity \
+	voaacenc \
+	voamrwbenc \
 	vp8 \
 	xvid \
 	zbar \

@@ -84,6 +84,8 @@
  * unreffed or replaced by a new user set element. Initially only elements
  * needed for view finder mode are created to speed up startup. Image bin and
  * video bin elements are created when setting the mode or starting capture.
+ * GstCameraBin must be in the PLAYING state before #GstCameraBin::capture-start
+ * is called.
  * </para>
  * </refsect2>
  * <refsect2>
@@ -208,9 +210,10 @@ static guint camerabin_signals[LAST_SIGNAL];
 
 #define DEFAULT_FLAGS GST_CAMERABIN_FLAG_SOURCE_RESIZE | \
   GST_CAMERABIN_FLAG_VIEWFINDER_SCALE | \
-  GST_CAMERABIN_FLAG_AUDIO_CONVERSION | \
+  GST_CAMERABIN_FLAG_VIEWFINDER_COLOR_CONVERSION | \
   GST_CAMERABIN_FLAG_IMAGE_COLOR_CONVERSION | \
-  GST_CAMERABIN_FLAG_VIDEO_COLOR_CONVERSION
+  GST_CAMERABIN_FLAG_VIDEO_COLOR_CONVERSION | \
+  GST_CAMERABIN_FLAG_AUDIO_CONVERSION
 
 /* Using "bilinear" as default zoom method */
 #define CAMERABIN_DEFAULT_ZOOM_METHOD 1
@@ -234,25 +237,37 @@ static guint camerabin_signals[LAST_SIGNAL];
   GST_DEBUG_OBJECT ((c), "Processing counter incremented to: %d", \
       (c)->processing_counter);               \
   if ((c)->processing_counter == 1)           \
-    g_object_notify (G_OBJECT (c), "idle");            \
+    g_object_notify (G_OBJECT (c), "idle");
 
 #define CAMERABIN_PROCESSING_DEC_UNLOCKED(c)  \
   (c)->processing_counter -= 1;               \
   GST_DEBUG_OBJECT ((c), "Processing counter decremented to: %d", \
       (c)->processing_counter);               \
   g_assert ((c)->processing_counter >= 0);    \
-  if ((c)->processing_counter == 0)           \
-    g_object_notify (G_OBJECT (c), "idle");            \
+  if ((c)->processing_counter == 0) {         \
+    g_cond_signal ((c)->idle_cond);           \
+    g_object_notify (G_OBJECT (c), "idle");   \
+  }
 
 #define CAMERABIN_PROCESSING_INC(c)           \
   g_mutex_lock ((c)->capture_mutex);          \
   CAMERABIN_PROCESSING_INC_UNLOCKED ((c));    \
-  g_mutex_unlock ((c)->capture_mutex);        \
+  g_mutex_unlock ((c)->capture_mutex);
 
 #define CAMERABIN_PROCESSING_DEC(c)           \
   g_mutex_lock ((c)->capture_mutex);          \
   CAMERABIN_PROCESSING_DEC_UNLOCKED ((c));    \
-  g_mutex_unlock ((c)->capture_mutex);        \
+  g_mutex_unlock ((c)->capture_mutex);
+
+#define CAMERABIN_PROCESSING_WAIT_IDLE(c)             \
+  g_mutex_lock ((c)->capture_mutex);                  \
+  if ((c)->processing_counter > 0) {                  \
+    GST_DEBUG_OBJECT ((c), "Waiting for processing operations to finish %d", \
+        (c)->processing_counter);                     \
+    g_cond_wait ((c)->idle_cond, (c)->capture_mutex); \
+    GST_DEBUG_OBJECT ((c), "Processing operations finished"); \
+  }                                                   \
+  g_mutex_unlock ((c)->capture_mutex);
 
 /*
  * static helper functions declaration
@@ -931,6 +946,10 @@ camerabin_dispose_elements (GstCameraBin * camera)
     g_cond_free (camera->cond);
     camera->cond = NULL;
   }
+  if (camera->idle_cond) {
+    g_cond_free (camera->idle_cond);
+    camera->idle_cond = NULL;
+  }
   if (camera->filename) {
     g_string_free (camera->filename, TRUE);
     camera->filename = NULL;
@@ -1605,6 +1624,9 @@ reset_video_capture_caps (GstCameraBin * camera)
   /* Interrupt ongoing capture */
   gst_camerabin_do_stop (camera);
 
+  /* prevent image captures from being lost */
+  CAMERABIN_PROCESSING_WAIT_IDLE (camera);
+
   gst_element_get_state (GST_ELEMENT (camera), &state, &pending, 0);
   if (state == GST_STATE_PAUSED || state == GST_STATE_PLAYING) {
     GST_INFO_OBJECT (camera,
@@ -1641,6 +1663,7 @@ static void
 gst_camerabin_start_video_recording (GstCameraBin * camera)
 {
   GstStateChangeReturn state_ret;
+  GstCameraBinVideo *vidbin = (GstCameraBinVideo *) camera->vidbin;
   /* FIXME: how to ensure resolution and fps is supported by CPU?
    * use a queue overrun signal?
    */
@@ -1654,9 +1677,14 @@ gst_camerabin_start_video_recording (GstCameraBin * camera)
   gst_camerabin_rewrite_tags (camera);
 
   /* Pause the pipeline in order to distribute new clock in paused_to_playing */
+  /* Audio source needs to go to null to reset the ringbuffer */
+  if (vidbin->aud_src)
+    gst_element_set_state (vidbin->aud_src, GST_STATE_NULL);
   state_ret = gst_element_set_state (GST_ELEMENT (camera), GST_STATE_PAUSED);
 
   if (state_ret != GST_STATE_CHANGE_FAILURE) {
+    GstClock *clock = gst_element_get_clock (GST_ELEMENT (camera));
+
     g_mutex_lock (camera->capture_mutex);
     camera->capturing = TRUE;
     g_mutex_unlock (camera->capture_mutex);
@@ -1671,6 +1699,11 @@ gst_camerabin_start_video_recording (GstCameraBin * camera)
             "capture-mode")) {
       g_object_set (G_OBJECT (camera->src_vid_src), "capture-mode", 2, NULL);
     }
+
+    /* Clock might be distributed as NULL to audiosrc, messing timestamping */
+    if (vidbin->aud_src)
+      gst_element_set_clock (vidbin->aud_src, clock);
+    gst_object_unref (clock);
 
     /* videobin will not go to playing if file is not writable */
     if (gst_element_set_state (GST_ELEMENT (camera), GST_STATE_PLAYING) ==
@@ -1811,7 +1844,6 @@ gst_camerabin_have_img_buffer (GstPad * pad, GstMiniObject * obj,
   if (GST_IS_BUFFER (obj)) {
     GstBuffer *buffer = GST_BUFFER_CAST (obj);
     GstStructure *fn_ev_struct = NULL;
-    gboolean ret = TRUE;
     GstPad *os_sink = NULL;
 
     GST_LOG ("got buffer %p with size %d", buffer, GST_BUFFER_SIZE (buffer));
@@ -1823,7 +1855,6 @@ gst_camerabin_have_img_buffer (GstPad * pad, GstMiniObject * obj,
     /* Image filename should be set by now */
     if (g_str_equal (camera->filename->str, "")) {
       GST_DEBUG_OBJECT (camera, "filename not set, dropping buffer");
-      ret = FALSE;
       CAMERABIN_PROCESSING_DEC_UNLOCKED (camera);
       goto done;
     }
@@ -2851,6 +2882,19 @@ gst_camerabin_class_init (GstCameraBinClass * klass)
           GST_TYPE_ELEMENT, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   /**
+   *  GstCameraBin:image-formatter:
+   *
+   * Set up an image formatter (for example, jifmux) element.
+   * This property can only be set while #GstCameraBin is in NULL state.
+   * The ownership of the element will be taken by #GstCameraBin.
+   */
+
+  g_object_class_install_property (gobject_class, ARG_IMAGE_FORMATTER,
+      g_param_spec_object ("image-formatter", "Image formatter",
+          "Image formatter GStreamer element (default is jifmux)",
+          GST_TYPE_ELEMENT, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  /**
    *  GstCameraBin:video-post-processing:
    *
    * Set up an element to do video post processing.
@@ -3324,6 +3368,7 @@ gst_camerabin_init (GstCameraBin * camera, GstCameraBinClass * gclass)
   /* concurrency control */
   camera->capture_mutex = g_mutex_new ();
   camera->cond = g_cond_new ();
+  camera->idle_cond = g_cond_new ();
   camera->processing_counter = 0;
 
   /* pad names for output and input selectors */
@@ -3480,6 +3525,14 @@ gst_camerabin_set_property (GObject * object, guint prop_id,
             "can't use set element until next image bin NULL to READY state change");
       }
       gst_camerabin_image_set_encoder (GST_CAMERABIN_IMAGE (camera->imgbin),
+          g_value_get_object (value));
+      break;
+    case ARG_IMAGE_FORMATTER:
+      if (GST_STATE (camera->imgbin) != GST_STATE_NULL) {
+        GST_WARNING_OBJECT (camera,
+            "can't use set element until next image bin NULL to READY state change");
+      }
+      gst_camerabin_image_set_formatter (GST_CAMERABIN_IMAGE (camera->imgbin),
           g_value_get_object (value));
       break;
     case ARG_VF_SINK:
@@ -3724,6 +3777,11 @@ gst_camerabin_get_property (GObject * object, guint prop_id,
           gst_camerabin_image_get_encoder (GST_CAMERABIN_IMAGE
               (camera->imgbin)));
       break;
+    case ARG_IMAGE_FORMATTER:
+      g_value_set_object (value,
+          gst_camerabin_image_get_formatter (GST_CAMERABIN_IMAGE
+              (camera->imgbin)));
+      break;
     case ARG_VIDEO_POST:
       g_value_set_object (value,
           gst_camerabin_video_get_post (GST_CAMERABIN_VIDEO (camera->vidbin)));
@@ -3886,8 +3944,10 @@ gst_camerabin_change_state (GstElement * element, GstStateChange transition)
       }
 
       /* reset processing counter */
-      GST_DEBUG_OBJECT (camera, "Reset processing counter to 0");
+      GST_DEBUG_OBJECT (camera, "Reset processing counter from %d to 0",
+          camera->processing_counter);
       camera->processing_counter = 0;
+      g_cond_signal (camera->idle_cond);
       g_object_notify (G_OBJECT (camera), "idle");
       g_mutex_unlock (camera->capture_mutex);
 

@@ -471,8 +471,8 @@ gst_vdp_h264_dec_handle_frame (GstBaseVideoDecoder * base_video_decoder,
 
   GstH264Frame *h264_frame;
   GstH264Slice *slice;
-  GstH264Picture *pic;
-  GstH264Sequence *seq;
+  GstH264Picture *pic G_GNUC_UNUSED;
+  GstH264Sequence *seq G_GNUC_UNUSED;
 
   GstFlowReturn ret;
   GstVdpVideoBuffer *outbuf;
@@ -870,8 +870,8 @@ gst_vdp_h264_dec_base_init (gpointer g_class)
       "Decode h264 stream with vdpau",
       "Carl-Anton Ingmarsson <ca.ingmarsson@gmail.com>");
 
-  gst_element_class_add_pad_template (element_class,
-      gst_static_pad_template_get (&sink_template));
+  gst_element_class_add_static_pad_template (element_class,
+      &sink_template);
 }
 
 static void
