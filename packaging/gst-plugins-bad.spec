@@ -8,17 +8,16 @@ Group:          Productivity/Multimedia/Other
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
 Source1:        %{name}-patch-source.sh
-Patch0:         gstreamer-plugins-bad-real.patch
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
 BuildRequires:  gcc-c++
 BuildRequires:  glib2-devel >= 2.31.14
 BuildRequires:  gstreamer-devel >= 1.0.0
-BuildRequires:  gstreamer-plugins-base-devel >= 1.0.0
+BuildRequires:  gst-plugins-base-devel >= 1.0.0
 BuildRequires:  gtk-doc
 #BuildRequires:  libjasper-devel
 BuildRequires:  pkgconfig(orc-0.4) >= 0.4.11
-BuildRequires:  python-base
+BuildRequires:  python
 BuildRequires:  xsltproc
 BuildRequires:  pkgconfig(cairo)
 #BuildRequires:  pkgconfig(dirac) >= 0.10
