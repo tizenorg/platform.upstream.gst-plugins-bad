@@ -153,7 +153,7 @@ processing capabilities can be added simply by installing new plug-ins.
     --disable-static\
     --disable-examples\
     --enable-experimental\
-    --disable-gtk-doc \
+    --disable-gtk-doc 
 %__make %{?_smp_mflags} V=1
 
 %install
