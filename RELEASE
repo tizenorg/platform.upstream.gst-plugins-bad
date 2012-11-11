@@ -1,0 +1,150 @@
+
+Release notes for GStreamer Bad Plugins 1.0.2
+
+
+The GStreamer team is proud to announce a new release
+in the 1.x stable series of the
+core of the GStreamer streaming media framework.
+
+
+The 1.x series is a stable series targeted at end users.
+It is not API or ABI compatible with the stable 0.10.x series.
+It is, however, parallel installable with the 0.10.x series and
+will not affect an existing 0.10.x installation.
+
+
+
+"That an accusation?"
+
+
+No perfectly groomed moustache or any amount of fine clothing is going to
+cover up the truth - these plugins are Bad with a capital B.
+They look fine on the outside, and might even appear to get the job done, but
+at the end of the day they're a black sheep. Without a golden-haired angel
+to watch over them, they'll probably land in an unmarked grave at the final
+showdown.
+
+
+Don't bug us about their quality - exercise your Free Software rights,
+patch up the offender and send us the patch on the fastest steed you can
+steal from the Confederates. Because you see, in this world, there's two
+kinds of people, my friend: those with loaded guns and those who dig.
+You dig.
+
+
+This module contains a set of plugins that aren't up to par compared to the
+rest.  They might be close to being good quality, but they're missing something
+- be it a good code review, some documentation, a set of tests, a real live
+maintainer, or some actual wide use.  If the blanks are filled in they might be
+upgraded to become part of either gst-plugins-good or gst-plugins-ugly,
+depending on the other factors.
+If the plugins break, you can't complain - instead, you can fix the
+problem and send us a patch, or bribe someone into fixing them for you.
+New contributors can start here for things to work on.
+
+
+Other modules containing plugins are:
+
+
+gst-plugins-base
+contains a basic set of well-supported plugins
+gst-plugins-good
+contains a set of well-supported plugins under our preferred license
+gst-plugins-ugly
+contains a set of well-supported plugins, but might pose problems for
+    distributors
+gst-libav
+contains a set of codecs plugins based on libav (formerly gst-ffmpeg)
+
+
+
+  
+
+Features of this release
+    
+      * Parallel installability with 0.10.x series
+      * audioparse: add mode where caps are taken from upstream and only timestamping is performed
+      * directsoundsrc: port to 1.0
+      * dtsdec: fix buffer parsing
+      * fieldanalysis: actually build (remove from the NONPORTED plugins list)
+      * hlsdemux: numerous thread-safety fixes, and an invalid memory access fix
+      * mpegdemux: handle and combine downstream flow returns better
+      * mpegdemux: make work properly with dvdreadsrc
+      * mpegtsdemux: PES header parsing fixes; fix potential crash
+      * mpegtsdemux: First push EOS, then destroy all programs
+      * mpegtsmux: fix buffer refcounting issue
+      * mpeg4videoparse: correctly parse the full first frame; properly mark config data presence
+      * mpegvideoparse: correctly parse the full first frame; signal interlacing properly in caps
+      * pitch: fix for start times > 0 (e.g. ogg streaming)
+      * rtmpsink: handle RTMP_Write() return value correctly, fix memory leak
+      * scaletempo: fix timestamp and latency query handling, and event leak
+      * subenc: port to 1.0
+
+Bugs fixed in this release
+     
+      * 623387 : mpegdemux: check base_time before calculating new_start
+      * 673414 : directsoundsrc: Port to 1.0
+      * 681459 : rtmpsink: memory leak
+      * 685709 : mpeg4videoparse: AVI file with XVID video doesn't want to preroll: p_length.avi
+      * 685895 : mpegvideoparse: signal interlacing correctly in caps using new " interlace-mode " field
+      * 686009 : rtmpsink: handle RTMP_Write() return value correctly
+      * 686294 : tsdemux: Fix checking P-STD_buffer marker in PES header
+      * 686327 : mpegtsmux: fix refcount issue with input buffers
+      * 686358 : tsdemux: fix potential crash dereferencing NULL program pointer
+      * 686520 : wayland: update to wayland-protocol 0.99
+      * 686547 : rtpopuspay outputs unparseable caps
+      * 686595 : [mpg123] misc improvements and fixes
+      * 686774 : gst-plugins-bad/curl: add a comment describing function...
+
+==== Download ====
+
+You can find source releases of gst-plugins-bad in the download
+directory: http://gstreamer.freedesktop.org/src/gst-plugins-bad/
+
+The git repository and details how to clone it can be found at
+http://cgit.freedesktop.org/gstreamer/gst-plugins-bad/
+
+==== Homepage ====
+
+The project's website is http://gstreamer.freedesktop.org/
+
+==== Support and Bugs ====
+
+We use GNOME's bugzilla for bug reports and feature requests:
+http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer
+
+Please submit patches via bugzilla as well.
+
+For help and support, please subscribe to and send questions to the
+gstreamer-devel mailing list (see below for details).
+
+There is also a #gstreamer IRC channel on the Freenode IRC network.
+
+==== Developers ====
+
+GStreamer is stored in Git, hosted at git.freedesktop.org, and can be cloned
+from there (see link above).
+
+Interested developers of the core library, plugins, and applications should
+subscribe to the gstreamer-devel list.
+
+        
+Contributors to this release
+    
+      * Andoni Morales Alastruey
+      * Carlos Rafael Giani
+      * David Régade
+      * Jan Schmidt
+      * Josep Torra
+      * Mark Nauwelaerts
+      * Michael Smith
+      * Raimo Järvi
+      * Reynaldo H. Verdejo Pinochet
+      * Sebastian Dröge
+      * Sebastian Rasmussen
+      * Sergey N. Gorshkov
+      * Sreerenj Balachandran
+      * Thijs Vermeir
+      * Tim-Philipp Müller
+      * Wim Taymans
+ 
