@@ -147,7 +147,7 @@ videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
 %prep
-%setup -q -n %{_name}-%{version}
+%setup -q -n %{name}-%{version}
 
 %build
 %configure\
