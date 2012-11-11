@@ -158,8 +158,8 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %install
 %make_install
-%find_lang %{_name}-%{gst_branch}
-mv %{_name}-%{gst_branch}.lang %{name}.lang
+%find_lang %_name}-%{gst_branch}
+mv %{name}-%{gst_branch}.lang %{name}.lang
 
 %lang_package
 
