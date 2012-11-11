@@ -1,4 +1,3 @@
-%bcond_with divx4linux
 Name:           gst-plugins-bad
 Version:        1.0.2
 Release:        0
@@ -155,8 +154,7 @@ processing capabilities can be added simply by installing new plug-ins.
     --disable-static\
     --disable-examples\
     --enable-experimental\
-    --enable-gtk-doc \
-    --with-gtk=3.0
+    --disable-gtk-doc \
 %__make %{?_smp_mflags} V=1
 
 %install
@@ -242,8 +240,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstspeed.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideoparsersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgsty4mdec.so
-%if 0%{?BUILD_ORIG}
-%if 0%{?BUILD_ORIG_ADDON}
 
 
 %files -n libgstphotography
@@ -266,11 +262,6 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 %{_libdir}/libgstsignalprocessor-%{gst_branch}.so.0*
 
-%if %{build_gstvdp}
-%files -n libgstvdp
-%defattr(-, root, root)
-%{_libdir}/libgstvdp-%{gst_branch}.so.0*
-%endif
 
 %files devel
 %defattr(-, root, root)
