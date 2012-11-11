@@ -83,11 +83,8 @@ BuildRequires:  divx4linux-devel
 %endif
 Requires(post): glib2-tools
 Requires(postun): glib2-tools
-%define gstreamer_plugins_bad_req %(xzgrep --text "^GST.*_REQ" %{S:0} | sort -u | sed 's/GST_REQ=/gstreamer >= /;s/GSTPB_REQ=/gstreamer-plugins-base >= /' | tr '\\n' ' ')
-Requires:       %gstreamer_plugins_bad_req
+Requires:       gstreamer >= 1.0.2
 Enhances:       gstreamer
-# Generic name, never used in SuSE:
-Provides:       gst-plugins-bad = %{version}
 %if 0%{?BUILD_ORIG}
 %if 0%{?BUILD_ORIG_ADDON}
 Provides:       patched_subset
