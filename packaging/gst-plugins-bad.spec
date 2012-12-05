@@ -7,35 +7,23 @@ License:        GPL-2.0+ and LGPL-2.1+
 Group:          Productivity/Multimedia/Other
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
-Source1:        %{name}-patch-source.sh
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
 BuildRequires:  gcc-c++
 BuildRequires:  glib2-devel >= 2.31.14
 BuildRequires:  gstreamer-devel >= 1.0.0
 BuildRequires:  gst-plugins-base-devel >= 1.0.0
-BuildRequires:  gtk-doc
-#BuildRequires:  libjasper-devel
 BuildRequires:  pkgconfig(orc-0.4) >= 0.4.11
 BuildRequires:  python
 BuildRequires:  xsltproc
 BuildRequires:  pkgconfig(cairo)
-#BuildRequires:  pkgconfig(dirac) >= 0.10
 BuildRequires:  pkgconfig(gio-2.0) >= 2.25.0
-#BuildRequires:  pkgconfig(kate) >= 0.1.7
-#BuildRequires:  pkgconfig(libass) >= 0.9.4
-#BuildRequires:  pkgconfig(libcdaudio)
 BuildRequires:  pkgconfig(libcrypto)
 BuildRequires:  pkgconfig(libcurl) >= 7.21.0
 BuildRequires:  pkgconfig(libexif) >= 0.6.16
-#BuildRequires:  pkgconfig(libmms) >= 0.4
 BuildRequires:  pkgconfig(libpng) >= 1.2
-#BuildRequires:  pkgconfig(librsvg-2.0) >= 2.14
-#BuildRequires:  pkgconfig(mjpegtools)
 BuildRequires:  pkgconfig(openssl) >= 0.9.5
-#BuildRequires:  pkgconfig(schroedinger-1.0) >= 1.0.10
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
-#BuildRequires:  pkgconfig(wayland-client) >= 0.1
 BuildRequires:  pkgconfig(x11)
 Requires(post): glib2-tools
 Requires(postun): glib2-tools
@@ -239,6 +227,11 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstspeed.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideoparsersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgsty4mdec.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstdvdspu.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstfieldanalysis.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstfrei0r.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 
 
 %files -n libgstphotography
@@ -272,5 +265,5 @@ rm -rf $RPM_BUILD_ROOT
 
 %files doc
 %defattr(-, root, root)
-%{_datadir}/gtk-doc/html/gst-plugins-bad-plugins-%{gst_branch}/
+#%{_datadir}/gtk-doc/html/gst-plugins-bad-plugins-%{gst_branch}/
 %{_datadir}/gtk-doc/html/gst-plugins-bad-libs-%{gst_branch}/
