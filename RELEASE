@@ -1,8 +1,8 @@
 
-Release notes for GStreamer Bad Plugins 1.0.2
+Release notes for GStreamer Bad Plugins 1.0.4
 
 
-The GStreamer team is proud to announce a new release
+The GStreamer team is proud to announce a new bug-fix release
 in the 1.x stable series of the
 core of the GStreamer streaming media framework.
 
@@ -62,39 +62,19 @@ contains a set of codecs plugins based on libav (formerly gst-ffmpeg)
 
 Features of this release
     
-      * Parallel installability with 0.10.x series
-      * audioparse: add mode where caps are taken from upstream and only timestamping is performed
-      * directsoundsrc: port to 1.0
-      * dtsdec: fix buffer parsing
-      * fieldanalysis: actually build (remove from the NONPORTED plugins list)
-      * hlsdemux: numerous thread-safety fixes, and an invalid memory access fix
-      * mpegdemux: handle and combine downstream flow returns better
-      * mpegdemux: make work properly with dvdreadsrc
-      * mpegtsdemux: PES header parsing fixes; fix potential crash
-      * mpegtsdemux: First push EOS, then destroy all programs
-      * mpegtsmux: fix buffer refcounting issue
-      * mpeg4videoparse: correctly parse the full first frame; properly mark config data presence
-      * mpegvideoparse: correctly parse the full first frame; signal interlacing properly in caps
-      * pitch: fix for start times > 0 (e.g. ogg streaming)
-      * rtmpsink: handle RTMP_Write() return value correctly, fix memory leak
-      * scaletempo: fix timestamp and latency query handling, and event leak
-      * subenc: port to 1.0
+      * mpeg4videoparse: also parse divx 4/5
+      * mpeg4videoparse: export number of sprite warping points in caps (decoders might have no or only limited GMC support)
+      * mpegtsmux: propagate flow returns upstream; don't crash when reused
+      * rtmpsrc: disable seeking if the configured url specifies live=true
+      * build fixes for OS/X (shm) and Windows (d3dvideosink)
 
 Bugs fixed in this release
      
-      * 623387 : mpegdemux: check base_time before calculating new_start
-      * 673414 : directsoundsrc: Port to 1.0
-      * 681459 : rtmpsink: memory leak
-      * 685709 : mpeg4videoparse: AVI file with XVID video doesn't want to preroll: p_length.avi
-      * 685895 : mpegvideoparse: signal interlacing correctly in caps using new " interlace-mode " field
-      * 686009 : rtmpsink: handle RTMP_Write() return value correctly
-      * 686294 : tsdemux: Fix checking P-STD_buffer marker in PES header
-      * 686327 : mpegtsmux: fix refcount issue with input buffers
-      * 686358 : tsdemux: fix potential crash dereferencing NULL program pointer
-      * 686520 : wayland: update to wayland-protocol 0.99
-      * 686547 : rtpopuspay outputs unparseable caps
-      * 686595 : [mpg123] misc improvements and fixes
-      * 686774 : gst-plugins-bad/curl: add a comment describing function...
+      * 688870 : mpegtsmux: does not propagate flow status
+      * 689107 : mpegtsmux: crashes when re-used
+      * 689183 : [shm] Modifications to get shm to compile on OSX
+      * 690031 : d3dvideosink makefile missing GST_PLUGINS_BASE_CFLAGS and GMODULE_NO_EXPORT_LIBS
+      * 690149 : [mpeg4videoparse] support divx and add GMC info in caps
 
 ==== Download ====
 
@@ -131,20 +111,12 @@ subscribe to the gstreamer-devel list.
         
 Contributors to this release
     
-      * Andoni Morales Alastruey
-      * Carlos Rafael Giani
-      * David Régade
-      * Jan Schmidt
-      * Josep Torra
-      * Mark Nauwelaerts
-      * Michael Smith
-      * Raimo Järvi
-      * Reynaldo H. Verdejo Pinochet
+      * Alessandro Decina
+      * Arnaud Vrac
+      * Emmanuel Durand
+      * Krzysztof Konopko
+      * Michael Esemplare
       * Sebastian Dröge
-      * Sebastian Rasmussen
-      * Sergey N. Gorshkov
-      * Sreerenj Balachandran
       * Thijs Vermeir
       * Tim-Philipp Müller
-      * Wim Taymans
  

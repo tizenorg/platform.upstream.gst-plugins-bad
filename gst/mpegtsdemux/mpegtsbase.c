@@ -1340,6 +1340,14 @@ mpegts_base_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
   switch (GST_EVENT_TYPE (event)) {
     case GST_EVENT_SEGMENT:
       gst_event_copy_segment (event, &base->segment);
+      /* Check if we need to switch PCR/PTS handling */
+      if (base->segment.format == GST_FORMAT_TIME) {
+        base->packetizer->calculate_offset = FALSE;
+        base->packetizer->calculate_skew = TRUE;
+      } else {
+        base->packetizer->calculate_offset = TRUE;
+        base->packetizer->calculate_skew = FALSE;
+      }
       gst_event_unref (event);
       break;
     case GST_EVENT_STREAM_START:
@@ -1353,14 +1361,13 @@ mpegts_base_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       /* FIXME, do something */
       gst_event_unref (event);
       break;
-    case GST_EVENT_FLUSH_START:
+    case GST_EVENT_FLUSH_STOP:
+      res = GST_MPEGTS_BASE_GET_CLASS (base)->push_event (base, event);
       mpegts_packetizer_flush (base->packetizer);
       mpegts_base_flush (base);
-      res = GST_MPEGTS_BASE_GET_CLASS (base)->push_event (base, event);
-      break;
-    case GST_EVENT_FLUSH_STOP:
       gst_segment_init (&base->segment, GST_FORMAT_UNDEFINED);
       base->seen_pat = FALSE;
+      break;
       /* Passthrough */
     default:
       res = GST_MPEGTS_BASE_GET_CLASS (base)->push_event (base, event);
@@ -1667,7 +1674,6 @@ mpegts_base_handle_seek_event (MpegTSBase * base, GstPad * pad,
     /* First try if upstream supports seeking in TIME format */
     if (gst_pad_push_event (base->sinkpad, gst_event_ref (event))) {
       GST_DEBUG ("upstream handled SEEK event");
-      gst_event_unref (event);
       return TRUE;
     }
     /* FIXME : Actually ... it is supported, we just need to convert
@@ -1779,13 +1785,14 @@ mpegts_base_sink_activate_mode (GstPad * pad, GstObject * parent,
   switch (mode) {
     case GST_PAD_MODE_PUSH:
       base->mode = BASE_MODE_PUSHING;
-      base->packetizer->calculate_skew = TRUE;
       res = TRUE;
       break;
     case GST_PAD_MODE_PULL:
       if (active) {
         base->mode = BASE_MODE_SCANNING;
+        /* When working pull-based, we always use offsets for estimation */
         base->packetizer->calculate_offset = TRUE;
+        base->packetizer->calculate_skew = FALSE;
         res =
             gst_pad_start_task (pad, (GstTaskFunction) mpegts_base_loop, base,
             NULL);

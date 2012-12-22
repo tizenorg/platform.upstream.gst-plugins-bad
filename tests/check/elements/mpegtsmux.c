@@ -620,6 +620,113 @@ GST_START_TEST (test_force_key_unit_event_upstream)
 
 GST_END_TEST;
 
+static GstFlowReturn
+flow_test_stat_chain_func (GstPad * pad, GstObject * parent, GstBuffer * buffer)
+{
+  /* the requested status is conveyed in the timestamp */
+  GstFlowReturn ret = (GstFlowReturn) GST_BUFFER_TIMESTAMP (buffer);
+  gst_buffer_unref (buffer);
+  return ret;
+}
+
+GST_START_TEST (test_propagate_flow_status)
+{
+  GstElement *mux;
+  gchar *padname;
+  GstSegment segment;
+  GstBuffer *inbuffer;
+  GstCaps *caps;
+  guint i;
+
+  GstFlowReturn expected[] = { GST_FLOW_OK, GST_FLOW_FLUSHING, GST_FLOW_EOS,
+    GST_FLOW_NOT_NEGOTIATED, GST_FLOW_ERROR, GST_FLOW_NOT_SUPPORTED
+  };
+
+  mux = setup_tsmux (&video_src_template, "sink_%d", &padname);
+  gst_pad_set_chain_function (mysinkpad, flow_test_stat_chain_func);
+
+  fail_unless (gst_element_set_state (mux,
+          GST_STATE_PLAYING) == GST_STATE_CHANGE_SUCCESS,
+      "could not set to playing");
+
+  gst_segment_init (&segment, GST_FORMAT_TIME);
+  fail_unless (gst_pad_push_event (mysrcpad, gst_event_new_segment (&segment)));
+
+  caps = gst_caps_from_string (VIDEO_CAPS_STRING);
+  gst_pad_set_caps (mysrcpad, caps);
+  gst_caps_unref (caps);
+
+  for (i = 0; i < G_N_ELEMENTS (expected); ++i) {
+    GstFlowReturn res;
+
+    inbuffer = gst_buffer_new_and_alloc (1);
+    ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
+
+    /* convey the requested status in the timestamp */
+    GST_BUFFER_TIMESTAMP (inbuffer) = expected[i];
+    res = gst_pad_push (mysrcpad, inbuffer);
+
+    fail_unless (res == expected[i],
+        "result: %d, expected: %d", res, expected[i]);
+  }
+
+  cleanup_tsmux (mux, padname);
+  g_free (padname);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_multiple_state_change)
+{
+  GstElement *mux;
+  gchar *padname;
+  GstSegment segment;
+  GstCaps *caps;
+  size_t i;
+
+  /* it's just a sample of all possible permutations of all states and their
+   * transitions */
+  GstState states[] = { GST_STATE_PLAYING, GST_STATE_PAUSED, GST_STATE_PLAYING,
+    GST_STATE_READY, GST_STATE_PAUSED, GST_STATE_PLAYING, GST_STATE_NULL
+  };
+
+  size_t num_transitions_to_test = 10;
+
+  mux = setup_tsmux (&video_src_template, "sink_%d", &padname);
+  gst_pad_set_chain_function (mysinkpad, flow_test_stat_chain_func);
+  gst_segment_init (&segment, GST_FORMAT_TIME);
+
+  caps = gst_caps_from_string (VIDEO_CAPS_STRING);
+  gst_pad_set_caps (mysrcpad, caps);
+  gst_caps_unref (caps);
+
+  for (i = 0; i < num_transitions_to_test; ++i) {
+    GstState next_state = states[i % G_N_ELEMENTS (states)];
+    fail_unless (gst_element_set_state (mux,
+            next_state) == GST_STATE_CHANGE_SUCCESS,
+        "could not set to %s", gst_element_state_get_name (next_state));
+
+    /* push some buffers when playing - this triggers a lot of activity */
+    if (GST_STATE_PLAYING == next_state) {
+      GstBuffer *inbuffer;
+
+      fail_unless (gst_pad_push_event (mysrcpad,
+              gst_event_new_segment (&segment)));
+
+      inbuffer = gst_buffer_new_and_alloc (1);
+      ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
+
+      GST_BUFFER_TIMESTAMP (inbuffer) = GST_FLOW_OK;
+      fail_unless (GST_FLOW_OK == gst_pad_push (mysrcpad, inbuffer));
+    }
+  }
+
+  cleanup_tsmux (mux, padname);
+  g_free (padname);
+}
+
+GST_END_TEST;
+
 static Suite *
 mpegtsmux_suite (void)
 {
@@ -632,6 +739,8 @@ mpegtsmux_suite (void)
   tcase_add_test (tc_chain, test_video);
   tcase_add_test (tc_chain, test_force_key_unit_event_downstream);
   tcase_add_test (tc_chain, test_force_key_unit_event_upstream);
+  tcase_add_test (tc_chain, test_propagate_flow_status);
+  tcase_add_test (tc_chain, test_multiple_state_change);
 
   return s;
 }

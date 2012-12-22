@@ -379,7 +379,7 @@
 /* Use Orc */
 #undef HAVE_ORC
 
-/* Defined if compiling for OSX */
+/* Apple Mac OS X operating system detected */
 #undef HAVE_OSX
 
 /* Define to enable OSX video (used by osxvideosrc). */

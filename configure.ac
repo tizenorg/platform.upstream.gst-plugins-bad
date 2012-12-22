@@ -3,7 +3,7 @@ AC_PREREQ(2.62)
 dnl initialize autoconf
 dnl when going to/from release please set the nano (fourth number) right !
 dnl releases only do Wall, cvs and prerelease does Werror too
-AC_INIT(GStreamer Bad Plug-ins, 1.0.2,
+AC_INIT(GStreamer Bad Plug-ins, 1.0.4,
     http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer,
     gst-plugins-bad)
 
@@ -50,7 +50,7 @@ dnl - interfaces added/removed/changed -> increment CURRENT, REVISION = 0
 dnl - interfaces added -> increment AGE
 dnl - interfaces removed -> AGE = 0
 dnl sets GST_LT_LDFLAGS
-AS_LIBTOOL(GST, 2, 0, 2)
+AS_LIBTOOL(GST, 4, 0, 4)
 
 dnl *** required versions of GStreamer stuff ***
 GST_REQ=1.0.0
@@ -686,15 +686,24 @@ AG_GST_CHECK_FEATURE(QUICKTIME, [QuickTime wrapper], qtwrapper, [
 dnl check for shm_open (for shm plugin)
 translit(dnm, m, l) AM_CONDITIONAL(USE_SHM, true)
 AG_GST_CHECK_FEATURE(SHM, [POSIX shared memory source and sink], shm, [
-  if test "x$HAVE_SYS_SOCKET_H" = "xyes"; then
-    AC_CHECK_LIB([rt], [shm_open],
-       AC_CHECK_DECL([MSG_NOSIGNAL], HAVE_SHM=yes, HAVE_SHM=no, [
-#include <sys/socket.h>
-	 ]),
-	 HAVE_SHM=no)
-  else
-    HAVE_SHM=no
-  fi
+    if test "x$HAVE_SYS_SOCKET_H" = "xyes"; then
+        case $host in
+        *-darwin* | *-macos10*)
+            AC_DEFINE(HAVE_OSX,[1],[Apple Mac OS X operating system detected])
+            HAVE_SHM=yes
+            ;;
+        *)
+            AC_CHECK_LIB([rt], [shm_open],
+                AC_CHECK_DECL([MSG_NOSIGNAL], HAVE_SHM=yes, HAVE_SHM=no, [
+                #include <sys/socket.h>
+  	            ]),
+                HAVE_SHM=no)
+            AC_SUBST(SHM_LIBS, "-lrt")
+            ;;
+        esac
+    else
+        HAVE_SHM=no
+    fi
 ])
 
 dnl check for Video CD

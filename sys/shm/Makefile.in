@@ -126,7 +126,9 @@ am__uninstall_files_from_dir = { \
   }
 am__installdirs = "$(DESTDIR)$(plugindir)"
 LTLIBRARIES = $(plugin_LTLIBRARIES)
-libgstshm_la_DEPENDENCIES =
+am__DEPENDENCIES_1 =
+libgstshm_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 am_libgstshm_la_OBJECTS = libgstshm_la-shmpipe.lo \
 	libgstshm_la-shmalloc.lo libgstshm_la-gstshm.lo \
 	libgstshm_la-gstshmsrc.lo libgstshm_la-gstshmsink.lo
@@ -495,6 +497,7 @@ SDL_LIBS = @SDL_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SHM_LIBS = @SHM_LIBS@
 SLV2_CFLAGS = @SLV2_CFLAGS@
 SLV2_LIBS = @SLV2_LIBS@
 SNDFILE_CFLAGS = @SNDFILE_CFLAGS@
@@ -613,8 +616,8 @@ top_srcdir = @top_srcdir@
 plugin_LTLIBRARIES = libgstshm.la
 libgstshm_la_SOURCES = shmpipe.c shmalloc.c gstshm.c gstshmsrc.c gstshmsink.c
 libgstshm_la_CFLAGS = $(GST_PLUGINS_BAD_CFLAGS) $(GST_CFLAGS) -DSHM_PIPE_USE_GLIB
-libgstshm_la_LIBADD = -lrt
-libgstshm_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) $(GST_BASE_LIBS)
+libgstshm_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
+libgstshm_la_LIBADD = $(GST_LIBS) $(GST_BASE_LIBS) $(SHM_LIBS)
 libgstshm_la_LIBTOOLFLAGS = --tag=disable-static
 noinst_HEADERS = gstshmsrc.h gstshmsink.h shmpipe.h  shmalloc.h
 all: all-am
