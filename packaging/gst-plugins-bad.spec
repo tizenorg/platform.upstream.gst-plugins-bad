@@ -232,6 +232,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstfrei0r.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 
 
 %files -n libgstphotography
