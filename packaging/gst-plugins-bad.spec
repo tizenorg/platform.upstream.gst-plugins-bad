@@ -1,5 +1,5 @@
 Name:           gst-plugins-bad
-Version:        1.0.2
+Version:        1.0.5
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
