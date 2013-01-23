@@ -5,9 +5,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: gst-plugins-bad 1.0.4\n"
+"Project-Id-Version: gst-plugins-bad 1.0.5\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2012-12-18 01:24+0000\n"
+"POT-Creation-Date: 2013-01-08 01:18+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,26 +16,26 @@ msgstr ""
 "Content-Type: text/plain; charset=CHARSET\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ext/resindvd/resindvdsrc.c:359
+#: ext/resindvd/resindvdsrc.c:361
 msgid "Could not read title information for DVD."
 msgstr ""
 
-#: ext/resindvd/resindvdsrc.c:365
+#: ext/resindvd/resindvdsrc.c:367
 #, c-format
 msgid "Failed to open DVD device '%s'."
 msgstr ""
 
-#: ext/resindvd/resindvdsrc.c:371
+#: ext/resindvd/resindvdsrc.c:373
 msgid "Failed to set PGC based seeking."
 msgstr ""
 
-#: ext/resindvd/resindvdsrc.c:1156
+#: ext/resindvd/resindvdsrc.c:1165
 msgid ""
 "Could not read DVD. This may be because the DVD is encrypted and a DVD "
 "decryption library is not installed."
 msgstr ""
 
-#: ext/resindvd/resindvdsrc.c:1161 ext/resindvd/resindvdsrc.c:1170
+#: ext/resindvd/resindvdsrc.c:1170 ext/resindvd/resindvdsrc.c:1179
 msgid "Could not read DVD."
 msgstr ""
 

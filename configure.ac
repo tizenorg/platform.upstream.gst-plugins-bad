@@ -3,7 +3,7 @@ AC_PREREQ(2.62)
 dnl initialize autoconf
 dnl when going to/from release please set the nano (fourth number) right !
 dnl releases only do Wall, cvs and prerelease does Werror too
-AC_INIT(GStreamer Bad Plug-ins, 1.0.4,
+AC_INIT(GStreamer Bad Plug-ins, 1.0.5,
     http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer,
     gst-plugins-bad)
 
@@ -22,7 +22,7 @@ dnl can autoconf find the source ?
 AC_CONFIG_SRCDIR([docs/plugins/gst-plugins-bad-plugins-docs.sgml])
 
 dnl define the output header for config
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 
 dnl AM_MAINTAINER_MODE only provides the option to configure to enable it
 AM_MAINTAINER_MODE([enable])
@@ -50,7 +50,7 @@ dnl - interfaces added/removed/changed -> increment CURRENT, REVISION = 0
 dnl - interfaces added -> increment AGE
 dnl - interfaces removed -> AGE = 0
 dnl sets GST_LT_LDFLAGS
-AS_LIBTOOL(GST, 4, 0, 4)
+AS_LIBTOOL(GST, 5, 0, 5)
 
 dnl *** required versions of GStreamer stuff ***
 GST_REQ=1.0.0
@@ -316,7 +316,7 @@ GST_PLUGINS_NONPORTED=" androidmedia aiff \
  freeverb \
  hdvparse ivfparse jp2kdecimator \
  kate librfb \
- mpegpsmux mve mxf mythtv nsf nuvdemux \
+ mve mxf mythtv nsf nuvdemux \
  patchdetect real \
  sdi stereo tta videofilters \
  videomeasure videosignal vmnc \
