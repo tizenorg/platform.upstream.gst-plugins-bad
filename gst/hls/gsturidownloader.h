@@ -56,10 +56,10 @@ struct _GstUriDownloaderClass
 GType gst_uri_downloader_get_type (void);
 
 GstUriDownloader * gst_uri_downloader_new (void);
-#ifdef GST_EXT_HLS_MODIFICATION
-GstFragment * gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri, gchar ***cookies);
-#else
 GstFragment * gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri);
+#ifdef GST_EXT_HLS_MODIFICATION
+void gst_uri_downloader_set_user_agent (GstUriDownloader * downloader, gchar * user_agent);
+void gst_uri_downloader_set_cookies (GstUriDownloader * downloader, gchar ** cookies);
 #endif
 void gst_uri_downloader_cancel (GstUriDownloader *downloader);
 void gst_uri_downloader_free (GstUriDownloader *downloader);

@@ -109,6 +109,7 @@ void gst_m3u8_client_get_current_position (GstM3U8Client * client,
     GstClockTime * timestamp);
 GstClockTime gst_m3u8_client_get_duration (GstM3U8Client * client);
 GstClockTime gst_m3u8_client_get_target_duration (GstM3U8Client * client);
+guint gst_m3u8_client_get_start_sequence (GstM3U8Client * client);
 const gchar *gst_m3u8_client_get_uri(GstM3U8Client * client);
 const gchar *gst_m3u8_client_get_current_uri(GstM3U8Client * client);
 gboolean gst_m3u8_client_has_variant_playlist(GstM3U8Client * client);
@@ -119,6 +120,8 @@ gboolean gst_m3u8_client_decrypt_init (GstM3U8Client * client,
     GstM3U8Key * key);
 gboolean gst_m3u8_client_decrypt_update (GstM3U8Client * client,
     guint8 * out_data, gint * out_size, guint8 * in_data, gint in_size);
+gboolean gst_m3u8_client_decrypt_final (GstM3U8Client * client,
+    guint8 * out_data, gint * out_size);
 
 G_END_DECLS
 #endif /* __M3U8_H__ */

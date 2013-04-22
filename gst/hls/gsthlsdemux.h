@@ -87,9 +87,6 @@ struct _GstHLSDemux
   /* Position in the stream */
   GstClockTime position_shift;
   gboolean need_segment;
-#ifdef GST_EXT_HLS_MODIFICATION
-  gchar **cookies;
-#endif
 };
 
 struct _GstHLSDemuxClass

@@ -41,6 +41,10 @@ struct _GstUriDownloaderPrivate
   GstFragment *download;
   GMutex *lock;
   GCond *cond;
+#ifdef GST_EXT_HLS_MODIFICATION
+  gchar *user_agent;
+  gchar **cookies;
+#endif
 };
 
 static void gst_uri_downloader_finalize (GObject * object);
@@ -98,6 +102,11 @@ gst_uri_downloader_init (GstUriDownloader * downloader)
 
   downloader->priv->lock = g_mutex_new ();
   downloader->priv->cond = g_cond_new ();
+
+#ifdef GST_EXT_HLS_MODIFICATION
+  downloader->priv->user_agent = NULL;
+  downloader->priv->cookies = NULL;
+#endif
 }
 
 static void
@@ -124,6 +133,17 @@ gst_uri_downloader_dispose (GObject * object)
     g_object_unref (downloader->priv->download);
     downloader->priv->download = NULL;
   }
+
+#ifdef GST_EXT_HLS_MODIFICATION
+  if (downloader->priv->user_agent) {
+    g_free (downloader->priv->user_agent);
+    downloader->priv->user_agent = NULL;
+  }
+  if (downloader->priv->cookies) {
+    g_strfreev (downloader->priv->cookies);
+    downloader->priv->cookies = NULL;
+  }
+#endif
 
   G_OBJECT_CLASS (gst_uri_downloader_parent_class)->dispose (object);
 }
@@ -244,8 +264,6 @@ gst_uri_downloader_stop (GstUriDownloader * downloader)
 
   GST_DEBUG_OBJECT (downloader, "Stopping source element");
 
-  /* remove the bus' sync handler */
-  gst_bus_set_sync_handler (downloader->priv->bus, NULL, NULL);
   /* unlink the source element from the internal pad */
   pad = gst_pad_get_peer (downloader->priv->pad);
   if (pad) {
@@ -256,6 +274,11 @@ gst_uri_downloader_stop (GstUriDownloader * downloader)
   gst_element_set_state (downloader->priv->urisrc, GST_STATE_NULL);
   gst_element_get_state (downloader->priv->urisrc, NULL, NULL,
       GST_CLOCK_TIME_NONE);
+  /* remove the bus' sync handler */
+  gst_bus_set_sync_handler (downloader->priv->bus, NULL, NULL);
+  /* remove source element */
+  gst_object_unref (downloader->priv->urisrc);
+  downloader->priv->urisrc = NULL;
 }
 
 void
@@ -304,14 +327,13 @@ gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri)
 }
 
 GstFragment *
-#ifdef GST_EXT_HLS_MODIFICATION
-gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri, gchar ***cookies)
-#else
 gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri)
-#endif
 {
   GstStateChangeReturn ret;
   GstFragment *download = NULL;
+#ifdef GST_EXT_HLS_MODIFICATION
+  gchar **cookies;
+#endif
 
   g_mutex_lock (downloader->priv->lock);
 
@@ -329,7 +351,8 @@ gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri)
   }
 
 #ifdef GST_EXT_HLS_MODIFICATION
-  g_object_set (downloader->priv->urisrc, "cookies", *cookies, NULL);
+  g_object_set (downloader->priv->urisrc, "cookies", downloader->priv->cookies, NULL);
+  g_object_set (downloader->priv->urisrc, "user-agent", downloader->priv->user_agent, NULL);
 #endif
 
   /* wait until:
@@ -341,9 +364,8 @@ gst_uri_downloader_fetch_uri (GstUriDownloader * downloader, const gchar * uri)
   g_cond_wait (downloader->priv->cond, downloader->priv->lock);
 
 #ifdef GST_EXT_HLS_MODIFICATION
-  if (*cookies)
-    g_strfreev (*cookies);
-  g_object_get (downloader->priv->urisrc, "cookies", cookies, NULL);
+  g_object_get (downloader->priv->urisrc, "cookies", &cookies, NULL);
+  gst_uri_downloader_set_cookies (downloader, cookies);
 #endif
 
   GST_OBJECT_LOCK (downloader);
@@ -363,3 +385,23 @@ quit:
     return download;
   }
 }
+
+#ifdef GST_EXT_HLS_MODIFICATION
+void
+gst_uri_downloader_set_user_agent (GstUriDownloader * downloader, gchar * user_agent)
+{
+  if (downloader->priv->user_agent)
+    g_free (downloader->priv->user_agent);
+
+  downloader->priv->user_agent = user_agent;
+}
+
+void
+gst_uri_downloader_set_cookies (GstUriDownloader * downloader, gchar ** cookies)
+{
+  if (downloader->priv->cookies)
+    g_strfreev (downloader->priv->cookies);
+
+  downloader->priv->cookies = cookies;
+}
+#endif

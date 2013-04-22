@@ -40,6 +40,7 @@ static void gst_m3u8_media_file_free (GstM3U8MediaFile * self);
 static GstM3U8Key *gst_m3u8_key_new (GstM3U8EncryptionMethod method,
     gchar * uri, guint8 *iv, guint sequence);
 static void gst_m3u8_key_free (GstM3U8Key * self);
+static guint _get_start_sequence (GstM3U8Client * client);
 
 static GstM3U8 *
 gst_m3u8_new (void)
@@ -134,6 +135,23 @@ gst_m3u8_key_free (GstM3U8Key * self)
   g_free (self->iv);
   g_free (self->data);
   g_free (self);
+}
+
+static void
+gst_m3u8_key_merge_data (GstM3U8Key * key, GList *old_list)
+{
+  GList *walk;
+  gchar *key_uri = key->uri;
+  GstM3U8Key *old_key;
+
+  for (walk = old_list; walk; walk = walk->next) {
+    old_key = GST_M3U8_KEY (walk->data);
+    if (!g_strcmp0 (old_key->uri, key_uri)) {
+      key->data = old_key->data;
+      old_key->data = NULL;
+      break;
+    }
+  }
 }
 
 static gboolean
@@ -324,6 +342,7 @@ gst_m3u8_update (GstM3U8 * self, gchar * data, gboolean * updated)
   gchar *title, *end;
 //  gboolean discontinuity;
   GstM3U8 *list;
+  GList *new_keys = NULL;
 
   g_return_val_if_fail (self != NULL, FALSE);
   g_return_val_if_fail (data != NULL, FALSE);
@@ -353,12 +372,6 @@ gst_m3u8_update (GstM3U8 * self, gchar * data, gboolean * updated)
     g_list_foreach (self->files, (GFunc) gst_m3u8_media_file_free, NULL);
     g_list_free (self->files);
     self->files = NULL;
-  }
-
-  if (self->keys) {
-    g_list_foreach (self->keys, (GFunc) gst_m3u8_key_free, NULL);
-    g_list_free (self->keys);
-    self->keys = NULL;
   }
 
   list = NULL;
@@ -524,15 +537,7 @@ gst_m3u8_update (GstM3U8 * self, gchar * data, gboolean * updated)
           }
         }
       }
-      if ((encryption != GST_M3U8_ENCRYPTED_NONE) && (key_uri != NULL)) {
-        if (iv == NULL) {
-          iv = g_malloc0 (GST_M3U8_IV_LEN);
-          if (!iv_from_uint (self->mediasequence, iv)) {
-            GST_WARNING ("Can't convert IV from sequence");
-            goto next_line;
-          }
-        }
-      } else {
+      if ((encryption == GST_M3U8_ENCRYPTED_NONE) || (key_uri == NULL)) {
         g_free(key_uri);
         g_free(iv);
         if (encryption != GST_M3U8_ENCRYPTED_NONE) {
@@ -542,7 +547,8 @@ gst_m3u8_update (GstM3U8 * self, gchar * data, gboolean * updated)
       }
       key = gst_m3u8_key_new (encryption, key_uri, iv,
           self->mediasequence);
-      self->keys = g_list_prepend (self->keys, key);
+      gst_m3u8_key_merge_data (key, self->keys);
+      new_keys = g_list_prepend (new_keys, key);
     } else {
       GST_LOG ("Ignored line: %s", data);
     }
@@ -569,6 +575,12 @@ gst_m3u8_update (GstM3U8 * self, gchar * data, gboolean * updated)
     self->current_variant = g_list_find_custom (self->lists, top_variant_uri,
         (GCompareFunc) _m3u8_compare_uri);
   }
+
+  if (self->keys) {
+    g_list_foreach (self->keys, (GFunc) gst_m3u8_key_free, NULL);
+    g_list_free (self->keys);
+  }
+  self->keys = new_keys;
 
   return TRUE;
 }
@@ -627,10 +639,11 @@ gst_m3u8_client_update (GstM3U8Client * self, gchar * data)
   m3u8 = self->current ? self->current : self->main;
 
   if (!gst_m3u8_update (m3u8, data, &updated))
-    goto out;
+    self->update_failed_count++;
+  else
+    self->update_failed_count = 0;
 
   if (!updated) {
-    self->update_failed_count++;
     goto out;
   }
 
@@ -644,8 +657,7 @@ gst_m3u8_client_update (GstM3U8Client * self, gchar * data)
   }
 
   if (m3u8->files && self->sequence == -1) {
-    self->sequence =
-        GST_M3U8_MEDIA_FILE (g_list_first (m3u8->files)->data)->sequence;
+    self->sequence = _get_start_sequence (self);
     GST_DEBUG ("Setting first sequence at %d", self->sequence);
   }
 
@@ -683,6 +695,10 @@ gst_m3u8_client_get_current_position (GstM3U8Client * client,
       (GCompareFunc) _find_next);
 
   *timestamp = 0;
+#ifdef GST_EXT_HLS_MODIFICATION
+  if (!client->current->endlist)
+    return;
+#endif
   for (walk = client->current->files; walk; walk = walk->next) {
     if (walk == l)
       break;
@@ -715,6 +731,8 @@ gst_m3u8_client_get_next_fragment (GstM3U8Client * client,
 
   file = GST_M3U8_MEDIA_FILE (l->data);
 
+  *discontinuity = client->sequence != file->sequence;
+  client->sequence = file->sequence;
   *key = NULL;
   if (client->current->keys) {
     l = g_list_find_custom (client->current->keys, client,
@@ -723,8 +741,7 @@ gst_m3u8_client_get_next_fragment (GstM3U8Client * client,
       *key = GST_M3U8_KEY (l->data);
   }
 
-  *discontinuity = client->sequence != file->sequence;
-  client->sequence = file->sequence + 1;
+  client->sequence++;
 
   *uri = file->uri;
   *duration = file->duration;
@@ -745,6 +762,7 @@ gst_m3u8_client_get_duration (GstM3U8Client * client)
   GstClockTime duration = 0;
 
   g_return_val_if_fail (client != NULL, GST_CLOCK_TIME_NONE);
+  g_return_val_if_fail (client->current != NULL, GST_CLOCK_TIME_NONE);
 
   GST_M3U8_CLIENT_LOCK (client);
   /* We can only get the duration for on-demand streams */
@@ -764,11 +782,46 @@ gst_m3u8_client_get_target_duration (GstM3U8Client * client)
   GstClockTime duration = 0;
 
   g_return_val_if_fail (client != NULL, GST_CLOCK_TIME_NONE);
+  g_return_val_if_fail (client->current != NULL, GST_CLOCK_TIME_NONE);
 
   GST_M3U8_CLIENT_LOCK (client);
   duration = client->current->targetduration;
   GST_M3U8_CLIENT_UNLOCK (client);
   return duration;
+}
+
+static guint
+_get_start_sequence (GstM3U8Client * client)
+{
+  GList *l;
+  GstClockTime duration_limit, duration_count = 0;
+  guint sequence = -1;
+
+  if (client->current->endlist) {
+    l = g_list_first (client->current->files);
+    sequence = GST_M3U8_MEDIA_FILE (l->data)->sequence;
+  } else {
+    duration_limit = client->current->targetduration * 3;
+    for (l = g_list_last (client->current->files); l; l = l->prev) {
+      duration_count += GST_M3U8_MEDIA_FILE (l->data)->duration;
+      sequence = GST_M3U8_MEDIA_FILE (l->data)->sequence;
+      if (duration_count >= duration_limit) {
+        break;
+      }
+    }
+  }
+  return sequence;
+}
+
+guint
+gst_m3u8_client_get_start_sequence (GstM3U8Client * client)
+{
+  guint sequence;
+
+  GST_M3U8_CLIENT_LOCK (client);
+  sequence = _get_start_sequence (client);
+  GST_M3U8_CLIENT_UNLOCK (client);
+  return sequence;
 }
 
 const gchar *
@@ -856,13 +909,28 @@ gst_m3u8_client_get_playlist_for_bitrate (GstM3U8Client * client, guint bitrate)
 gboolean
 gst_m3u8_client_decrypt_init (GstM3U8Client * client, GstM3U8Key * key)
 {
+  gboolean evp_ret;
+  guint *iv = NULL;
+
   if (!client->current->cipher_ctx)
     client->current->cipher_ctx = g_malloc0 (sizeof(EVP_CIPHER_CTX));
 
   EVP_CIPHER_CTX_init (client->current->cipher_ctx);
   if (key->method == GST_M3U8_ENCRYPTED_AES_128) {
-    return EVP_DecryptInit_ex (client->current->cipher_ctx, EVP_aes_128_cbc(),
-        NULL, key->data, key->iv);
+    if (key->iv == NULL) {
+      iv = g_malloc0 (GST_M3U8_IV_LEN);
+      if (!iv_from_uint (client->sequence - 1, iv)) {
+        GST_WARNING ("Can't convert IV from sequence");
+        return FALSE;
+      }
+    } else {
+      iv = key->iv;
+    }
+    evp_ret = EVP_DecryptInit_ex (client->current->cipher_ctx, EVP_aes_128_cbc(),
+        NULL, key->data, iv);
+    if (key->iv == NULL)
+      g_free (iv);
+    return evp_ret;
   } else {
     return FALSE;
   }
@@ -877,3 +945,13 @@ gst_m3u8_client_decrypt_update (GstM3U8Client * client, guint8 * out_data,
   return EVP_DecryptUpdate (client->current->cipher_ctx, out_data, out_size,
       in_data, in_size);
 }
+
+gboolean
+gst_m3u8_client_decrypt_final (GstM3U8Client * client, guint8 * out_data,
+    gint * out_size)
+{
+  g_return_val_if_fail (client->current->cipher_ctx != NULL, FALSE);
+
+  return EVP_DecryptFinal_ex (client->current->cipher_ctx, out_data, out_size);
+}
+

@@ -2,7 +2,7 @@
 Name:       gst-plugins-bad
 Summary:    GStreamer plugins from the "bad" set
 Version:    0.10.23
-Release:    11
+Release:    12
 Group:      Applications/Multimedia
 License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
