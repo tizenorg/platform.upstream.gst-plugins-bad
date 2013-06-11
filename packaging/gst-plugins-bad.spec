@@ -143,7 +143,6 @@ export CFLAGS+=" -Wall -g -fPIC\
  --disable-schro\
  --disable-vp8\
  --disable-zbar\
- --disable-dataurisrc\
  --disable-shm\
  --disable-coloreffects\
  --disable-colorspace\
@@ -185,6 +184,7 @@ rm -rf %{buildroot}
 %files
 %manifest gst-plugins-bad.manifest
 %defattr(-,root,root,-)
+%{_libdir}/gstreamer-0.10/libgstdataurisrc.so
 %{_libdir}/libgstbasevideo-0.10.so.*
 %{_libdir}/libgstcodecparsers-0.10.so.*
 %{_libdir}/libgstbasecamerabinsrc-0.10.so.*
