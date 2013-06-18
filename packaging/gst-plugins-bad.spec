@@ -1,5 +1,5 @@
 #sbs-git:slp/pkgs/g/gst-plugins-bad0.10 gst-plugins-bad 0.10.23 3e50f3f786fc9956e191c290b2169d52808cd441
-Name:       gst-plugins-bad
+Name:       gst-plugins-bad0.10
 Summary:    GStreamer plugins from the "bad" set
 Version:    0.10.23
 Release:    12
@@ -196,4 +196,4 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %{_libdir}/libgst*.so
 %{_includedir}/gstreamer-0.10/gst/*
-%{_libdir}/pkgconfig/gstreamer-*.pc
+%{_libdir}/pkgconfig/*.pc
