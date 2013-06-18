@@ -1,12 +1,14 @@
 Name:           gst-plugins-bad
-Version:        1.0.5
+Version:        1.0.7
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
-Group:          Productivity/Multimedia/Other
+Group:          Multimedia/Audio
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
+BuildRequires:  gst-common
+BuildRequires:  gettext-tools
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
 BuildRequires:  gcc-c++
@@ -40,7 +42,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstbasecamerabinsrc
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstbasecamerabinsrc
 GStreamer is a streaming media framework based on graphs of filters
@@ -51,7 +52,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstphotography
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstphotography
 GStreamer is a streaming media framework based on graphs of filters
@@ -62,7 +62,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstvdp
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstvdp
 GStreamer is a streaming media framework based on graphs of filters
@@ -73,7 +72,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstbasevideo
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstbasevideo
 GStreamer is a streaming media framework based on graphs of filters
@@ -84,7 +82,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstcodecparsers
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstcodecparsers
 GStreamer is a streaming media framework based on graphs of filters
@@ -95,7 +92,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstsignalprocessor
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Productivity/Multimedia/Other
 
 %description -n libgstsignalprocessor
 GStreamer is a streaming media framework based on graphs of filters
@@ -106,7 +102,6 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %package devel
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Development/Libraries/C and C++
 Requires:       gstreamer-devel
 Requires:       libgstbasecamerabinsrc = %{version}
 Requires:       libgstbasevideo = %{version}
@@ -121,22 +116,16 @@ anything media-related,from real-time sound processing to playing
 videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
-%package doc
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Group:          Development/Libraries/C and C++
-Requires:       %{name} = %{version}
-
-%description doc
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
 
 %prep
 %setup -q -n %{name}-%{version}
+rm -rf common
+cp -a %{_datadir}/gst-common common
+find common -exec touch {} \;
 
 %build
+export V=1
+NOCONFIGURE=1 ./autogen.sh
 %configure\
     --disable-static\
     --disable-examples\
@@ -233,6 +222,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
+%{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
 
 
 %files -n libgstphotography
@@ -264,7 +255,3 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 
-%files doc
-%defattr(-, root, root)
-#%{_datadir}/gtk-doc/html/gst-plugins-bad-plugins-%{gst_branch}/
-%{_datadir}/gtk-doc/html/gst-plugins-bad-libs-%{gst_branch}/
