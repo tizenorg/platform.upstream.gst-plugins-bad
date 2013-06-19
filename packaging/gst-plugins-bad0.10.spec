@@ -8,8 +8,8 @@ License:    LGPLv2+
 Source0:    %{name}-%{version}.tar.gz
 Patch0:     gst-plugins-bad-disable-gtk-doc.patch
 BuildRequires:  gettext
-BuildRequires:  gst-plugins-base-devel  
 BuildRequires:  pkgconfig(gstreamer-0.10) 
+BuildRequires:  pkgconfig(gstreamer-plugins-base-0.10) 
 BuildRequires:  pkgconfig(glib-2.0)
 BuildRequires:  pkgconfig(libcrypto)
 
@@ -179,6 +179,9 @@ make %{?jobs:-j%jobs}
 rm -rf %{buildroot}
 %make_install
 
+%post -p /sbin/ldconfig
+
+%postun -p /sbin/ldconfig
 
 
 
