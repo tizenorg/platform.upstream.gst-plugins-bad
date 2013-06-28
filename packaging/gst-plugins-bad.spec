@@ -7,6 +7,7 @@ License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Audio
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
+Source1001: 	gst-plugins-bad.manifest
 BuildRequires:  gst-common
 BuildRequires:  gettext-tools
 BuildRequires:  SDL-devel
@@ -119,6 +120,7 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %prep
 %setup -q -n %{name}-%{version}
+cp %{SOURCE1001} .
 rm -rf common
 cp -a %{_datadir}/gst-common common
 find common -exec touch {} \;
@@ -172,6 +174,7 @@ rm -rf $RPM_BUILD_ROOT
 %postun -n libgstsignalprocessor -p /sbin/ldconfig
 
 %files
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %doc COPYING COPYING.LIB 
 %{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
@@ -227,27 +230,33 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %files -n libgstphotography
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstphotography-%{gst_branch}.so.0*
 
 %files -n libgstbasevideo
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstbasevideo-%{gst_branch}.so.0*
 
 %files -n libgstbasecamerabinsrc
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstbasecamerabinsrc-%{gst_branch}.so.0*
 
 %files -n libgstcodecparsers
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstcodecparsers-%{gst_branch}.so.0*
 
 %files -n libgstsignalprocessor
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstsignalprocessor-%{gst_branch}.so.0*
 
 
 %files devel
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_includedir}/gstreamer-%{gst_branch}
 %{_libdir}/*.so
