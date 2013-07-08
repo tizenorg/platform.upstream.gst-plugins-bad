@@ -1,0 +1,8 @@
+Change-Id: Ifd4aa81d5e9cd758166029339d464224a449e824
+Code-Review+2: Ryan Ware <ware@linux.intel.com>
+Verified+1: Ryan Ware <ware@linux.intel.com>
+Submitted-by: Ryan Ware <ware@linux.intel.com>
+Submitted-at: Mon, 08 Jul 2013 09:40:28 -0700
+Reviewed-on: https://review.tizen.org/gerrit/4780
+Project: platform/upstream/gst-plugins-bad
+Branch: refs/heads/tizen
