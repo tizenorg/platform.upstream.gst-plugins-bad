@@ -1,3 +1,4 @@
+%bcond_with wayland
 Name:           gst-plugins-bad
 Version:        1.2.0
 Release:        0
@@ -27,6 +28,9 @@ BuildRequires:  pkgconfig(libexif) >= 0.6.16
 BuildRequires:  pkgconfig(libpng) >= 1.2
 BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
+%if %{with wayland}
+BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
+%endif
 BuildRequires:  pkgconfig(x11)
 Requires(post): glib2-tools
 Requires(postun): glib2-tools
@@ -252,7 +256,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
-
 %{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
@@ -266,6 +269,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 
+%if %{with wayland}
+%{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
+%endif
 
 %files -n libgstphotography
 %manifest %{name}.manifest
