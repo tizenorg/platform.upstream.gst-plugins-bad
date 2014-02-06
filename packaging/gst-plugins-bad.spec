@@ -1,4 +1,6 @@
 %bcond_with wayland
+%bcond_with x
+
 Name:           gst-plugins-bad
 Version:        1.0.7
 Release:        0
@@ -31,7 +33,9 @@ BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 %if %{with wayland}
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 %endif
+%if %{with x}
 BuildRequires:  pkgconfig(x11)
+%endif
 Requires(post): glib2-tools
 Requires(postun): glib2-tools
 Requires:       gstreamer >= 1.0.2
