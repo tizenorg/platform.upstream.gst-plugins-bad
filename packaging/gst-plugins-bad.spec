@@ -23,6 +23,8 @@ BuildRequires:  pkgconfig(orc-0.4) >= 0.4.11
 BuildRequires:  python
 BuildRequires:  xsltproc
 BuildRequires:  pkgconfig(cairo)
+BuildRequires:  pkgconfig(libusb-1.0)
+BuildRequires:  pkgconfig(gudev-1.0)
 BuildRequires:  pkgconfig(gio-2.0) >= 2.25.0
 BuildRequires:  pkgconfig(libcrypto)
 BuildRequires:  pkgconfig(libcurl) >= 7.21.0
@@ -272,6 +274,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
 
 %if %{with wayland}
 %{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
