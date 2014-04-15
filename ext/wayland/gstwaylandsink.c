@@ -256,7 +256,7 @@ destroy_window (struct window *window)
   if (window->surface)
     wl_surface_destroy (window->surface);
 
-  free (window);
+  g_free (window);
 }
 
 static void
@@ -483,7 +483,7 @@ create_window (GstWaylandSink * sink, struct display *display, int width,
 
   g_mutex_lock (&sink->wayland_lock);
 
-  window = malloc (sizeof *window);
+  window = g_malloc0 (sizeof *window);
   window->display = display;
   window->width = width;
   window->height = height;
