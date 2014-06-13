@@ -715,12 +715,21 @@ gst_h264_parse_handle_frame_packetized (GstBaseParse * parse,
 
     /* dispatch per NALU if needed */
     if (h264parse->split_packetized) {
+      GstBaseParseFrame tmp_frame;
+
+      gst_base_parse_frame_init (&tmp_frame);
+      tmp_frame.flags |= frame->flags;
+      tmp_frame.offset = frame->offset;
+      tmp_frame.overhead = frame->overhead;
+      tmp_frame.buffer = gst_buffer_copy_region (buffer, GST_BUFFER_COPY_ALL,
+          nalu.offset, nalu.size);
+
       /* note we don't need to come up with a sub-buffer, since
        * subsequent code only considers input buffer's metadata.
        * Real data is either taken from input by baseclass or
        * a replacement output buffer is provided anyway. */
-      gst_h264_parse_parse_frame (parse, frame);
-      ret = gst_base_parse_finish_frame (parse, frame, nl + nalu.size);
+      gst_h264_parse_parse_frame (parse, &tmp_frame);
+      ret = gst_base_parse_finish_frame (parse, &tmp_frame, nl + nalu.size);
       left -= nl + nalu.size;
     }
 
@@ -1000,9 +1009,7 @@ gst_h264_parse_make_codec_data (GstH264Parse * h264parse)
       }
     }
   }
-  for (i = 0;
-      i < GST_H264_MAX_PPS_COUNT
-      && h264parse->format != GST_H264_PARSE_FORMAT_AVC3; i++) {
+  for (i = 0; i < GST_H264_MAX_PPS_COUNT; i++) {
     if ((nal = h264parse->pps_nals[i])) {
       num_pps++;
       /* size bytes also count */
@@ -1010,8 +1017,10 @@ gst_h264_parse_make_codec_data (GstH264Parse * h264parse)
     }
   }
 
+  /* AVC3 has SPS/PPS inside the stream, not in the codec_data */
   if (h264parse->format == GST_H264_PARSE_FORMAT_AVC3) {
     num_sps = sps_size = 0;
+    num_pps = pps_size = 0;
   }
 
   GST_DEBUG_OBJECT (h264parse,
@@ -1034,23 +1043,27 @@ gst_h264_parse_make_codec_data (GstH264Parse * h264parse)
   data[5] = 0xe0 | num_sps;     /* number of SPSs */
 
   data += 6;
-  for (i = 0; i < num_sps; i++) {
-    if ((nal = h264parse->sps_nals[i])) {
-      gsize nal_size = gst_buffer_get_size (nal);
-      GST_WRITE_UINT16_BE (data, nal_size);
-      gst_buffer_extract (nal, 0, data + 2, nal_size);
-      data += 2 + nal_size;
+  if (h264parse->format != GST_H264_PARSE_FORMAT_AVC3) {
+    for (i = 0; i < GST_H264_MAX_SPS_COUNT; i++) {
+      if ((nal = h264parse->sps_nals[i])) {
+        gsize nal_size = gst_buffer_get_size (nal);
+        GST_WRITE_UINT16_BE (data, nal_size);
+        gst_buffer_extract (nal, 0, data + 2, nal_size);
+        data += 2 + nal_size;
+      }
     }
   }
 
   data[0] = num_pps;
   data++;
-  for (i = 0; i < num_pps; i++) {
-    if ((nal = h264parse->pps_nals[i])) {
-      gsize nal_size = gst_buffer_get_size (nal);
-      GST_WRITE_UINT16_BE (data, nal_size);
-      gst_buffer_extract (nal, 0, data + 2, nal_size);
-      data += 2 + nal_size;
+  if (h264parse->format != GST_H264_PARSE_FORMAT_AVC3) {
+    for (i = 0; i < GST_H264_MAX_PPS_COUNT; i++) {
+      if ((nal = h264parse->pps_nals[i])) {
+        gsize nal_size = gst_buffer_get_size (nal);
+        GST_WRITE_UINT16_BE (data, nal_size);
+        gst_buffer_extract (nal, 0, data + 2, nal_size);
+        data += 2 + nal_size;
+      }
     }
   }
 

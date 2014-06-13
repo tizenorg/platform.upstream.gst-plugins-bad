@@ -40,7 +40,8 @@ libgstapplemedia_la_LIBADD =			\
 	$(GST_BASE_LIBS)			\
 	$(GST_PLUGINS_BASE_LIBS)		\
 	-lgstvideo-$(GST_API_VERSION) 		\
-	-lgstaudio-$(GST_API_VERSION)
+	-lgstaudio-$(GST_API_VERSION)		\
+	$(GMODULE_NO_EXPORT_LIBS)
 
 libgstapplemedia_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
@@ -67,17 +68,19 @@ noinst_HEADERS =				\
 	vtapi.h					\
 	atdec.h 				\
 	dynapi.h				\
-	dynapi-internal.h
+	dynapi-internal.h                       \
+	iosassetsrc.h
 
 if HAVE_IOS
 
 libgstapplemedia_la_SOURCES +=			\
-	avfvideosrc.m
+	iosassetsrc.m
+#	avfvideosrc.m
 
 libgstapplemedia_la_LDFLAGS +=			\
-	-Wl,-framework -Wl,CoreMedia		\
 	-Wl,-framework -Wl,Foundation		\
-	-Wl,-framework -Wl,AVFoundation
+	-Wl,-framework -Wl,AssetsLibrary
+#	-Wl,-framework -Wl,AVFoundation
 
 else
 

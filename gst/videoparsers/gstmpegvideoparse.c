@@ -461,17 +461,20 @@ parse_packet_extension (GstMpegvParse * mpvparse, GstMapInfo * info, guint off)
   }
 }
 
-/* caller guarantees at least start code in @buf at @off */
+/* caller guarantees at least start code in @buf at @off ( - 4)*/
 /* for off == 4 initial code; returns TRUE if code starts a frame
  * otherwise returns TRUE if code terminates preceding frame */
 static gboolean
 gst_mpegv_parse_process_sc (GstMpegvParse * mpvparse,
-    GstMapInfo * info, gint off, GstMpegVideoPacket * packet)
+    GstMapInfo * info, gint off, GstMpegVideoPacket * packet,
+    gboolean * need_more)
 {
   gboolean ret = FALSE, checkconfig = TRUE;
 
   GST_LOG_OBJECT (mpvparse, "process startcode %x (%s) offset:%d", packet->type,
       picture_start_code_name (packet->type), off);
+
+  *need_more = FALSE;
 
   switch (packet->type) {
     case GST_MPEG_VIDEO_PACKET_PICTURE:
@@ -501,9 +504,14 @@ gst_mpegv_parse_process_sc (GstMpegvParse * mpvparse,
       break;
     case GST_MPEG_VIDEO_PACKET_EXTENSION:
       GST_LOG_OBJECT (mpvparse, "startcode is VIDEO PACKET EXTENSION");
-      parse_packet_extension (mpvparse, info, off);
-      if (mpvparse->ext_count < G_N_ELEMENTS (mpvparse->ext_offsets))
-        mpvparse->ext_offsets[mpvparse->ext_count++] = off;
+      if (mpvparse->pic_offset >= 0) {
+        GST_LOG_OBJECT (mpvparse, "... considered PICTURE EXTENSION");
+        parse_packet_extension (mpvparse, info, off);
+      } else {
+        GST_LOG_OBJECT (mpvparse, "... considered SEQUENCE EXTENSION");
+        if (mpvparse->ext_count < G_N_ELEMENTS (mpvparse->ext_offsets))
+          mpvparse->ext_offsets[mpvparse->ext_count++] = off;
+      }
       checkconfig = FALSE;
       break;
     default:
@@ -544,8 +552,11 @@ gst_mpegv_parse_process_sc (GstMpegvParse * mpvparse,
     /* if terminating packet is a picture, we need to check if it has same TSN as the picture that is being
        terminated. If it does, we need to keep those together, as these packets are two fields of the same
        frame */
-    if (packet->type == GST_MPEG_VIDEO_PACKET_PICTURE) {
+    if (packet->type == GST_MPEG_VIDEO_PACKET_PICTURE
+        && (mpvparse->config_flags & FLAG_SEQUENCE_EXT)
+        && !mpvparse->sequenceext.progressive) {
       if (info->size - off < 2) {       /* we need at least two bytes to read the TSN */
+        *need_more = TRUE;
         ret = FALSE;
       } else {
         /* TSN is stored in first 10 bits */
@@ -589,6 +600,7 @@ gst_mpegv_parse_handle_frame (GstBaseParse * parse,
   GstMpegVideoPacket packet;
   guint8 *data;
   gint size;
+  gboolean need_more = FALSE;
   GstMapInfo map;
 
   update_frame_parsing_status (mpvparse, frame);
@@ -628,7 +640,7 @@ retry:
   /* note: initial start code is assumed at offset 0 by subsequent code */
 
   /* examine start code, see if it looks like an initial start code */
-  if (gst_mpegv_parse_process_sc (mpvparse, &map, 4, &packet)) {
+  if (gst_mpegv_parse_process_sc (mpvparse, &map, 4, &packet, &need_more)) {
     /* found sc */
     GST_LOG_OBJECT (mpvparse, "valid start code found");
     mpvparse->last_sc = 0;
@@ -658,22 +670,18 @@ next:
 
   GST_LOG_OBJECT (mpvparse, "next start code at %d", off);
   if (off < 0) {
-    /* if draining, take all */
-    if (GST_BASE_PARSE_DRAINING (parse)) {
-      GST_LOG_OBJECT (mpvparse, "draining, accepting all data");
-      off = size;
-      ret = TRUE;
-    } else {
-      GST_LOG_OBJECT (mpvparse, "need more data");
-      /* resume scan where we left it */
-      mpvparse->last_sc = size - 3;
-      /* request best next available */
-      off = G_MAXUINT;
-      goto exit;
-    }
+    off = size - 3;
+    goto need_more;
   } else {
     /* decide whether this startcode ends a frame */
-    ret = gst_mpegv_parse_process_sc (mpvparse, &map, off + 4, &packet);
+    ret = gst_mpegv_parse_process_sc (mpvparse, &map, off + 4, &packet,
+        &need_more);
+    /* in rare cases, might need to peek past start code */
+    if (need_more) {
+      GST_LOG_OBJECT (mpvparse, "need more data (past start code");
+      ret = FALSE;
+      goto need_more;
+    }
   }
 
   if (!ret)
@@ -700,6 +708,21 @@ exit:
   }
 
   return flowret;
+
+need_more:
+  /* if draining, take all */
+  if (GST_BASE_PARSE_DRAINING (parse)) {
+    GST_LOG_OBJECT (mpvparse, "draining, accepting all data");
+    off = size;
+    ret = TRUE;
+  } else {
+    GST_LOG_OBJECT (mpvparse, "need more data");
+    /* resume scan where we left it */
+    mpvparse->last_sc = off;
+    /* request best next available */
+    off = G_MAXUINT;
+  }
+  goto exit;
 }
 
 static void

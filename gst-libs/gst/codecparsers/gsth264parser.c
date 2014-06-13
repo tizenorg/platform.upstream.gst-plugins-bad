@@ -1126,7 +1126,7 @@ gst_h264_parser_parse_pic_timing (GstH264NalParser * nalparser,
           vui->nal_hrd_parameters.cpb_removal_delay_length_minus1 + 1);
       READ_UINT32 (nr, tim->dpb_output_delay,
           vui->nal_hrd_parameters.dpb_output_delay_length_minus1 + 1);
-    } else if (vui->nal_hrd_parameters_present_flag) {
+    } else if (vui->vcl_hrd_parameters_present_flag) {
       READ_UINT32 (nr, tim->cpb_removal_delay,
           vui->vcl_hrd_parameters.cpb_removal_delay_length_minus1 + 1);
       READ_UINT32 (nr, tim->dpb_output_delay,
@@ -1721,8 +1721,8 @@ gst_h264_parse_pps (GstH264NalParser * nalparser, GstH264NalUnit * nalu,
     if (sps->scaling_matrix_present_flag) {
       if (!gst_h264_parser_parse_scaling_list (&nr,
               pps->scaling_lists_4x4, pps->scaling_lists_8x8,
-              sps->scaling_lists_4x4[0], sps->scaling_lists_4x4[3],
-              sps->scaling_lists_8x8[0], sps->scaling_lists_8x8[3], n_lists))
+              sps->scaling_lists_4x4[3], sps->scaling_lists_4x4[0],
+              sps->scaling_lists_8x8[3], sps->scaling_lists_8x8[0], n_lists))
         goto error;
     } else {
       if (!gst_h264_parser_parse_scaling_list (&nr,

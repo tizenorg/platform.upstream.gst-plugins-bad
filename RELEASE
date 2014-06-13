@@ -1,8 +1,8 @@
 
-Release notes for GStreamer Bad Plugins 1.2.0
+Release notes for GStreamer Bad Plugins 1.2.2
 
 
-The GStreamer team is proud to announce a new feature release
+The GStreamer team is proud to announce a new bug-fix release
 in the 1.x stable series of the
 core of the GStreamer streaming media framework.
 
@@ -60,8 +60,23 @@ contains a set of codecs plugins based on libav (formerly gst-ffmpeg)
 
   
 
-There were no bugs fixed in this release
-    
+Bugs fixed in this release
+     
+      * 667564 : mpeg4videoparse: does not detect config data when VOP only stream is sent
+      * 680700 : decklinksrc: does not forward EOS events passed via send_event
+      * 706211 : applemedia: Garbled output from vtenc_h264
+      * 709416 : gsmdec: MS GSM playback is broken
+      * 710223 : smoothstreaming: strip both /manifest and /Manifest from the manifest uri
+      * 711495 : srtpenc: new streams remove any existing streams
+      * 711627 : mpegvparse: Incorrect repositioning of start code location when input buffer is empty
+      * 712219 : dvdspu: stalled playback
+      * 712605 : h264parse: Broken conversion avc/au to byte-stream/nal
+      * 715166 : pngparse: Don't set a framerate from uninitialized variables
+      * 719657 : gstmpegvideoparser: debug category not always initialized soon enough
+      * 720099 : codecparsers: h264: fix picture level scaling lists derivation from fall-back rule set B
+      * 720421 : eglglessink: simultaneous eglglessinks not possible in iOS application
+      * 720532 : configure.ac: Fix typo in bz2-check
+      * 720673 : mpegts: Does not install all headers
 
 ==== Download ====
 
@@ -98,7 +113,17 @@ subscribe to the gstreamer-devel list.
         
 Contributors to this release
     
-      * Edward Hervey
+      * Aurélien Zanelli
+      * Cong Zhong
+      * Dominik Röttsches
+      * Jan Schmidt
+      * Lubosz Sarnecki
+      * Mariusz Buras
+      * Mark Nauwelaerts
+      * Olivier Crête
       * Sebastian Dröge
+      * Thiago Santos
+      * Thibault Saunier
       * Tim-Philipp Müller
+      * Todd Agulnick
  

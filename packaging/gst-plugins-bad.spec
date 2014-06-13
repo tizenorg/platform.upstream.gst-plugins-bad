@@ -2,7 +2,7 @@
 %bcond_with x
 
 Name:           gst-plugins-bad
-Version:        1.2.0
+Version:        1.2.2
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -13,7 +13,7 @@ Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{v
 Source100:      common.tar.bz2
 Source1001: 	gst-plugins-bad.manifest
 BuildRequires:  gettext-tools
-BuildRequires:  SDL-devel
+#BuildRequires:  SDL-devel
 BuildRequires:  autoconf
 BuildRequires:  gcc-c++
 BuildRequires:  glib2-devel >= 2.31.14
@@ -261,7 +261,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
-%{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
@@ -295,10 +295,10 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 %{_libdir}/libgstcodecparsers-%{gst_branch}.so.0*
 
-%files -n libgstegl
-%manifest %{name}.manifest
-%defattr(-, root, root)
-%{_libdir}/libgstegl-%{gst_branch}.so.0*
+#%files -n libgstegl
+#%manifest %{name}.manifest
+#%defattr(-, root, root)
+#%{_libdir}/libgstegl-%{gst_branch}.so.0*
 
 %files -n libgstinsertbin
 %manifest %{name}.manifest
@@ -322,6 +322,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
-%{_libdir}/pkgconfig/gstreamer-egl-%{gst_branch}.pc
+#%{_libdir}/pkgconfig/gstreamer-egl-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
+%{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
 

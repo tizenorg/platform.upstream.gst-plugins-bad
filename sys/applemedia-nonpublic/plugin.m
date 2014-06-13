@@ -45,8 +45,10 @@ plugin_init (GstPlugin * plugin)
   gboolean res = TRUE;
 
 #ifdef HAVE_IOS
+#if 0
   res &= gst_element_register (plugin, "celvideosrc", GST_RANK_NONE,
       GST_TYPE_CEL_VIDEO_SRC);
+#endif
 #else
   enable_mt_mode ();
 
@@ -61,6 +63,6 @@ plugin_init (GstPlugin * plugin)
 
 GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    applemedia,
+    applemedia_nonpublic,
     "Elements for capture and codec access on Apple OS X and iOS using private Frameworks",
     plugin_init, VERSION, "LGPL", "GStreamer", "http://gstreamer.net/")

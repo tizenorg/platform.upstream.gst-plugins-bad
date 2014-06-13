@@ -39,7 +39,8 @@ endif
 libgstapplemedia_nonpublic_la_LIBADD =			\
 	$(GST_BASE_LIBS)			\
 	$(GST_PLUGINS_BASE_LIBS)		\
-	-lgstvideo-$(GST_API_VERSION)
+	-lgstvideo-$(GST_API_VERSION)		\
+	$(GMODULE_NO_EXPORT_LIBS)
 
 libgstapplemedia_nonpublic_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
@@ -69,10 +70,10 @@ noinst_HEADERS =				\
 
 if HAVE_IOS
 
-libgstapplemedia_nonpublic_la_SOURCES +=			\
-	celvideosrc.c				\
-	mtapi.c					\
-	celapi.c
+#libgstapplemedia_nonpublic_la_SOURCES +=			\
+#	celvideosrc.c				\
+#	mtapi.c					\
+#	celapi.c
 
 else
 

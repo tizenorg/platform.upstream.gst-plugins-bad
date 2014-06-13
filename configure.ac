@@ -3,7 +3,7 @@ AC_PREREQ([2.68])
 dnl initialize autoconf
 dnl when going to/from release please set the nano (fourth number) right !
 dnl releases only do Wall, cvs and prerelease does Werror too
-AC_INIT([GStreamer Bad Plug-ins],[1.2.0],[http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer],[gst-plugins-bad])
+AC_INIT([GStreamer Bad Plug-ins],[1.2.2],[http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer],[gst-plugins-bad])
 
 AG_GST_INIT
 
@@ -48,7 +48,7 @@ dnl - interfaces added/removed/changed -> increment CURRENT, REVISION = 0
 dnl - interfaces added -> increment AGE
 dnl - interfaces removed -> AGE = 0
 dnl sets GST_LT_LDFLAGS
-AS_LIBTOOL(GST, 200, 0, 200)
+AS_LIBTOOL(GST, 202, 0, 202)
 
 dnl *** required versions of GStreamer stuff ***
 GST_REQ=1.2.0
@@ -426,6 +426,13 @@ if test "x$HAVE_CPU_I386" != "xyes" && test "x$HAVE_CPU_X86_64" != "xyes"; then
   AG_GST_DISABLE_PLUGIN(real)
 fi
 
+AC_CHECK_HEADER(MobileCoreServices/MobileCoreServices.h, HAVE_IOS="yes", HAVE_IOS="no", [-])
+
+AM_CONDITIONAL(HAVE_IOS, test "x$HAVE_IOS" = "xyes")
+if test "x$HAVE_IOS" = "xyes"; then
+  AC_DEFINE(HAVE_IOS, 1, [Define if building for Apple iOS])
+fi
+
 dnl disable gst plugins we might not be able to build on this
 dnl platform: (ugly but minimally invasive)
 dnl FIXME: maybe move to sys, or make work with winsock2
@@ -446,7 +453,7 @@ fi
 
 dnl *** gst-libs/gst/egl ***
 AC_ARG_WITH([egl-window-system],
-              AS_HELP_STRING([--with-egl-window-system],[EGL window system to use (x11, mali-fb, rpi, ios, none)]),
+              AS_HELP_STRING([--with-egl-window-system],[EGL window system to use (x11, mali-fb, rpi, none)]),
               [EGL_WINDOW_SYSTEM="$withval"],
               [EGL_WINDOW_SYSTEM="auto"])
 
@@ -482,18 +489,12 @@ if test x"$EGL_WINDOW_SYSTEM" = x"auto"; then
   fi
 
   if test x"$EGL_WINDOW_SYSTEM" = x"auto"; then
-    if test x"$HAVE_IOS" = x"yes"; then
-      EGL_WINDOW_SYSTEM="ios"
-    fi
-  fi
-
-  if test x"$EGL_WINDOW_SYSTEM" = x"auto"; then
-    EGL_WINDOW_SYSTEM="none"
+    EGL_WINDOW_SYSTEM="auto"
   fi
 fi
 
 case "$EGL_WINDOW_SYSTEM" in
-  x11|none)
+  x11|auto)
     PKG_CHECK_MODULES(EGL, egl, HAVE_EGL="yes", [
       HAVE_EGL="no"
       old_LIBS=$LIBS
@@ -515,6 +516,7 @@ case "$EGL_WINDOW_SYSTEM" in
       CFLAGS=$old_CFLAGS
     ])
       
+    dnl X11 specific part, above is auto and X11
     if test x"$HAVE_EGL" = x"yes" -a x"$EGL_WINDOW_SYSTEM" = x"x11"; then
       if test x"$HAVE_X11" != x"yes"; then
         AC_MSG_ERROR([libX11 not found and is required for EGL X11 window system])
@@ -593,8 +595,9 @@ case "$EGL_WINDOW_SYSTEM" in
     LIBS=$old_LIBS
     CFLAGS=$old_CFLAGS
     ;;
-  ios)
-    HAVE_EGLGLES="yes"
+  none|no)
+    HAVE_EGL="no"
+    AC_MSG_WARN([No EGL window system specified, will not build gstreamer-egl])
     ;;
   *)
     AC_MSG_ERROR([invalid EGL window system specified])
@@ -860,13 +863,6 @@ case "$host" in
     ;;
 esac
 
-AC_CHECK_HEADER(MobileCoreServices/MobileCoreServices.h, HAVE_IOS="yes", HAVE_IOS="no", [-])
-
-AM_CONDITIONAL(HAVE_IOS, test "x$HAVE_IOS" = "xyes")
-if test "x$HAVE_IOS" = "xyes"; then
-  AC_DEFINE(HAVE_IOS, 1, [Define if building for Apple iOS])
-fi
-
 dnl *** bluez ***
 translit(dnm, m, l) AM_CONDITIONAL(USE_BLUEZ, true)
 AG_GST_CHECK_FEATURE(BLUEZ, [Bluez], bluez, [
@@ -1093,7 +1089,7 @@ AG_GST_CHECK_FEATURE(BZ2, [bz2 library], bz2, [
   if test "x$HAVE_BZ2" = "xyes"; then
     BZ2_LIBS="-lbz2"
   fi
-  AC_SUBST(BZ2_LIBS):w
+  AC_SUBST(BZ2_LIBS)
 
 ])
 
@@ -1848,6 +1844,8 @@ AG_GST_CHECK_FEATURE(EGLGLES, [eglgles sink], eglgles, [
         LIBS=$old_LIBS
         CFLAGS=$old_CFLAGS
       ])
+  elif test x"$HAVE_IOS" = x"yes"; then
+      HAVE_EGLGLES="yes"
   fi
 
   AC_SUBST(EGLGLES_CFLAGS)
@@ -2229,6 +2227,7 @@ AM_CONDITIONAL(USE_OPENJPEG, false)
 AM_CONDITIONAL(USE_OPUS, false)
 AM_CONDITIONAL(USE_PVR, false)
 AM_CONDITIONAL(USE_RSVG, false)
+AM_CONDITIONAL(USE_EGLGLES, false)
 AM_CONDITIONAL(USE_TIMIDITY, false)
 AM_CONDITIONAL(USE_WILDMIDI, false)
 AM_CONDITIONAL(USE_SDL, false)
@@ -2528,6 +2527,8 @@ pkgconfig/gstreamer-insertbin.pc
 pkgconfig/gstreamer-insertbin-uninstalled.pc
 pkgconfig/gstreamer-egl.pc
 pkgconfig/gstreamer-egl-uninstalled.pc
+pkgconfig/gstreamer-mpegts.pc
+pkgconfig/gstreamer-mpegts-uninstalled.pc
 tools/Makefile
 m4/Makefile
 )
