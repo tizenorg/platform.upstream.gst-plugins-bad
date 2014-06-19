@@ -2,7 +2,7 @@
 %bcond_with x
 
 Name:           gst-plugins-bad
-Version:        1.2.0
+Version:        1.2.4
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -324,3 +324,4 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-egl-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
+%{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
