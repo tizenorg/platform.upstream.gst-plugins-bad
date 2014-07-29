@@ -417,6 +417,7 @@ AG_GST_CHECK_PLUGIN(videosignal)
 AG_GST_CHECK_PLUGIN(vmnc)
 AG_GST_CHECK_PLUGIN(y4m)
 AG_GST_CHECK_PLUGIN(yadif)
+AG_GST_CHECK_PLUGIN(wfdrtspsrc)
 
 dnl *** plug-ins to exclude ***
 
@@ -2335,6 +2336,7 @@ common/Makefile
 common/m4/Makefile
 gst-plugins-bad.spec
 gst/Makefile
+gst/wfdrtspsrc/Makefile
 gst/accurip/Makefile
 gst/adpcmdec/Makefile
 gst/adpcmenc/Makefile

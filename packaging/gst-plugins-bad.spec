@@ -275,6 +275,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstwfdrtspsrc.so
 
 %if %{with wayland}
 %{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
