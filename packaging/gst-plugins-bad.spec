@@ -2,7 +2,7 @@
 %bcond_with x
 
 Name:           gst-plugins-bad
-Version:        1.2.4
+Version:        1.4.1
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -50,6 +50,34 @@ anything media-related,from real-time sound processing to playing
 videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
+%if %{with wayland}
+%package -n libgstwayland
+Summary:        GStreamer Streaming-Media Framework Plug-Ins
+%description -n libgstwayland
+GStreamer is a streaming media framework based on graphs of filters
+that operate on media data. Applications using this library can do
+anything media-related,from real-time sound processing to playing
+videos. Its plug-in-based architecture means that new data types or
+processing capabilities can be added simply by installing new plug-ins.
+%endif
+
+%package -n libgstbadbase
+Summary:        GStreamer Streaming-Media Framework Plug-Ins
+%description -n libgstbadbase
+GStreamer is a streaming media framework based on graphs of filters
+that operate on media data. Applications using this library can do
+anything media-related,from real-time sound processing to playing
+videos. Its plug-in-based architecture means that new data types or
+processing capabilities can be added simply by installing new plug-ins.
+
+%package -n libgstbadvideo
+Summary:        GStreamer Streaming-Media Framework Plug-Ins
+%description -n libgstbadvideo
+GStreamer is a streaming media framework based on graphs of filters
+that operate on media data. Applications using this library can do
+anything media-related,from real-time sound processing to playing
+videos. Its plug-in-based architecture means that new data types or
+processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstbasecamerabinsrc
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -91,15 +119,6 @@ anything media-related,from real-time sound processing to playing
 videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
-%package -n libgstegl
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstegl
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
 
 %package -n libgstinsertbin
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -137,10 +156,14 @@ Requires:       gstreamer-devel
 Requires:       libgstbasecamerabinsrc = %{version}
 Requires:       libgstcodecparsers = %{version}
 Requires:       libgstphotography = %{version}
-Requires:       libgstegl = %{version}
 Requires:       libgstinsertbin = %{version}
 Requires:       libgstmpegts = %{version}
 Requires:       libgsturidownloader = %{version}
+%if %{with wayland}
+Requires:	libgstwayland = %{version}
+%endif
+Requires:	libgstbadbase = %{version}
+Requires:	libgstbadvideo = %{version}
 
 %description devel
 GStreamer is a streaming media framework based on graphs of filters
@@ -181,6 +204,14 @@ rm -rf $RPM_BUILD_ROOT
 %postun
 %glib2_gsettings_schema_postun
 
+%if %{with wayland}
+%post -n libgstwayland -p /sbin/ldconfig
+%endif
+
+%post -n libgstbadbase -p /sbin/ldconfig
+
+%post -n libgstbadvideo -p /sbin/ldconfig
+
 %post -n libgstbasecamerabinsrc -p /sbin/ldconfig
 
 %post -n libgstphotography -p /sbin/ldconfig
@@ -189,13 +220,19 @@ rm -rf $RPM_BUILD_ROOT
 
 %post -n libgstvdp -p /sbin/ldconfig
 
-%post -n libgstegl -p /sbin/ldconfig
-
 %post -n libgstinsertbin -p /sbin/ldconfig
 
 %post -n libgstmpegts -p /sbin/ldconfig
 
 %post -n libgsturidownloader -p /sbin/ldconfig
+
+%if %{with wayland}
+%postun -n libgstwayland -p /sbin/ldconfig
+%endif
+
+%postun -n libgstbadbase -p /sbin/ldconfig
+
+%postun -n libgstbadvideo -p /sbin/ldconfig
 
 %postun -n libgstbasecamerabinsrc -p /sbin/ldconfig
 
@@ -204,8 +241,6 @@ rm -rf $RPM_BUILD_ROOT
 %postun -n libgstcodecparsers -p /sbin/ldconfig
 
 %postun -n libgstvdp -p /sbin/ldconfig
-
-%postun -n libgstegl -p /sbin/ldconfig
 
 %postun -n libgstinsertbin -p /sbin/ldconfig
 
@@ -217,6 +252,14 @@ rm -rf $RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %defattr(-, root, root)
 %license COPYING COPYING.LIB
+%{_libdir}/gstreamer-%{gst_branch}/libgstvmnc.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstvideosignal.so
+%{_libdir}/gstreamer-%{gst_branch}/libgststereo.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstsndfile.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstjp2kdecimator.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstivfparse.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstcompositor.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstaudiomixer.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstadpcmenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstasfmux.so
@@ -261,14 +304,12 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
-%{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfbdevsink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfreeverb.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstivtc.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstmfc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmidi.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmxf.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
@@ -277,8 +318,22 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
 
 %if %{with wayland}
+%files -n libgstwayland
+%manifest %{name}.manifest
+%defattr(-, root, root)
 %{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
+%{_libdir}/libgstwayland-%{gst_branch}.so.0*
 %endif
+
+%files -n libgstbadbase
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libgstbadbase-%{gst_branch}.so.0*
+
+%files -n libgstbadvideo
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
 
 %files -n libgstphotography
 %manifest %{name}.manifest
@@ -294,11 +349,6 @@ rm -rf $RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libgstcodecparsers-%{gst_branch}.so.0*
-
-%files -n libgstegl
-%manifest %{name}.manifest
-%defattr(-, root, root)
-%{_libdir}/libgstegl-%{gst_branch}.so.0*
 
 %files -n libgstinsertbin
 %manifest %{name}.manifest
@@ -322,6 +372,5 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
-%{_libdir}/pkgconfig/gstreamer-egl-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
