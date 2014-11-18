@@ -162,8 +162,8 @@ Requires:       libgsturidownloader = %{version}
 %if %{with wayland}
 Requires:	libgstwayland = %{version}
 %endif
-Requires:	libgstbadbase = %{version}
-Requires:	libgstbadvideo = %{version}
+Requires:	libgstbadbase = %{version}-%{release}
+Requires:	libgstbadvideo = %{version}-%{release}
 
 %description devel
 GStreamer is a streaming media framework based on graphs of filters
