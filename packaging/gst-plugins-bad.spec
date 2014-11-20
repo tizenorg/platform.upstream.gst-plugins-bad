@@ -34,6 +34,7 @@ BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 %if %{with wayland}
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
+Requires:       libgstwayland = %{version}
 %endif
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
