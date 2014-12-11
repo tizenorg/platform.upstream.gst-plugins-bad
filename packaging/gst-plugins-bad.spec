@@ -151,6 +151,18 @@ anything media-related,from real-time sound processing to playing
 videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
+%if %{with x}
+%package -n libgstgl
+Summary:        GStreamer Streaming-Media Framework Plug-Ins
+
+%description -n libgstgl
+GStreamer is a streaming media framework based on graphs of filters
+that operate on media data. Applications using this library can do
+anything media-related,from real-time sound processing to playing
+videos. Its plug-in-based architecture means that new data types or
+processing capabilities can be added simply by installing new plug-ins.
+%endif
+
 %package devel
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 Requires:       gstreamer-devel
@@ -160,6 +172,9 @@ Requires:       libgstphotography = %{version}
 Requires:       libgstinsertbin = %{version}
 Requires:       libgstmpegts = %{version}
 Requires:       libgsturidownloader = %{version}
+%if %{with x}
+Requires:	libgstgl = %{version}
+%endif
 %if %{with wayland}
 Requires:	libgstwayland = %{version}
 %endif
@@ -227,6 +242,10 @@ rm -rf $RPM_BUILD_ROOT
 
 %post -n libgsturidownloader -p /sbin/ldconfig
 
+%if %{with x}
+%post -n libgstgl -p /sbin/ldconfig
+%endif
+
 %if %{with wayland}
 %postun -n libgstwayland -p /sbin/ldconfig
 %endif
@@ -248,6 +267,10 @@ rm -rf $RPM_BUILD_ROOT
 %postun -n libgstmpegts -p /sbin/ldconfig
 
 %postun -n libgsturidownloader -p /sbin/ldconfig
+
+%if %{with x}
+%postun -n libgstgl -p /sbin/ldconfig
+%endif
 
 %files
 %manifest %{name}.manifest
@@ -317,6 +340,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
+%if %{with x}
+%{_libdir}/gstreamer-%{gst_branch}/libgstopengl.so
+%endif
 
 %if %{with wayland}
 %files -n libgstwayland
@@ -366,6 +392,13 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 %{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
 
+%if %{with x}
+%files -n libgstgl
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libgstgl-%{gst_branch}.so.0*
+%endif
+
 %files devel
 %manifest %{name}.manifest
 %defattr(-, root, root)
@@ -375,3 +408,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
+%if %{with x}
+%{_libdir}/pkgconfig/gstreamer-gl-%{gst_branch}.pc
+%endif
