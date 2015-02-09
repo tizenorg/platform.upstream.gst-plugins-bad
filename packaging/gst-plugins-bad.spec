@@ -2,7 +2,7 @@
 %bcond_with x
 
 Name:           gst-plugins-bad
-Version:        1.2.4
+Version:        1.4.1
 Release:        0
 %define gst_branch 1.0
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
@@ -11,7 +11,6 @@ Group:          Multimedia/Audio
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
 Source100:      common.tar.bz2
-Source1001: 	gst-plugins-bad.manifest
 BuildRequires:  gettext-tools
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
@@ -38,8 +37,6 @@ BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
 %endif
-Requires(post): glib2-tools
-Requires(postun): glib2-tools
 Requires:       gstreamer >= 1.0.2
 Enhances:       gstreamer
 
@@ -51,96 +48,10 @@ videos. Its plug-in-based architecture means that new data types or
 processing capabilities can be added simply by installing new plug-ins.
 
 
-%package -n libgstbasecamerabinsrc
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstbasecamerabinsrc
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstphotography
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstphotography
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstvdp
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstvdp
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstcodecparsers
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstcodecparsers
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstegl
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstegl
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstinsertbin
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstinsertbin
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgstmpegts
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgstmpegts
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
-%package -n libgsturidownloader
-Summary:        GStreamer Streaming-Media Framework Plug-Ins
-
-%description -n libgsturidownloader
-GStreamer is a streaming media framework based on graphs of filters
-that operate on media data. Applications using this library can do
-anything media-related,from real-time sound processing to playing
-videos. Its plug-in-based architecture means that new data types or
-processing capabilities can be added simply by installing new plug-ins.
-
 %package devel
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-Requires:       gstreamer-devel
-Requires:       libgstbasecamerabinsrc = %{version}
-Requires:       libgstcodecparsers = %{version}
-Requires:       libgstphotography = %{version}
-Requires:       libgstegl = %{version}
-Requires:       libgstinsertbin = %{version}
-Requires:       libgstmpegts = %{version}
-Requires:       libgsturidownloader = %{version}
+Requires: %{name} = %{version}-%{release}
+Requires: gst-plugins-base-devel
 
 %description devel
 GStreamer is a streaming media framework based on graphs of filters
@@ -153,7 +64,6 @@ processing capabilities can be added simply by installing new plug-ins.
 %prep
 %setup -q -n %{name}-%{version}
 %setup -q -T -D -a 100
-cp %{SOURCE1001} .
 
 %build
 export V=1
@@ -162,6 +72,16 @@ NOCONFIGURE=1 ./autogen.sh
     --disable-static\
     --disable-examples\
     --enable-experimental\
+    --disable-audiomixer\
+    --disable-compositor\
+    --disable-ivfparse\
+    --disable-jp2kdecimator\
+    --disable-opengl\
+    --disable-gles2\
+    --disable-sndfile\
+    --disable-stereo\
+    --disable-videosignal\
+    --disable-vmnc\
     --disable-gtk-doc
 %__make %{?_smp_mflags} V=1
 
@@ -172,46 +92,16 @@ mv %{name}-%{gst_branch}.lang %{name}.lang
 
 %lang_package
 
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%post
-%glib2_gsettings_schema_post
 
-%postun
-%glib2_gsettings_schema_postun
+%post -p /sbin/ldconfig
 
-%post -n libgstbasecamerabinsrc -p /sbin/ldconfig
 
-%post -n libgstphotography -p /sbin/ldconfig
+%postun -p /sbin/ldconfig
 
-%post -n libgstcodecparsers -p /sbin/ldconfig
-
-%post -n libgstvdp -p /sbin/ldconfig
-
-%post -n libgstegl -p /sbin/ldconfig
-
-%post -n libgstinsertbin -p /sbin/ldconfig
-
-%post -n libgstmpegts -p /sbin/ldconfig
-
-%post -n libgsturidownloader -p /sbin/ldconfig
-
-%postun -n libgstbasecamerabinsrc -p /sbin/ldconfig
-
-%postun -n libgstphotography -p /sbin/ldconfig
-
-%postun -n libgstcodecparsers -p /sbin/ldconfig
-
-%postun -n libgstvdp -p /sbin/ldconfig
-
-%postun -n libgstegl -p /sbin/ldconfig
-
-%postun -n libgstinsertbin -p /sbin/ldconfig
-
-%postun -n libgstmpegts -p /sbin/ldconfig
-
-%postun -n libgsturidownloader -p /sbin/ldconfig
 
 %files
 %manifest %{name}.manifest
@@ -261,14 +151,12 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
-%{_libdir}/gstreamer-%{gst_branch}/libgsteglglessink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfbdevsink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfreeverb.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstivtc.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstmfc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmidi.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmxf.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
@@ -277,43 +165,18 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
 
 %if %{with wayland}
+%{_libdir}/libgstwayland-%{gst_branch}.so.0*
 %{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
 %endif
 
-%files -n libgstphotography
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgstphotography-%{gst_branch}.so.0*
-
-%files -n libgstbasecamerabinsrc
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgstbasecamerabinsrc-%{gst_branch}.so.0*
-
-%files -n libgstcodecparsers
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgstcodecparsers-%{gst_branch}.so.0*
-
-%files -n libgstegl
-%manifest %{name}.manifest
-%defattr(-, root, root)
-%{_libdir}/libgstegl-%{gst_branch}.so.0*
-
-%files -n libgstinsertbin
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgstinsertbin-%{gst_branch}.so.0*
-
-%files -n libgstmpegts
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgstmpegts-%{gst_branch}.so.0*
-
-%files -n libgsturidownloader
-%manifest %{name}.manifest
-%defattr(-, root, root)
 %{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
+%{_libdir}/libgstbadbase-%{gst_branch}.so.0*
+%{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
 
 %files devel
 %manifest %{name}.manifest
@@ -322,6 +185,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
-%{_libdir}/pkgconfig/gstreamer-egl-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
+
