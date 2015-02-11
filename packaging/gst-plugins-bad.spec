@@ -1,13 +1,13 @@
 %bcond_with wayland
 %bcond_with x
+%define gst_branch 1.0
 
 Name:           gst-plugins-bad
 Version:        1.4.1
-Release:        0
-%define gst_branch 1.0
+Release:        1
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
-Group:          Multimedia/Audio
+Group:          Multimedia/Framework
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
 Source100:      common.tar.bz2
