@@ -36,6 +36,7 @@ static void gst_wl_display_finalize (GObject * gobject);
 static void
 gst_wl_display_class_init (GstWlDisplayClass * klass)
 {
+  GST_INFO (" ");
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize = gst_wl_display_finalize;
 }
@@ -43,6 +44,8 @@ gst_wl_display_class_init (GstWlDisplayClass * klass)
 static void
 gst_wl_display_init (GstWlDisplay * self)
 {
+  GST_INFO (" ");
+
   self->formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
   self->wl_fd_poll = gst_poll_new (TRUE);
 }
@@ -50,6 +53,8 @@ gst_wl_display_init (GstWlDisplay * self)
 static void
 gst_wl_display_finalize (GObject * gobject)
 {
+  GST_INFO (" ");
+
   GstWlDisplay *self = GST_WL_DISPLAY (gobject);
 
   gst_poll_set_flushing (self->wl_fd_poll, TRUE);
@@ -89,6 +94,8 @@ gst_wl_display_finalize (GObject * gobject)
 static void
 sync_callback (void *data, struct wl_callback *callback, uint32_t serial)
 {
+  GST_INFO (" ");
+
   gboolean *done = data;
   *done = TRUE;
 }
@@ -100,6 +107,8 @@ static const struct wl_callback_listener sync_listener = {
 static gint
 gst_wl_display_roundtrip (GstWlDisplay * self)
 {
+  GST_INFO (" ");
+
   struct wl_callback *callback;
   gint ret = 0;
   gboolean done = FALSE;
@@ -120,6 +129,8 @@ gst_wl_display_roundtrip (GstWlDisplay * self)
 static void
 shm_format (void *data, struct wl_shm *wl_shm, uint32_t format)
 {
+  GST_INFO (" ");
+
   GstWlDisplay *self = data;
 
   g_array_append_val (self->formats, format);
@@ -133,6 +144,8 @@ static void
 registry_handle_global (void *data, struct wl_registry *registry,
     uint32_t id, const char *interface, uint32_t version)
 {
+
+  GST_INFO (" ");
   GstWlDisplay *self = data;
 
   if (g_strcmp0 (interface, "wl_compositor") == 0) {
@@ -158,6 +171,8 @@ static const struct wl_registry_listener registry_listener = {
 static gpointer
 gst_wl_display_thread_run (gpointer data)
 {
+  GST_INFO (" ");
+
   GstWlDisplay *self = data;
   GstPollFD pollfd = GST_POLL_FD_INIT;
 
@@ -194,6 +209,8 @@ error:
 GstWlDisplay *
 gst_wl_display_new (const gchar * name, GError ** error)
 {
+  GST_INFO (" ");
+
   struct wl_display *display;
 
   display = wl_display_connect (name);
@@ -212,6 +229,8 @@ GstWlDisplay *
 gst_wl_display_new_existing (struct wl_display * display,
     gboolean take_ownership, GError ** error)
 {
+  GST_INFO (" ");
+
   GstWlDisplay *self;
   GError *err = NULL;
   gint i;

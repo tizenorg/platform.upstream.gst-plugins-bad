@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.4.1
-Release:        1
+Release:        2
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework
@@ -187,4 +187,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
-
+%if %{with wayland}
+%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
+%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
+%endif
