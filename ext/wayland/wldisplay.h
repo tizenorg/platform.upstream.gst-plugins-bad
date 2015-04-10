@@ -26,14 +26,17 @@
 #include "scaler-client-protocol.h"
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
 #define GST_WL_DISPLAY(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplay))
 #define GST_IS_WL_DISPLAY(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
 #define GST_IS_WL_DISPLAY_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
-
+#if 0
+#define FUNCTION_ENTER()	GST_INFO("<ENTER>")
+#else
+#define FUNCTION_ENTER()
+#endif
 typedef struct _GstWlDisplay GstWlDisplay;
 typedef struct _GstWlDisplayClass GstWlDisplayClass;
 
@@ -68,9 +71,8 @@ struct _GstWlDisplayClass
 GType gst_wl_display_get_type (void);
 
 GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
-GstWlDisplay *gst_wl_display_new_existing (struct wl_display * display,
+GstWlDisplay *gst_wl_display_new_existing (struct wl_display *display,
     gboolean take_ownership, GError ** error);
 
 G_END_DECLS
-
 #endif /* __GST_WL_DISPLAY_H__ */

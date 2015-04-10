@@ -25,14 +25,17 @@
 #include <gst/video/video.h>
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_WL_WINDOW                  (gst_wl_window_get_type ())
 #define GST_WL_WINDOW(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_WINDOW, GstWlWindow))
 #define GST_IS_WL_WINDOW(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_WINDOW))
 #define GST_WL_WINDOW_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_WINDOW, GstWlWindowClass))
 #define GST_IS_WL_WINDOW_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_WINDOW))
 #define GST_WL_WINDOW_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_WINDOW, GstWlWindowClass))
-
+#if 0
+#define FUNCTION_ENTER()	GST_INFO("<ENTER>")
+#else
+#define FUNCTION_ENTER()
+#endif
 typedef struct _GstWlWindow GstWlWindow;
 typedef struct _GstWlWindowClass GstWlWindowClass;
 
@@ -62,19 +65,18 @@ struct _GstWlWindowClass
 GType gst_wl_window_get_type (void);
 
 GstWlWindow *gst_wl_window_new_toplevel (GstWlDisplay * display,
-        GstVideoInfo * video_info);
+    GstVideoInfo * video_info);
 GstWlWindow *gst_wl_window_new_in_surface (GstWlDisplay * display,
-        struct wl_surface * parent);
+    struct wl_surface *parent);
 
 GstWlDisplay *gst_wl_window_get_display (GstWlWindow * window);
 struct wl_surface *gst_wl_window_get_wl_surface (GstWlWindow * window);
-gboolean gst_wl_window_is_toplevel (GstWlWindow *window);
+gboolean gst_wl_window_is_toplevel (GstWlWindow * window);
 
 /* functions to manipulate the size on non-toplevel windows */
 void gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info);
 void gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
-        gint w, gint h);
+    gint w, gint h);
 
 G_END_DECLS
-
 #endif /* __GST_WL_WINDOW_H__ */

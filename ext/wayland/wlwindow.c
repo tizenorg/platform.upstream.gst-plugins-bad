@@ -37,6 +37,8 @@ static void
 handle_ping (void *data, struct wl_shell_surface *shell_surface,
     uint32_t serial)
 {
+  FUNCTION_ENTER ();
+
   wl_shell_surface_pong (shell_surface, serial);
 }
 
@@ -44,11 +46,15 @@ static void
 handle_configure (void *data, struct wl_shell_surface *shell_surface,
     uint32_t edges, int32_t width, int32_t height)
 {
+  FUNCTION_ENTER ();
+
 }
 
 static void
 handle_popup_done (void *data, struct wl_shell_surface *shell_surface)
 {
+  FUNCTION_ENTER ();
+
 }
 
 static const struct wl_shell_surface_listener shell_surface_listener = {
@@ -60,6 +66,8 @@ static const struct wl_shell_surface_listener shell_surface_listener = {
 static void
 gst_wl_window_class_init (GstWlWindowClass * klass)
 {
+  FUNCTION_ENTER ();
+
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize = gst_wl_window_finalize;
 }
@@ -67,11 +75,15 @@ gst_wl_window_class_init (GstWlWindowClass * klass)
 static void
 gst_wl_window_init (GstWlWindow * self)
 {
+  FUNCTION_ENTER ();
+
 }
 
 static void
 gst_wl_window_finalize (GObject * gobject)
 {
+  FUNCTION_ENTER ();
+
   GstWlWindow *self = GST_WL_WINDOW (gobject);
 
   if (self->shell_surface) {
@@ -93,6 +105,8 @@ gst_wl_window_finalize (GObject * gobject)
 static GstWlWindow *
 gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *surface)
 {
+  FUNCTION_ENTER ();
+
   GstWlWindow *window;
   struct wl_region *region;
 
@@ -118,6 +132,8 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *surface)
 GstWlWindow *
 gst_wl_window_new_toplevel (GstWlDisplay * display, GstVideoInfo * video_info)
 {
+  FUNCTION_ENTER ();
+
   GstWlWindow *window;
 
   window = gst_wl_window_new_internal (display,
@@ -148,6 +164,8 @@ GstWlWindow *
 gst_wl_window_new_in_surface (GstWlDisplay * display,
     struct wl_surface * parent)
 {
+  FUNCTION_ENTER ();
+
   GstWlWindow *window;
 
   window = gst_wl_window_new_internal (display,
@@ -163,6 +181,8 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 GstWlDisplay *
 gst_wl_window_get_display (GstWlWindow * window)
 {
+  FUNCTION_ENTER ();
+
   g_return_val_if_fail (window != NULL, NULL);
 
   return g_object_ref (window->display);
@@ -171,6 +191,8 @@ gst_wl_window_get_display (GstWlWindow * window)
 struct wl_surface *
 gst_wl_window_get_wl_surface (GstWlWindow * window)
 {
+  FUNCTION_ENTER ();
+
   g_return_val_if_fail (window != NULL, NULL);
 
   return window->surface;
@@ -179,6 +201,8 @@ gst_wl_window_get_wl_surface (GstWlWindow * window)
 gboolean
 gst_wl_window_is_toplevel (GstWlWindow * window)
 {
+  FUNCTION_ENTER ();
+
   g_return_val_if_fail (window != NULL, FALSE);
 
   return (window->shell_surface != NULL);
@@ -187,7 +211,10 @@ gst_wl_window_is_toplevel (GstWlWindow * window)
 static void
 gst_wl_window_resize_internal (GstWlWindow * window, gboolean commit)
 {
-  GstVideoRectangle src, res;
+  FUNCTION_ENTER ();
+
+  GstVideoRectangle src = { 0, };
+  GstVideoRectangle res;
 
   src.w = window->video_width;
   src.h = window->video_height;
@@ -211,6 +238,8 @@ gst_wl_window_resize_internal (GstWlWindow * window, gboolean commit)
 void
 gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info)
 {
+  FUNCTION_ENTER ();
+
   g_return_if_fail (window != NULL);
 
   window->video_width =
@@ -225,6 +254,8 @@ void
 gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h)
 {
+  FUNCTION_ENTER ();
+
   g_return_if_fail (window != NULL);
 
   window->render_rectangle.x = x;
