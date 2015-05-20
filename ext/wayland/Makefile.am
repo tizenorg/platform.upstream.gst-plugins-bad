@@ -6,7 +6,8 @@ libgstwaylandsink_la_SOURCES =  \
 	wldisplay.c \
 	wlwindow.c \
 	wlvideoformat.c \
-	scaler-protocol.c
+	scaler-protocol.c \
+	tizen-subsurfaceprotocol.c
 
 libgstwaylandsink_la_CFLAGS = $(GST_CFLAGS) $(GST_PLUGINS_BASE_CFLAGS) \
                                $(WAYLAND_CFLAGS) $(GST_PLUGINS_BAD_CFLAGS)
@@ -24,7 +25,8 @@ noinst_HEADERS = \
 	wldisplay.h \
 	wlwindow.h \
 	wlvideoformat.h \
-	scaler-client-protocol.h
+	scaler-client-protocol.h \
+	tizen-subsurfaceprotocol.h
 
 EXTRA_DIST = scaler.xml
 CLEANFILES = scaler-protocol.c scaler-client-protocol.h

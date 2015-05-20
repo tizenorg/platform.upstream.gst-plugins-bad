@@ -64,7 +64,10 @@ gst_wl_display_finalize (GObject * gobject)
 
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
-
+#ifdef GST_ENHANCEMENT
+  if (self->tz_subsurface)
+    tizen_subsurface_destroy (self->tz_subsurface);
+#endif
   if (self->shm)
     wl_shm_destroy (self->shm);
 
@@ -161,7 +164,11 @@ registry_handle_global (void *data, struct wl_registry *registry,
     wl_shm_add_listener (self->shm, &shm_listener, self);
   } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
+#ifdef GST_ENHANCEMENT
+  } else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
+    self->tz_subsurface = wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
   }
+#endif
 }
 
 static const struct wl_registry_listener registry_listener = {

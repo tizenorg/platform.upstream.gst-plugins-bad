@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.4.1
-Release:        2
+Release:        3
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework
@@ -68,6 +68,7 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
+export CFLAGS="-DGST_ENHANCEMENT"
 %configure\
     --disable-static\
     --disable-examples\
