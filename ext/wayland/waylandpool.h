@@ -71,6 +71,9 @@ struct _GstWaylandBufferPool
   size_t used;
   void *data;
 
+#ifdef GST_ENHANCEMENT
+  struct tizen_buffer_pool *tz_buffer_pool;	
+#endif
   GMutex buffers_map_mutex;
   GHashTable *buffers_map;
 };

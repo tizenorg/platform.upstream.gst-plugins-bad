@@ -350,6 +350,15 @@ gst_wayland_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
       width, height, stride, format);
   meta->used_by_compositor = FALSE;
 
+#ifdef GST_ENHANCEMENT
+
+ meta->wbuffer = tizen_buffer_pool_create_buffer(tz_buffer_pool,
+                                            tbm_bo_export(bo),
+                                            BUFFER_WIDTH, BUFFER_HEIGHT,
+                                            BUFFER_WIDTH,
+                                            TIZEN_BUFFER_POOL_FORMAT_YUV420);  
+
+#endif
   /* configure listening to wl_buffer.release */
   g_mutex_lock (&self->buffers_map_mutex);
   g_hash_table_insert (self->buffers_map, meta->wbuffer, *buffer);

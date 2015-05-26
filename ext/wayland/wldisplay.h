@@ -25,7 +25,7 @@
 #include <wayland-client.h>
 #include "scaler-client-protocol.h"
 #ifdef GST_ENHANCEMENT
-#include "tizen-subsurfaceprotocol.h"
+#include "protocol/tizen-subsurfaceprotocol.h"
 #endif
 G_BEGIN_DECLS
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
@@ -34,7 +34,7 @@ G_BEGIN_DECLS
 #define GST_WL_DISPLAY_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
 #define GST_IS_WL_DISPLAY_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
-#if 0
+#if 1
 #define FUNCTION_ENTER()	GST_INFO("<ENTER>")
 #else
 #define FUNCTION_ENTER()

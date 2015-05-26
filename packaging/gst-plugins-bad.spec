@@ -38,7 +38,7 @@ BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 BuildRequires:  pkgconfig(x11)
 %endif
 Requires:       gstreamer >= 1.0.2
-Enhances:       gstreamer
+#Enhances:       gstreamer
 
 %description
 GStreamer is a streaming media framework based on graphs of filters
