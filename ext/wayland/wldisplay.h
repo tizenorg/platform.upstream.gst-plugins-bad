@@ -80,6 +80,7 @@ struct _GstWlDisplay
   int drm_fd;
   int authenticated;
   /* tbm for zero copy*/
+  tbm_bufmgr bufmgr;
   tbm_bo tbm_bo;
 #endif
 };

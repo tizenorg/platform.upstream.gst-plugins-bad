@@ -116,15 +116,8 @@
 
             <!-- specail format for samsung exynos(nv12t) -->
             <entry name="st12" value="0x32315453"/>
+            <entry name="sn12" value="0x32314e53"/>
         </enum>
 
     </interface>
 </protocol>
-
-<!-- 
-1. drm authenticate과정은 우선 wl-drm과 동일. 추후 fd만 바로 얻어갈 수 있는 request확장
-2. tizen-buffer-pool은 server, client간 tbm_bo를 공유하기 위한 buffer pool
-3. tizen-buffer-pool global resource는 pool에 들어 있는 buffer를 처리하는 주체에 따라서 pool여러개 생성가능.
-   현재, default, video, screenmirror 3종류의 pool 필요할 것으로 봄
-4. name은 tbm_bo_export의 결과가 들어올 것이라 기대. 아닌 경우 invalid_name 리턴
--->

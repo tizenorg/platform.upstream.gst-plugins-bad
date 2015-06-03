@@ -162,10 +162,6 @@ gst_wl_display_finalize (GObject * gobject)
 
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
-#ifdef GST_ENHANCEMENT
-  if (self->tizen_subsurface)
-    tizen_subsurface_destroy (self->tizen_subsurface);
-#endif
   if (self->shm)
     wl_shm_destroy (self->shm);
 
@@ -189,9 +185,16 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_disconnect (self->display);
   }
 #ifdef GST_ENHANCEMENT
+  if (self->tizen_subsurface)
+    tizen_subsurface_destroy (self->tizen_subsurface);
+  if (self->tizen_buffer_pool)
+    tizen_buffer_pool_destroy (self->tizen_buffer_pool);
+  if (self->device_name)
+    free (self->device_name);
   if (self->drm_fd >= 0)
     close (self->drm_fd);
 #endif
+
   G_OBJECT_CLASS (gst_wl_display_parent_class)->finalize (gobject);
 }
 
@@ -260,18 +263,15 @@ registry_handle_global (void *data, struct wl_registry *registry,
         wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
   } else if (g_strcmp0 (interface, "wl_shell") == 0) {
     self->shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
-  }
 #ifndef GST_ENHANCEMENT
-  else if (g_strcmp0 (interface, "wl_shm") == 0) {
+  } else if (g_strcmp0 (interface, "wl_shm") == 0) {
     self->shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
     wl_shm_add_listener (self->shm, &shm_listener, self);
-  }
 #endif
-  else if (g_strcmp0 (interface, "wl_scaler") == 0) {
+  } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
-  }
 #ifdef GST_ENHANCEMENT
-  else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
+  } else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
     self->tizen_subsurface =
         wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
   } else if (g_strcmp0 (interface, "tizen_buffer_pool") == 0) {
@@ -399,7 +399,9 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (compositor, "wl_compositor");
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
-#ifndef GST_ENHANCEMENT
+#ifdef GST_ENHANCEMENT
+  VERIFY_INTERFACE_EXISTS (tizen_buffer_pool, "tizen_buffer_pool");
+#else
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
 #endif
   VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");

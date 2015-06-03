@@ -268,26 +268,32 @@ gst_wayland_buffer_pool_start (GstBufferPool * pool)
 
 #ifdef GST_ENHANCEMENT
   tbm_bo_handle vitual_addr;
-  tbm_bufmgr bufmgr;
-  
   guint size = 0;
+
   size = GST_VIDEO_INFO_SIZE (&self->info) * 15;
 
-  bufmgr = tbm_bufmgr_init(self->display->drm_fd);
-  g_return_if_fail(bufmgr != NULL);
+  self->display->bufmgr = tbm_bufmgr_init(self->display->drm_fd);
+  g_return_if_fail(self->display->bufmgr != NULL);
 
-  self->display->tbm_bo = tbm_bo_alloc(bufmgr, size, TBM_BO_DEFAULT);
-  g_return_if_fail(self->display->tbm_bo != NULL);
+  self->display->tbm_bo = tbm_bo_alloc(self->display->bufmgr, size, TBM_BO_DEFAULT);
+  if (!self->display->tbm_bo) {
+    GST_ERROR_OBJECT (pool, "alloc tbm bo(size:%d) failed: %s", size, strerror (errno));
+    tbm_bufmgr_deinit (self->display->bufmgr);
+    return FALSE;
+  }
 
   vitual_addr = tbm_bo_get_handle(self->display->tbm_bo, TBM_DEVICE_CPU);
-  g_return_if_fail(vitual_addr.ptr != NULL);
+  if (!vitual_addr.ptr) {
+    GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
+    tbm_bo_unref (self->display->tbm_bo);
+    tbm_bufmgr_deinit (self->display->bufmgr);
+    return FALSE;
+  }
 
   if (vitual_addr.ptr)
   	memset (vitual_addr.ptr, 0x0, size);
 
   self->data = vitual_addr.ptr;  
-
-  /*tbm_bo_unmap(self->display->tbm_bo);*/
 #else
   guint size = 0;
   int fd;
@@ -343,8 +349,15 @@ gst_wayland_buffer_pool_stop (GstBufferPool * pool)
 
   GST_DEBUG_OBJECT (self, "Stopping wayland buffer pool");
 
+#ifdef GST_ENHANCEMENT
+  if (self->display->tbm_bo)
+    tbm_bo_unref (self->display->tbm_bo);
+  if (self->display->bufmgr)
+    tbm_bufmgr_deinit (self->display->bufmgr);
+#else
   munmap (self->data, self->size);
   wl_shm_pool_destroy (self->wl_pool);
+#endif
 
   self->wl_pool = NULL;
   self->size = 0;
