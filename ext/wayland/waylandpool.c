@@ -279,6 +279,7 @@ gst_wayland_buffer_pool_start (GstBufferPool * pool)
   if (!self->display->tbm_bo) {
     GST_ERROR_OBJECT (pool, "alloc tbm bo(size:%d) failed: %s", size, strerror (errno));
     tbm_bufmgr_deinit (self->display->bufmgr);
+    self->display->bufmgr = NULL;
     return FALSE;
   }
 
@@ -287,6 +288,8 @@ gst_wayland_buffer_pool_start (GstBufferPool * pool)
     GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
     tbm_bo_unref (self->display->tbm_bo);
     tbm_bufmgr_deinit (self->display->bufmgr);
+    self->display->tbm_bo = NULL;
+    self->display->bufmgr = NULL;
     return FALSE;
   }
 
@@ -354,6 +357,8 @@ gst_wayland_buffer_pool_stop (GstBufferPool * pool)
     tbm_bo_unref (self->display->tbm_bo);
   if (self->display->bufmgr)
     tbm_bufmgr_deinit (self->display->bufmgr);
+  self->display->tbm_bo = NULL;
+  self->display->bufmgr = NULL;
 #else
   munmap (self->data, self->size);
   wl_shm_pool_destroy (self->wl_pool);
