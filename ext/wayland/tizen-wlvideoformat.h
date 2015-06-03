@@ -21,22 +21,22 @@
  * Boston, MA 02110-1301 USA.
  */
 
-#ifndef __GST_WL_VIDEO_FORMAT_H__
-#define __GST_WL_VIDEO_FORMAT_H__
+#ifndef __GST_TIZEN_WL_VIDEO_FORMAT_H__
+#define __GST_TIZEN_WL_VIDEO_FORMAT_H__
 
 #include <wayland-client.h>
 #include <gst/video/video.h>
 
-#ifndef GST_ENHANCEMENT
+#ifdef GST_ENHANCEMENT
+#include "protocol/tizen-bufferpoolprotocol.h"
 
 G_BEGIN_DECLS
 
-enum wl_shm_format gst_video_format_to_wayland_format (GstVideoFormat format);
-GstVideoFormat gst_wayland_format_to_video_format (enum wl_shm_format wl_format);
+enum tizen_buffer_pool_format gst_video_format_to_wayland_format (GstVideoFormat format);
+GstVideoFormat gst_wayland_format_to_video_format (enum tizen_buffer_pool_format wl_format);
 
-const gchar *gst_wayland_format_to_string (enum wl_shm_format wl_format);
+const gchar *gst_wayland_format_to_string (enum tizen_buffer_pool_format wl_format);
 
 G_END_DECLS
-
 #endif
 #endif

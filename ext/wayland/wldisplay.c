@@ -22,156 +22,106 @@
 #include <config.h>
 #endif
 
+#include <fcntl.h>
+#include <unistd.h>
+#include <xf86drm.h>
+
+
+
 #include "wldisplay.h"
 
 #include <errno.h>
 
 #ifdef GST_ENHANCEMENT
 
-static struct tizen_buffer_pool *tz_buffer_pool;
-
-struct video_buffer_pool_data {
-    uint32_t name;
-
-    int has_capability;
-    struct wl_list format_list;
-
-    /* drm */
-    char *device_name;
-    int drm_fd;
-    int authenticated;
-
-    /* tbm */
-    tbm_bufmgr bufmgr;
-};
 static void
-handle_tizen_buffer_pool_device(void *data,
-                                struct tizen_buffer_pool *tizen_buffer_pool,
-                                const char *device_name)
+handle_tizen_buffer_pool_device (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, const char *device_name)
 {
-    struct video_buffer_pool_data *pdata = (struct video_buffer_pool_data*)data;
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
 
-    return_if_fail (pdata != NULL);
-    return_if_fail (device_name != NULL);
+  g_return_if_fail (self != NULL);
+  g_return_if_fail (device_name != NULL);
 
-    pdata->device_name = strdup(device_name);
-    //printf("@@@ %s(%d) name(%d)\n", __FUNCTION__, __LINE__, pdata->name);
+  self->device_name = strdup (device_name);
+  //printf("@@@ %s(%d) name(%d)\n", __FUNCTION__, __LINE__, pdata->name);
 }
 
 static void
-handle_tizen_buffer_pool_authenticated(void *data,
-                                       struct tizen_buffer_pool *tizen_buffer_pool)
+handle_tizen_buffer_pool_authenticated (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool)
 {
-    struct video_buffer_pool_data *pdata = (struct video_buffer_pool_data*)data;
+  FUNCTION_ENTER ();
 
-    return_if_fail (pdata != NULL);
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
 
-    /* authenticated */
-    pdata->authenticated = 1;
-   // printf("@@@ %s(%d) name(%d)\n", __FUNCTION__, __LINE__, pdata->name);
+  /* authenticated */
+  self->authenticated = 1;
+  // printf("@@@ %s(%d) name(%d)\n", __FUNCTION__, __LINE__, pdata->name);
 }
 
 static void
-handle_tizen_buffer_pool_capabilities(void *data,
-                                      struct tizen_buffer_pool *tizen_buffer_pool,
-                                      uint32_t value)
+handle_tizen_buffer_pool_capabilities (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t value)
 {
-    struct video_buffer_pool_data *pdata = (struct video_buffer_pool_data*)data;
-    drm_magic_t magic;
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
 
-    return_if_fail (pdata != NULL);
+  drm_magic_t magic;
+
 
   //  printf("@@@ %s(%d) name(%d) value(%x)\n", __FUNCTION__, __LINE__, pdata->name, value);
 
-    /* check if buffer_pool has video capability */
-    if (!(value & TIZEN_BUFFER_POOL_CAPABILITY_VIDEO))
-        return;
+  /* check if buffer_pool has video capability */
+  if (!(value & TIZEN_BUFFER_POOL_CAPABILITY_VIDEO))
+    return;
 
-    pdata->has_capability = 1;
+  self->has_capability = 1;
 
-    /* do authenticate only if a pool has the video capability */
+  /* do authenticate only if a pool has the video capability */
 #ifdef O_CLOEXEC
-    pdata->drm_fd = open(pdata->device_name, O_RDWR | O_CLOEXEC);
-    if (pdata->drm_fd == -1 && errno == EINVAL)
+  self->drm_fd = open (self->device_name, O_RDWR | O_CLOEXEC);
+  if (self->drm_fd == -1 && errno == EINVAL)
 #endif
-    {
-        pdata->drm_fd = open(pdata->device_name, O_RDWR);
-        if (pdata->drm_fd != -1)
-            fcntl(pdata->drm_fd, F_SETFD, fcntl(pdata->drm_fd, F_GETFD) | FD_CLOEXEC);
-    }
+  {
+    self->drm_fd = open (self->device_name, O_RDWR);
+    if (self->drm_fd != -1)
+      fcntl (self->drm_fd, F_SETFD, fcntl (self->drm_fd, F_GETFD) | FD_CLOEXEC);
+  }
 
-    return_if_fail (pdata->drm_fd >= 0);
+  g_return_if_fail (self->drm_fd >= 0);
 
-    if (drmGetMagic(pdata->drm_fd, &magic) != 0)
-    {
-        close (pdata->drm_fd);
-        pdata->drm_fd = -1;
-        return;
-    }
+  if (drmGetMagic (self->drm_fd, &magic) != 0) {
+    close (self->drm_fd);
+    self->drm_fd = -1;
+    return;
+  }
 
-    tizen_buffer_pool_authenticate(tizen_buffer_pool, magic);
-    //wl_display_roundtrip(display);
+  tizen_buffer_pool_authenticate (tizen_buffer_pool, magic);
+  wl_display_roundtrip (self->display);
 }
 
 static void
-handle_tizen_buffer_pool_format(void *data,
-                                struct tizen_buffer_pool *tizen_buffer_pool,
-                                uint32_t format)
+handle_tizen_buffer_pool_format (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t format)
 {
-    struct video_buffer_pool_data *pdata = (struct video_buffer_pool_data*)data;
-    struct video_format *fmt;
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
 
-    return_if_fail (pdata != NULL);
-
-    if (!pdata->has_capability)
-        return;
-
-    fmt = malloc(sizeof (struct video_format));
-    return_if_fail (fmt != NULL);
-
-    fmt->format = format;
-    wl_list_insert(&pdata->format_list, &fmt->link);
-
-    printf("@@@ %s(%d) format: %c%c%c%c\n", __FUNCTION__, __LINE__, FOURCC_STR(format));
+  GST_INFO ("format is %d", format);
+  g_array_append_val (self->formats, format);
 }
 
-
-static const struct tizen_buffer_pool_listener tz_buffer_pool_listener =
-{
-    handle_tizen_buffer_pool_device,
-    handle_tizen_buffer_pool_authenticated,
-    handle_tizen_buffer_pool_capabilities,
-    handle_tizen_buffer_pool_format
+static const struct tizen_buffer_pool_listener tz_buffer_pool_listener = {
+  handle_tizen_buffer_pool_device,
+  handle_tizen_buffer_pool_authenticated,
+  handle_tizen_buffer_pool_capabilities,
+  handle_tizen_buffer_pool_format
 };
-
-struct video_format {
-    uint32_t format;
-    struct wl_list link;
-};
-
-
-static void
-destroy_video_buffer_pool(struct tizen_buffer_pool *pool)
-{
-    struct video_buffer_pool_data *pdata = tizen_buffer_pool_get_user_data(pool);
-    
-    if (pdata)
-    {
-        struct video_format *fmt, *ff;
-
-        wl_list_for_each_safe(fmt, ff, &pdata->format_list, link)
-        {
-            wl_list_remove (&fmt->link);
-            free(fmt);
-        }
-        if (pdata->drm_fd >= 0)
-            close (pdata->drm_fd);
-        free(pdata);
-    }
-
-    tizen_buffer_pool_destroy(pool);
-}
-
 #endif
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
@@ -213,8 +163,8 @@ gst_wl_display_finalize (GObject * gobject)
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
 #ifdef GST_ENHANCEMENT
-  if (self->tz_subsurface)
-    tizen_subsurface_destroy (self->tz_subsurface);
+  if (self->tizen_subsurface)
+    tizen_subsurface_destroy (self->tizen_subsurface);
 #endif
   if (self->shm)
     wl_shm_destroy (self->shm);
@@ -238,7 +188,10 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_flush (self->display);
     wl_display_disconnect (self->display);
   }
-
+#ifdef GST_ENHANCEMENT
+  if (self->drm_fd >= 0)
+    close (self->drm_fd);
+#endif
   G_OBJECT_CLASS (gst_wl_display_parent_class)->finalize (gobject);
 }
 
@@ -307,40 +260,36 @@ registry_handle_global (void *data, struct wl_registry *registry,
         wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
   } else if (g_strcmp0 (interface, "wl_shell") == 0) {
     self->shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
-  } else if (g_strcmp0 (interface, "wl_shm") == 0) {
+  }
+#ifndef GST_ENHANCEMENT
+  else if (g_strcmp0 (interface, "wl_shm") == 0) {
     self->shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
     wl_shm_add_listener (self->shm, &shm_listener, self);
-  } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
+  }
+#endif
+  else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
+  }
 #ifdef GST_ENHANCEMENT
-  } else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
-    self->tz_subsurface = wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
-  } else if (g_strcmp0(interface, "tizen_buffer_pool") == 0) {
-	struct tizen_buffer_pool *pool;
-	struct video_buffer_pool_data *pdata;
+  else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
+    self->tizen_subsurface =
+        wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
+  } else if (g_strcmp0 (interface, "tizen_buffer_pool") == 0) {
 
-	pool = wl_registry_bind (registry, id, &tizen_buffer_pool_interface, 1);
-	g_return_if_fail(pool != NULL);
-	pdata = calloc(1, sizeof (struct video_buffer_pool_data));
-	if (!pdata) {
-	  tizen_buffer_pool_destroy (pool);
-      return;
-	}
-	GST_INFO("id(%d)", id);
-	pdata->name = id;
-	pdata->drm_fd = -1;
-	wl_list_init(&pdata->format_list);
+    self->tizen_buffer_pool =
+        wl_registry_bind (registry, id, &tizen_buffer_pool_interface, 1);
+    g_return_if_fail (self->tizen_buffer_pool != NULL);
 
-    tizen_buffer_pool_add_listener (pool, &tz_buffer_pool_listener, pdata);	
+    GST_INFO ("id(%d)", id);
 
-	
-	/* make sure all tizen_buffer_pool's events are handled */
-	wl_display_roundtrip(self->display);
+    self->name = id;
+    self->drm_fd = -1;
 
-    if (!pdata->has_capability || !pdata->authenticated)
-	  destroy_video_buffer_pool (pool);
-    else
-	  tz_buffer_pool = pool;	
+    tizen_buffer_pool_add_listener (self->tizen_buffer_pool, &tz_buffer_pool_listener, self);
+
+    /* make sure all tizen_buffer_pool's events are handled */
+    wl_display_roundtrip (self->display);
+
   }
 #endif
 }
@@ -450,7 +399,9 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (compositor, "wl_compositor");
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
+#ifndef GST_ENHANCEMENT
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
+#endif
   VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");
 
 #undef VERIFY_INTERFACE_EXISTS

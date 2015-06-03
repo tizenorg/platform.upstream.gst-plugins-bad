@@ -25,7 +25,9 @@
 #include <wayland-client.h>
 #include "scaler-client-protocol.h"
 #ifdef GST_ENHANCEMENT
+#include <tbm_bufmgr.h>
 #include "protocol/tizen-subsurfaceprotocol.h"
+#include "protocol/tizen-bufferpoolprotocol.h"
 #endif
 G_BEGIN_DECLS
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
@@ -57,15 +59,29 @@ struct _GstWlDisplay
   struct wl_shell *shell;
   struct wl_shm *shm;
   struct wl_scaler *scaler;
-#ifdef GST_ENHANCEMENT
-  struct tizen_subsurface *tz_subsurface;
-#endif
   GArray *formats;
 
   /* private */
   gboolean own_display;
   GThread *thread;
   GstPoll *wl_fd_poll;
+  
+#ifdef GST_ENHANCEMENT
+  /*video output layer*/
+  struct tizen_subsurface *tizen_subsurface;
+
+  /*zero copy*/
+  struct tizen_buffer_pool *tizen_buffer_pool;
+  uint32_t name;
+  int has_capability;
+  
+  /* drm for zero copy */
+  char *device_name;
+  int drm_fd;
+  int authenticated;
+  /* tbm for zero copy*/
+  tbm_bo tbm_bo;
+#endif
 };
 
 struct _GstWlDisplayClass
