@@ -26,6 +26,9 @@
 #include <gst/video/gstvideometa.h>
 
 #include "wldisplay.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <tbm_bufmgr.h>
+#endif
 
 G_BEGIN_DECLS
 
@@ -33,6 +36,12 @@ G_BEGIN_DECLS
 #define GST_IS_WAYLAND_BUFFER_POOL(obj)   (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WAYLAND_BUFFER_POOL))
 #define GST_WAYLAND_BUFFER_POOL(obj)      (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WAYLAND_BUFFER_POOL, GstWaylandBufferPool))
 #define GST_WAYLAND_BUFFER_POOL_CAST(obj) ((GstWaylandBufferPool*)(obj))
+
+#if 1
+#define FUNCTION_ENTER()	GST_INFO("<ENTER>")
+#else
+#define FUNCTION_ENTER()
+#endif
 
 typedef struct _GstWaylandBufferPool GstWaylandBufferPool;
 typedef struct _GstWaylandBufferPoolClass GstWaylandBufferPoolClass;
