@@ -42,7 +42,11 @@
 #endif
 
 #include "gstwaylandsink.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include "tizen-wlvideoformat.h"
+#else
 #include "wlvideoformat.h"
+#endif
 #include "waylandpool.h"
 
 #include <gst/wayland/wayland.h>
@@ -441,7 +445,11 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
     GValue value = G_VALUE_INIT;
     GArray *formats;
     gint i;
+#ifdef GST_WLSINK_ENHANCEMENT
+    enum tizen_buffer_pool_format fmt;
+#else
     enum wl_shm_format fmt;
+#endif
 
     g_value_init (&list, GST_TYPE_LIST);
     g_value_init (&value, G_TYPE_STRING);
@@ -481,7 +489,11 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   GstWaylandSink *sink;
   GstBufferPool *newpool;
   GstVideoInfo info;
+#ifdef GST_WLSINK_ENHANCEMENT
+  enum tizen_buffer_pool_format format;
+#else
   enum wl_shm_format format;
+#endif
   GArray *formats;
   gint i;
   GstStructure *structure;

@@ -21,10 +21,98 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
-
 #include "wldisplay.h"
-
 #include <errno.h>
+
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <fcntl.h>
+#include <unistd.h>
+#include <xf86drm.h>
+
+static void
+handle_tizen_buffer_pool_device (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, const char *device_name)
+{
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
+
+  g_return_if_fail (self != NULL);
+  g_return_if_fail (device_name != NULL);
+
+  self->device_name = strdup (device_name);
+}
+
+static void
+handle_tizen_buffer_pool_authenticated (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool)
+{
+  FUNCTION_ENTER ();
+
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
+
+  /* authenticated */
+  self->authenticated = 1;
+}
+
+static void
+handle_tizen_buffer_pool_capabilities (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t value)
+{
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
+
+  drm_magic_t magic;
+
+  /* check if buffer_pool has video capability */
+  if (!(value & TIZEN_BUFFER_POOL_CAPABILITY_VIDEO))
+    return;
+
+  self->has_capability = 1;
+
+  /* do authenticate only if a pool has the video capability */
+#ifdef O_CLOEXEC
+  self->drm_fd = open (self->device_name, O_RDWR | O_CLOEXEC);
+  if (self->drm_fd == -1 && errno == EINVAL)
+#endif
+  {
+    self->drm_fd = open (self->device_name, O_RDWR);
+    if (self->drm_fd != -1)
+      fcntl (self->drm_fd, F_SETFD, fcntl (self->drm_fd, F_GETFD) | FD_CLOEXEC);
+  }
+
+  g_return_if_fail (self->drm_fd >= 0);
+
+  if (drmGetMagic (self->drm_fd, &magic) != 0) {
+    close (self->drm_fd);
+    self->drm_fd = -1;
+    return;
+  }
+
+  tizen_buffer_pool_authenticate (tizen_buffer_pool, magic);
+  wl_display_roundtrip (self->display);
+}
+
+static void
+handle_tizen_buffer_pool_format (void *data,
+    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t format)
+{
+  FUNCTION_ENTER ();
+  GstWlDisplay *self = data;
+  g_return_if_fail (self != NULL);
+
+  GST_INFO ("format is %d", format);
+  g_array_append_val (self->formats, format);
+}
+
+static const struct tizen_buffer_pool_listener tz_buffer_pool_listener = {
+  handle_tizen_buffer_pool_device,
+  handle_tizen_buffer_pool_authenticated,
+  handle_tizen_buffer_pool_capabilities,
+  handle_tizen_buffer_pool_format
+};
+#endif
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
@@ -64,10 +152,6 @@ gst_wl_display_finalize (GObject * gobject)
 
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
-#ifdef GST_ENHANCEMENT
-  if (self->tz_subsurface)
-    tizen_subsurface_destroy (self->tz_subsurface);
-#endif
   if (self->shm)
     wl_shm_destroy (self->shm);
 
@@ -90,6 +174,16 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_flush (self->display);
     wl_display_disconnect (self->display);
   }
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (self->tizen_subsurface)
+    tizen_subsurface_destroy (self->tizen_subsurface);
+  if (self->tizen_buffer_pool)
+    tizen_buffer_pool_destroy (self->tizen_buffer_pool);
+  if (self->device_name)
+    free (self->device_name);
+  if (self->drm_fd >= 0)
+    close (self->drm_fd);
+#endif
 
   G_OBJECT_CLASS (gst_wl_display_parent_class)->finalize (gobject);
 }
@@ -159,14 +253,31 @@ registry_handle_global (void *data, struct wl_registry *registry,
         wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
   } else if (g_strcmp0 (interface, "wl_shell") == 0) {
     self->shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
+#ifndef GST_WLSINK_ENHANCEMENT
   } else if (g_strcmp0 (interface, "wl_shm") == 0) {
     self->shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
     wl_shm_add_listener (self->shm, &shm_listener, self);
+#endif
   } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
-#ifdef GST_ENHANCEMENT
+#ifdef GST_WLSINK_ENHANCEMENT
   } else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
-    self->tz_subsurface = wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
+    self->tizen_subsurface =
+        wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
+  } else if (g_strcmp0 (interface, "tizen_buffer_pool") == 0) {
+
+    self->tizen_buffer_pool =
+        wl_registry_bind (registry, id, &tizen_buffer_pool_interface, 1);
+    g_return_if_fail (self->tizen_buffer_pool != NULL);
+
+    GST_INFO ("id(%d)", id);
+    self->name = id;
+    self->drm_fd = -1;
+
+    tizen_buffer_pool_add_listener (self->tizen_buffer_pool, &tz_buffer_pool_listener, self);
+
+    /* make sure all tizen_buffer_pool's events are handled */
+    wl_display_roundtrip (self->display);
   }
 #endif
 }
@@ -276,7 +387,11 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (compositor, "wl_compositor");
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
+#ifdef GST_WLSINK_ENHANCEMENT
+  VERIFY_INTERFACE_EXISTS (tizen_buffer_pool, "tizen_buffer_pool");
+#else
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
+#endif
   VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");
 
 #undef VERIFY_INTERFACE_EXISTS
