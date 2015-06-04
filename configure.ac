@@ -2000,6 +2000,15 @@ AG_GST_CHECK_FEATURE(WAYLAND, [wayland sink], wayland , [
 ])
 
 AC_PATH_PROG([wayland_scanner], [wayland-scanner])
+if test "x$HAVE_WAYLAND" = "xyes"; then
+PKG_CHECK_MODULES(DRM, libdrm)
+AC_SUBST(DRM_CFLAGS)
+AC_SUBST(DRM_LIBS)
+
+PKG_CHECK_MODULES(TBM, libtbm)
+AC_SUBST(TBM_CFLAGS)
+AC_SUBST(TBM_LIBS)
+fi
 
 dnl **** WebP ****
 translit(dnm, m, l) AM_CONDITIONAL(USE_WEBP, true)

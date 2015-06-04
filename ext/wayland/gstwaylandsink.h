@@ -43,7 +43,7 @@ G_BEGIN_DECLS
 	    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_WAYLAND_SINK))
 #define GST_WAYLAND_SINK_GET_CLASS(inst) \
         (G_TYPE_INSTANCE_GET_CLASS ((inst), GST_TYPE_WAYLAND_SINK, GstWaylandSinkClass))
-#if 0
+#if 1
 #define FUNCTION_ENTER()	GST_INFO("<ENTER>")
 #else
 #define FUNCTION_ENTER()
