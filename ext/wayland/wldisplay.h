@@ -24,8 +24,10 @@
 #include <gst/gst.h>
 #include <wayland-client.h>
 #include "scaler-client-protocol.h"
-#ifdef GST_ENHANCEMENT
-#include "tizen-subsurfaceprotocol.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <tbm_bufmgr.h>
+#include "protocol/tizen-subsurfaceprotocol.h"
+#include "protocol/tizen-bufferpoolprotocol.h"
 #endif
 G_BEGIN_DECLS
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
@@ -34,7 +36,7 @@ G_BEGIN_DECLS
 #define GST_WL_DISPLAY_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
 #define GST_IS_WL_DISPLAY_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
-#if 0
+#if 1
 #define FUNCTION_ENTER()	GST_INFO("<ENTER>")
 #else
 #define FUNCTION_ENTER()
@@ -57,15 +59,30 @@ struct _GstWlDisplay
   struct wl_shell *shell;
   struct wl_shm *shm;
   struct wl_scaler *scaler;
-#ifdef GST_ENHANCEMENT
-  struct tizen_subsurface *tz_subsurface;
-#endif
   GArray *formats;
 
   /* private */
   gboolean own_display;
   GThread *thread;
   GstPoll *wl_fd_poll;
+ 
+#ifdef GST_WLSINK_ENHANCEMENT
+  /*video output layer*/
+  struct tizen_subsurface *tizen_subsurface;
+
+  /*zero copy*/
+  struct tizen_buffer_pool *tizen_buffer_pool;
+  uint32_t name;
+  int has_capability;
+
+  /* drm for zero copy */
+  char *device_name;
+  int drm_fd;
+  int authenticated;
+  /* tbm for zero copy*/
+  tbm_bufmgr tbm_bufmgr;
+  tbm_bo tbm_bo;
+#endif
 };
 
 struct _GstWlDisplayClass

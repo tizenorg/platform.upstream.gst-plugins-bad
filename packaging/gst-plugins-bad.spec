@@ -33,12 +33,14 @@ BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 %if %{with wayland}
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
+BuildRequires:  pkgconfig(libdrm)
+BuildRequires:  pkgconfig(libtbm)
 %endif
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
 %endif
 Requires:       gstreamer >= 1.0.2
-Enhances:       gstreamer
+#Enhances:       gstreamer
 
 %description
 GStreamer is a streaming media framework based on graphs of filters
@@ -68,7 +70,7 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
-export CFLAGS="-DGST_ENHANCEMENT"
+export CFLAGS="-DGST_WLSINK_ENHANCEMENT"
 %configure\
     --disable-static\
     --disable-examples\
