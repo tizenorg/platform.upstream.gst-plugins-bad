@@ -31,10 +31,10 @@ BuildRequires:  pkgconfig(libexif) >= 0.6.16
 BuildRequires:  pkgconfig(libpng) >= 1.2
 BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
-%if %{with wayland}
-BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(libtbm)
+%if %{with wayland}
+BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 %endif
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
