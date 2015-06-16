@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.4.1
-Release:        3
+Release:        5
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework
@@ -33,6 +33,7 @@ BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(libtbm)
+BuildRequires:	pkgconfig(mm-common)
 %if %{with wayland}
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 %endif

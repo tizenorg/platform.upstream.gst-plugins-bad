@@ -28,6 +28,7 @@
 #include <tbm_bufmgr.h>
 #include "protocol/tizen-subsurfaceprotocol.h"
 #include "protocol/tizen-bufferpoolprotocol.h"
+#define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
 #endif
 G_BEGIN_DECLS
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
@@ -67,21 +68,25 @@ struct _GstWlDisplay
   GstPoll *wl_fd_poll;
 
 #ifdef GST_WLSINK_ENHANCEMENT
-  /*video output layer*/
+  /*video output layer */
   struct tizen_subsurface *tizen_subsurface;
 
-  /*zero copy*/
+  /*tizen buffer pool */
   struct tizen_buffer_pool *tizen_buffer_pool;
   uint32_t name;
   int has_capability;
-
-  /* drm for zero copy */
   char *device_name;
   int drm_fd;
   int authenticated;
-  /* tbm for zero copy*/
   tbm_bufmgr tbm_bufmgr;
   tbm_bo tbm_bo;
+
+  gboolean is_special_format;   /*SN12, ST12 */
+  void *bo[NV_BUF_PLANE_NUM];
+  int plane_size[NV_BUF_PLANE_NUM];
+  int stride_width[NV_BUF_PLANE_NUM];
+  int stride_height[NV_BUF_PLANE_NUM];
+  int native_video_size;
 #endif
 };
 

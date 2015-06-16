@@ -430,37 +430,6 @@ gst_wayland_buffer_pool_new (GstWlDisplay * display)
 }
 
 #ifdef GST_WLSINK_ENHANCEMENT
-static void
-tizen_buffer_release (void *data, struct wl_buffer *wl_buffer)
-{
-  FUNCTION_ENTER ();
-
-  GstWaylandBufferPool *self = data;
-  GstBuffer *buffer;
-  GstWlMeta *meta;
-
-  g_mutex_lock (&self->buffers_map_mutex);
-  buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
-
-  GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
-
-  if (buffer) {
-    meta = gst_buffer_get_wl_meta (buffer);
-    if (meta->used_by_compositor) {
-      meta->used_by_compositor = FALSE;
-      /* unlock before unref because stop() may be called from here */
-      g_mutex_unlock (&self->buffers_map_mutex);
-      gst_buffer_unref (buffer);
-      return;
-    }
-  }
-  g_mutex_unlock (&self->buffers_map_mutex);
-}
-
-static const struct wl_buffer_listener tizen_buffer_listener = {
-  tizen_buffer_release
-};
-
 
 gboolean
 gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
@@ -469,38 +438,47 @@ gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
 
   GstWaylandBufferPool *self = GST_WAYLAND_BUFFER_POOL (pool);
 
-  GST_DEBUG_OBJECT (self, "Initializing wayland buffer pool");
+  GST_DEBUG_OBJECT (self, "Initializing tizen buffer pool");
 
   tbm_bo_handle vitual_addr;
   guint size = 0;
 
-  size = GST_VIDEO_INFO_SIZE (&self->info) * 15;
+  if (self->display->is_special_format == TRUE) {
+    /*in case of SN12 or ST12 video  format */
+    size = self->display->native_video_size * 15;
 
-  self->display->tbm_bufmgr = tbm_bufmgr_init (self->display->drm_fd);
-  g_return_if_fail (self->display->tbm_bufmgr != NULL);
+    vitual_addr = tbm_bo_get_handle (self->display->bo[0], TBM_DEVICE_CPU);
+    if (!vitual_addr.ptr) {
+      GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
+      return FALSE;
+    }
+  } else {
+    /*in case of normal video format */
+    size = GST_VIDEO_INFO_SIZE (&self->info) * 15;
 
-  self->display->tbm_bo =
-      tbm_bo_alloc (self->display->tbm_bufmgr, size, TBM_BO_DEFAULT);
-  if (!self->display->tbm_bo) {
-    GST_ERROR_OBJECT (pool, "alloc tbm bo(size:%d) failed: %s", size,
-        strerror (errno));
-    tbm_bufmgr_deinit (self->display->tbm_bufmgr);
-    self->display->tbm_bufmgr = NULL;
-    return FALSE;
+    self->display->tbm_bufmgr = tbm_bufmgr_init (self->display->drm_fd);
+    g_return_if_fail (self->display->tbm_bufmgr != NULL);
+
+    self->display->tbm_bo =
+        tbm_bo_alloc (self->display->tbm_bufmgr, size, TBM_BO_DEFAULT);
+    if (!self->display->tbm_bo) {
+      GST_ERROR_OBJECT (pool, "alloc tbm bo(size:%d) failed: %s", size,
+          strerror (errno));
+      tbm_bufmgr_deinit (self->display->tbm_bufmgr);
+      self->display->tbm_bufmgr = NULL;
+      return FALSE;
+    }
+
+    vitual_addr = tbm_bo_get_handle (self->display->tbm_bo, TBM_DEVICE_CPU);
+    if (!vitual_addr.ptr) {
+      GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
+      tbm_bo_unref (self->display->tbm_bo);
+      tbm_bufmgr_deinit (self->display->tbm_bufmgr);
+      self->display->tbm_bo = NULL;
+      self->display->tbm_bufmgr = NULL;
+      return FALSE;
+    }
   }
-
-  vitual_addr = tbm_bo_get_handle (self->display->tbm_bo, TBM_DEVICE_CPU);
-  if (!vitual_addr.ptr) {
-    GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
-    tbm_bo_unref (self->display->tbm_bo);
-    tbm_bufmgr_deinit (self->display->tbm_bufmgr);
-    self->display->tbm_bo = NULL;
-    self->display->tbm_bufmgr = NULL;
-    return FALSE;
-  }
-
-  if (vitual_addr.ptr)
-    memset (vitual_addr.ptr, 0x0, size);
 
   self->data = vitual_addr.ptr;
   self->size = size;
@@ -516,14 +494,17 @@ gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool)
 
   GstWaylandBufferPool *self = GST_WAYLAND_BUFFER_POOL (pool);
 
-  GST_DEBUG_OBJECT (self, "Stopping wayland buffer pool");
+  GST_DEBUG_OBJECT (self, "Stopping tizen buffer pool");
 
-  if (self->display->tbm_bo)
-    tbm_bo_unref (self->display->tbm_bo);
-  if (self->display->tbm_bufmgr)
-    tbm_bufmgr_deinit (self->display->tbm_bufmgr);
-  self->display->tbm_bo = NULL;
-  self->display->tbm_bufmgr = NULL;
+  if (self->display->is_special_format == FALSE) { /*need to remove*/
+    /*in case of normal video format */
+    if (self->display->tbm_bo)
+      tbm_bo_unref (self->display->tbm_bo);
+    if (self->display->tbm_bufmgr)
+      tbm_bufmgr_deinit (self->display->tbm_bufmgr);
+    self->display->tbm_bo = NULL;
+    self->display->tbm_bufmgr = NULL;
+  }
 
   self->wl_pool = NULL;
   self->size = 0;
@@ -546,48 +527,100 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
 
   GstWaylandBufferPool *self = GST_WAYLAND_BUFFER_POOL_CAST (pool);
 
-  gint width, height, stride;
+  gint width, height;
   gsize size;
   enum tizen_buffer_pool_format format;
-  gint offset;
+  gint data_offset;
   void *data;
   GstWlMeta *meta;
 
-  width = GST_VIDEO_INFO_WIDTH (&self->info);
-  height = GST_VIDEO_INFO_HEIGHT (&self->info);
-  stride = GST_VIDEO_INFO_PLANE_STRIDE (&self->info, 0);
-  size = GST_VIDEO_INFO_SIZE (&self->info);
-  format =
-      gst_video_format_to_wayland_format (GST_VIDEO_INFO_FORMAT (&self->info));
+  if (self->display->is_special_format == TRUE) {
+    /*in case of SN12 or ST12 video  format */
+    unsigned int name[NV_BUF_PLANE_NUM];
+    unsigned int offset[NV_BUF_PLANE_NUM] = { 0, };
+    unsigned int stride[NV_BUF_PLANE_NUM] = { 0, };
+    width = GST_VIDEO_INFO_WIDTH (&self->info);
+    height = GST_VIDEO_INFO_HEIGHT (&self->info);
+    size = self->display->native_video_size;
 
-  GST_DEBUG_OBJECT (self, "Allocating buffer of size %" G_GSSIZE_FORMAT
-      " (%d x %d, stride %d), format %s", size, width, height, stride,
-      gst_wayland_format_to_string (format));
-  /* try to reserve another memory block from the shm pool */
-  if (self->used + size > self->size)
-    goto no_buffer;
+    format =
+        gst_video_format_to_wayland_format (GST_VIDEO_INFO_FORMAT (&self->
+            info));
 
-  offset = self->used;
-  self->used += size;
+    /* try to reserve another memory block from the shm pool */
+    if (self->used + size > self->size)
+      goto no_buffer;
 
-  data = ((gchar *) self->data) + offset;
+    data_offset = self->used;
+    self->used += size;
 
-  /* create buffer and its metadata object */
-  *buffer = gst_buffer_new ();
-  meta = (GstWlMeta *) gst_buffer_add_meta (*buffer, GST_WL_META_INFO, NULL);
-  meta->pool = self;
+    data = ((gchar *) self->data) + data_offset;
 
-  meta->wbuffer =
-      tizen_buffer_pool_create_buffer (self->display->tizen_buffer_pool,
-      tbm_bo_export (self->display->tbm_bo), width, height, stride, format);
-  meta->used_by_compositor = FALSE;
+    /* create buffer and its metadata object */
+    *buffer = gst_buffer_new ();
+    meta = (GstWlMeta *) gst_buffer_add_meta (*buffer, GST_WL_META_INFO, NULL);
+    meta->pool = self;
+
+    for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
+      if (self->display->bo[i] != NULL) {
+        name[i] = tbm_bo_export (self->display->bo[0]);
+        offset[i] = 0;
+      } else {
+        name[i] = 0;
+        if (i > 0) {
+          offset[i] = offset[i - 1] + self->display->plane_size[i - 1];
+        }
+      }
+      stride[i] = self->display->stride_width[i];
+    }
+
+    meta->wbuffer =
+        tizen_buffer_pool_create_planar_buffer (self->display->
+        tizen_buffer_pool, width, height, format, name[0], offset[0], stride[0],
+        name[1], offset[1], stride[1], 0, 0, 0);
+    meta->used_by_compositor = FALSE;
+
+  } else {
+    int stride;
+
+    /*in case of normal video format */
+    width = GST_VIDEO_INFO_WIDTH (&self->info);
+    height = GST_VIDEO_INFO_HEIGHT (&self->info);
+    stride = GST_VIDEO_INFO_PLANE_STRIDE (&self->info, 0);
+    size = GST_VIDEO_INFO_SIZE (&self->info);
+    format =
+        gst_video_format_to_wayland_format (GST_VIDEO_INFO_FORMAT (&self->
+            info));
+
+    GST_DEBUG_OBJECT (self, "Allocating buffer of size %" G_GSSIZE_FORMAT
+        " (%d x %d, stride %d), format %s", size, width, height, stride,
+        gst_wayland_format_to_string (format));
+    /* try to reserve another memory block from the shm pool */
+    if (self->used + size > self->size)
+      goto no_buffer;
+
+    data_offset = self->used;
+    self->used += size;
+
+    data = ((gchar *) self->data) + data_offset;
+
+    /* create buffer and its metadata object */
+    *buffer = gst_buffer_new ();
+    meta = (GstWlMeta *) gst_buffer_add_meta (*buffer, GST_WL_META_INFO, NULL);
+    meta->pool = self;
+
+    meta->wbuffer =
+        tizen_buffer_pool_create_buffer (self->display->tizen_buffer_pool,
+        tbm_bo_export (self->display->tbm_bo), width, height, stride, format);
+    meta->used_by_compositor = FALSE;
+  }
 
   /* configure listening to wl_buffer.release */
   g_mutex_lock (&self->buffers_map_mutex);
   g_hash_table_insert (self->buffers_map, meta->wbuffer, *buffer);
   g_mutex_unlock (&self->buffers_map_mutex);
 
-  wl_buffer_add_listener (meta->wbuffer, &tizen_buffer_listener, self);
+  wl_buffer_add_listener (meta->wbuffer, &buffer_listener, self);
 
   /* add the allocated memory on the GstBuffer */
   gst_buffer_append_memory (*buffer,

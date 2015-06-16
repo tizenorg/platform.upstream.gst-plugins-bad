@@ -43,6 +43,7 @@
 
 #include "gstwaylandsink.h"
 #ifdef GST_WLSINK_ENHANCEMENT
+#include <mm_types.h>
 #include "tizen-wlvideoformat.h"
 #else
 #include "wlvideoformat.h"
@@ -51,6 +52,47 @@
 
 #include <gst/wayland/wayland.h>
 #include <gst/video/videooverlay.h>
+
+#ifdef GST_WLSINK_ENHANCEMENT
+
+enum
+{
+  DISP_GEO_METHOD_LETTER_BOX = 0,
+  DISP_GEO_METHOD_ORIGIN_SIZE,
+  DISP_GEO_METHOD_FULL_SCREEN,
+  DISP_GEO_METHOD_CROPPED_FULL_SCREEN,
+  DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX,
+  DISP_GEO_METHOD_CUSTOM_DST_ROI,
+  DISP_GEO_METHOD_NUM,
+};
+
+#define DEFAULT_DISPLAY_GEOMETRY_METHOD DISP_GEO_METHOD_LETTER_BOX
+
+#define GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_display_geometry_method_get_type())
+
+static GType
+gst_waylandsink_display_geometry_method_get_type (void)
+{
+  static GType waylandsink_display_geometry_method_type = 0;
+  static const GEnumValue display_geometry_method_type[] = {
+    {0, "Letter box", "LETTER_BOX"},
+    {1, "Origin size", "ORIGIN_SIZE"},
+    {2, "Full-screen", "FULL_SCREEN"},
+    {3, "Cropped full-screen", "CROPPED_FULL_SCREEN"},
+    {4, "Origin size(if screen size is larger than video size(width/height)) or Letter box(if video size(width/height) is larger than screen size)", "ORIGIN_SIZE_OR_LETTER_BOX"},
+    {5, "Explicitly described destination ROI", "CUSTOM_DST_ROI"},
+    {6, NULL, NULL},
+  };
+
+  if (!waylandsink_display_geometry_method_type) {
+    waylandsink_display_geometry_method_type =
+        g_enum_register_static ("GstWaylandSinkDisplayGeometryMethodType",
+        display_geometry_method_type);
+  }
+  return waylandsink_display_geometry_method_type;
+}
+#endif
+
 
 /* signals */
 enum
@@ -63,7 +105,10 @@ enum
 enum
 {
   PROP_0,
-  PROP_DISPLAY
+  PROP_DISPLAY,
+#ifdef GST_WLSINK_ENHANCEMENT
+  PROP_DISPLAY_GEOMETRY_METHOD,
+#endif
 };
 
 GST_DEBUG_CATEGORY (gstwayland_debug);
@@ -75,6 +120,9 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE
         ("{ BGRx, BGRA, RGBx, xBGR, xRGB, RGBA, ABGR, ARGB, RGB, BGR, "
             "RGB16, BGR16, YUY2, YVYU, UYVY, AYUV, NV12, NV21, NV16, "
+#ifdef GST_WLSINK_ENHANCEMENT
+            "SN12, ST12, "
+#endif
             "YUV9, YVU9, Y41B, I420, YV12, Y42B, v308 }"))
     );
 
@@ -162,6 +210,14 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
       g_param_spec_string ("display", "Wayland Display name", "Wayland "
           "display name to connect to, if not supplied via the GstContext",
           NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#ifdef GST_WLSINK_ENHANCEMENT
+  g_object_class_install_property (gobject_class, PROP_DISPLAY_GEOMETRY_METHOD,
+      g_param_spec_enum ("display-geometry-method", "Display geometry method",
+          "Geometrical method for display",
+          GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD,
+          DEFAULT_DISPLAY_GEOMETRY_METHOD,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#endif
 }
 
 static void
@@ -185,6 +241,11 @@ gst_wayland_sink_get_property (GObject * object,
       g_value_set_string (value, sink->display_name);
       GST_OBJECT_UNLOCK (sink);
       break;
+#ifdef GST_WLSINK_ENHANCEMENT
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      g_value_set_enum (value, sink->display_geometry_method);
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -204,6 +265,17 @@ gst_wayland_sink_set_property (GObject * object,
       sink->display_name = g_value_dup_string (value);
       GST_OBJECT_UNLOCK (sink);
       break;
+#ifdef GST_WLSINK_ENHANCEMENT
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      sink->display_geometry_method = g_value_get_enum (value);
+      GST_DEBUG_OBJECT (sink, "Display geometry method is set (%d)",
+          sink->display_geometry_method);
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to set geometry */
+        sink->video_info_changed = TRUE;
+      }
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -769,6 +841,77 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     if (!sink->pool)
       goto no_pool;
 
+#ifdef GST_WLSINK_ENHANCEMENT
+	if (GST_VIDEO_INFO_FORMAT (&sink->video_info) == GST_VIDEO_FORMAT_SN12 ||
+		GST_VIDEO_INFO_FORMAT (&sink->video_info) == GST_VIDEO_FORMAT_ST12) {
+	  sink->display->is_special_format = TRUE;
+	} else {
+	  sink->display->is_special_format = FALSE;
+	}
+	
+    if (sink->display->is_special_format == TRUE) {
+      /*in case of SN12 or ST12 video  format */
+      GstMemory *mem;
+      GstMapInfo mem_info = GST_MAP_INFO_INIT;
+      MMVideoBuffer *mm_video_buf = NULL;
+
+      mem = gst_buffer_peek_memory (buffer, 1);
+      gst_memory_map (mem, &mem_info, GST_MAP_READ);
+      mm_video_buf = (MMVideoBuffer *) mem_info.data;
+      gst_memory_unmap (mem, &mem_info);
+
+      if (mm_video_buf == NULL) {
+        GST_WARNING_OBJECT (sink, "mm_video_buf is NULL. Skip rendering");
+        return ret;
+      }
+      /* assign mm_video_buf info */
+      if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+        GST_LOG_OBJECT (sink, "TBM bo %p %p %p", mm_video_buf->handle.bo[0],
+            mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
+
+        sink->display->native_video_size = 0;
+
+        for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
+          if (mm_video_buf->handle.bo[i] != NULL) {
+            sink->display->bo[i] = mm_video_buf->handle.bo[i];
+          } else {
+            sink->display->bo[i] = 0;
+          }
+          sink->display->plane_size[i] = mm_video_buf->size[i];
+          sink->display->stride_width[i] = mm_video_buf->stride_width[i];
+          sink->display->stride_height[i] = mm_video_buf->stride_height[i];
+          sink->display->native_video_size += sink->display->plane_size[i];
+        }
+      } else {
+        GST_ERROR_OBJECT (sink, "Buffer type is not TBM");
+        return ret;
+      }
+
+      if (!gst_buffer_pool_set_active (sink->pool, TRUE))
+        goto activate_failed;
+
+      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
+      if (ret != GST_FLOW_OK)
+        goto no_buffer;
+
+
+
+    } else {
+      /*in case of normal video format and pool is not our pool */
+
+      if (!gst_buffer_pool_set_active (sink->pool, TRUE))
+        goto activate_failed;
+
+      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
+      if (ret != GST_FLOW_OK)
+        goto no_buffer;
+
+      gst_buffer_map (buffer, &src, GST_MAP_READ);
+      gst_buffer_fill (to_render, 0, src.data, src.size);
+      gst_buffer_unmap (buffer, &src);
+    }
+
+#else
     if (!gst_buffer_pool_set_active (sink->pool, TRUE))
       goto activate_failed;
 
@@ -779,6 +922,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     gst_buffer_map (buffer, &src, GST_MAP_READ);
     gst_buffer_fill (to_render, 0, src.data, src.size);
     gst_buffer_unmap (buffer, &src);
+#endif
   }
 
   gst_buffer_replace (&sink->last_buffer, to_render);

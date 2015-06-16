@@ -63,8 +63,11 @@ struct _GstWaylandSink
   gboolean video_info_changed;
   GstVideoInfo video_info;
 
+  /*property */
   gchar *display_name;
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  guint display_geometry_method;
+#endif
   gboolean redraw_pending;
   GMutex render_lock;
   GstBuffer *last_buffer;
