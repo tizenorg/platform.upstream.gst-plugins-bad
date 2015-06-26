@@ -43,6 +43,7 @@
 
 #include "gstwaylandsink.h"
 #ifdef GST_WLSINK_ENHANCEMENT
+#include <mm_types.h>
 #include "tizen-wlvideoformat.h"
 #else
 #include "wlvideoformat.h"
@@ -75,6 +76,9 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE
         ("{ BGRx, BGRA, RGBx, xBGR, xRGB, RGBA, ABGR, ARGB, RGB, BGR, "
             "RGB16, BGR16, YUY2, YVYU, UYVY, AYUV, NV12, NV21, NV16, "
+#ifdef GST_WLSINK_ENHANCEMENT
+            "SN12, ST12, "
+#endif
             "YUV9, YVU9, Y41B, I420, YV12, Y42B, v308 }"))
     );
 
@@ -505,6 +509,9 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   /* extract info from caps */
   if (!gst_video_info_from_caps (&info, caps))
     goto invalid_format;
+#ifdef GST_WLSINK_ENHANCEMENT
+  sink->caps = gst_caps_copy (caps);
+#endif
 
   format = gst_video_format_to_wayland_format (GST_VIDEO_INFO_FORMAT (&info));
   if ((gint) format == -1)
@@ -520,6 +527,32 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   if (i >= formats->len)
     goto unsupported_format;
 
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_SN12 ||
+      GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_ST12) {
+    sink->display->is_special_format = TRUE;
+  } else {
+    sink->display->is_special_format = FALSE;
+
+    /* create a new pool for the new configuration */
+    newpool = gst_wayland_buffer_pool_new (sink->display);
+    if (!newpool)
+      goto pool_failed;
+
+    structure = gst_buffer_pool_get_config (newpool);
+    gst_buffer_pool_config_set_params (structure, caps, info.size, 2, 0);
+    gst_buffer_pool_config_set_allocator (structure, NULL, &params);
+    if (!gst_buffer_pool_set_config (newpool, structure))
+      goto config_failed;
+
+    gst_object_replace ((GstObject **) & sink->pool, (GstObject *) newpool);
+    gst_object_unref (newpool);
+
+  }
+  /* store the video info */
+  sink->video_info = info;
+  sink->video_info_changed = TRUE;
+#else
   /* create a new pool for the new configuration */
   newpool = gst_wayland_buffer_pool_new (sink->display);
   if (!newpool)
@@ -537,7 +570,7 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 
   gst_object_replace ((GstObject **) & sink->pool, (GstObject *) newpool);
   gst_object_unref (newpool);
-
+#endif
   return TRUE;
 
 invalid_format:
@@ -576,6 +609,9 @@ gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   GstCaps *caps;
   guint size;
   gboolean need_pool;
+
+  if (sink->display->is_special_format == TRUE)
+    return TRUE;
 
   gst_query_parse_allocation (query, &caps, &need_pool);
 
@@ -692,6 +728,8 @@ render_last_buffer (GstWaylandSink * sink)
    * releases it. The release is handled internally in the pool */
   gst_wayland_compositor_acquire_buffer (meta->pool, sink->last_buffer);
 
+  GST_ERROR ("wl_surface_attach wl_buffer %p", meta->wbuffer);
+
   wl_surface_attach (surface, meta->wbuffer, 0, 0);
   wl_surface_damage (surface, 0, 0, sink->window->surface_width,
       sink->window->surface_height);
@@ -709,6 +747,12 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
   GstBuffer *to_render;
   GstWlMeta *meta;
   GstFlowReturn ret = GST_FLOW_OK;
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  GstBufferPool *newpool;
+  GstStructure *structure;
+  static GstAllocationParams params = { 0, 0, 0, 15, };
+#endif
 
   g_mutex_lock (&sink->render_lock);
 
@@ -766,6 +810,96 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     GstMapInfo src;
     GST_LOG_OBJECT (sink, "buffer %p not from our pool, copying", buffer);
 
+#ifdef GST_WLSINK_ENHANCEMENT
+    if (sink->display->is_special_format == TRUE) {
+      /*in case of SN12 or ST12 video  format */
+      GstMemory *mem;
+      GstMapInfo mem_info = GST_MAP_INFO_INIT;
+      MMVideoBuffer *mm_video_buf = NULL;
+
+      mem = gst_buffer_peek_memory (buffer, 1);
+      gst_memory_map (mem, &mem_info, GST_MAP_READ);
+      mm_video_buf = (MMVideoBuffer *) mem_info.data;
+      gst_memory_unmap (mem, &mem_info);
+
+      if (mm_video_buf == NULL) {
+        GST_WARNING_OBJECT (sink, "mm_video_buf is NULL. Skip rendering");
+        return ret;
+      }
+      /* assign mm_video_buf info */
+      if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+        GST_ERROR_OBJECT (sink, "TBM bo %p %p %p", mm_video_buf->handle.bo[0],
+            mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
+
+        sink->display->native_video_size = 0;
+
+        for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
+          if (mm_video_buf->handle.bo[i] != NULL) {
+            sink->display->bo[i] = mm_video_buf->handle.bo[i];
+          } else {
+            sink->display->bo[i] = 0;
+          }
+          sink->display->plane_size[i] = mm_video_buf->size[i];
+          sink->display->stride_width[i] = mm_video_buf->stride_width[i];
+          sink->display->stride_height[i] = mm_video_buf->stride_height[i];
+          sink->display->native_video_size += sink->display->plane_size[i];
+        }
+      } else {
+        GST_ERROR_OBJECT (sink, "Buffer type is not TBM");
+        return ret;
+      }
+
+      if (!sink->pool) {
+
+        /* create a new pool for the new configuration */
+        newpool = gst_wayland_buffer_pool_new (sink->display);
+        if (!newpool) {
+          GST_DEBUG_OBJECT (sink, "Failed to create new pool");
+          return FALSE;
+        }
+        structure = gst_buffer_pool_get_config (newpool);
+        gst_buffer_pool_config_set_params (structure, sink->caps,
+            sink->video_info.size, 2, 0);
+        gst_buffer_pool_config_set_allocator (structure, NULL, &params);
+        if (!gst_buffer_pool_set_config (newpool, structure)) {
+          GST_DEBUG_OBJECT (bsink, "failed setting config");
+          gst_object_unref (newpool);
+          return FALSE;
+        }
+
+        gst_object_replace ((GstObject **) & sink->pool, (GstObject *) newpool);
+        gst_object_unref (newpool);
+
+      }
+
+      if (!gst_buffer_pool_set_active (sink->pool, TRUE))
+        goto activate_failed;
+
+      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
+      if (ret != GST_FLOW_OK)
+        goto no_buffer;
+
+
+
+    } else {
+      /*in case of normal video format and pool is not our pool */
+
+      if (!sink->pool)
+        goto no_pool;
+
+      if (!gst_buffer_pool_set_active (sink->pool, TRUE))
+        goto activate_failed;
+
+      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
+      if (ret != GST_FLOW_OK)
+        goto no_buffer;
+
+      gst_buffer_map (buffer, &src, GST_MAP_READ);
+      gst_buffer_fill (to_render, 0, src.data, src.size);
+      gst_buffer_unmap (buffer, &src);
+    }
+
+#else
     if (!sink->pool)
       goto no_pool;
 
@@ -779,6 +913,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     gst_buffer_map (buffer, &src, GST_MAP_READ);
     gst_buffer_fill (to_render, 0, src.data, src.size);
     gst_buffer_unmap (buffer, &src);
+#endif
   }
 
   gst_buffer_replace (&sink->last_buffer, to_render);
