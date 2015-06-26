@@ -64,7 +64,9 @@ struct _GstWaylandSink
   GstVideoInfo video_info;
 
   gchar *display_name;
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  GstCaps *caps;
+#endif
   gboolean redraw_pending;
   GMutex render_lock;
   GstBuffer *last_buffer;

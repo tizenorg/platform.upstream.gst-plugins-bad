@@ -31,11 +31,13 @@
 #include "protocol/tizen-bufferpoolprotocol.h"
 
 G_BEGIN_DECLS
+    enum tizen_buffer_pool_format
+gst_video_format_to_wayland_format (GstVideoFormat format);
+GstVideoFormat gst_wayland_format_to_video_format (enum tizen_buffer_pool_format
+    wl_format);
 
-enum tizen_buffer_pool_format gst_video_format_to_wayland_format (GstVideoFormat format);
-GstVideoFormat gst_wayland_format_to_video_format (enum tizen_buffer_pool_format wl_format);
-
-const gchar *gst_wayland_format_to_string (enum tizen_buffer_pool_format wl_format);
+const gchar *gst_wayland_format_to_string (enum tizen_buffer_pool_format
+    wl_format);
 
 G_END_DECLS
 #endif

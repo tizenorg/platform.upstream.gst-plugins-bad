@@ -12,7 +12,7 @@ libgstwaylandsink_la_SOURCES =  \
 	protocol/tizen-bufferpoolprotocol.c
 
 libgstwaylandsink_la_CFLAGS = $(GST_CFLAGS) $(GST_PLUGINS_BASE_CFLAGS) \
-                               $(WAYLAND_CFLAGS) $(GST_PLUGINS_BAD_CFLAGS) $(DRM_CFLAGS) $(TBM_CFLAGS)
+                               $(WAYLAND_CFLAGS) $(GST_PLUGINS_BAD_CFLAGS) $(DRM_CFLAGS) $(TBM_CFLAGS) $(MMCOMMON_CFLAGS)
 libgstwaylandsink_la_LIBADD = \
 	$(GST_PLUGINS_BASE_LIBS) \
 	-lgstvideo-$(GST_API_VERSION) \

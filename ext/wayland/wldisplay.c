@@ -150,10 +150,25 @@ gst_wl_display_finalize (GObject * gobject)
   if (self->thread)
     g_thread_join (self->thread);
 
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (self->is_special_format == FALSE) {       /*need to remove */
+    /*in case of normal video format */
+    if (self->tbm_bo)
+      tbm_bo_unref (self->tbm_bo);
+    if (self->tbm_bufmgr)
+      tbm_bufmgr_deinit (self->tbm_bufmgr);
+    self->tbm_bo = NULL;
+    self->tbm_bufmgr = NULL;
+  }
+#endif
+
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
+
+#ifndef GST_WLSINK_ENHANCEMENT
   if (self->shm)
     wl_shm_destroy (self->shm);
+#endif
 
   if (self->shell)
     wl_shell_destroy (self->shell);
@@ -177,8 +192,10 @@ gst_wl_display_finalize (GObject * gobject)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->tizen_subsurface)
     tizen_subsurface_destroy (self->tizen_subsurface);
-  if (self->tizen_buffer_pool)
+  if (self->tizen_buffer_pool) {
     tizen_buffer_pool_destroy (self->tizen_buffer_pool);
+    self->tizen_buffer_pool = NULL;
+  }
   if (self->device_name)
     free (self->device_name);
   if (self->drm_fd >= 0)
@@ -274,7 +291,8 @@ registry_handle_global (void *data, struct wl_registry *registry,
     self->name = id;
     self->drm_fd = -1;
 
-    tizen_buffer_pool_add_listener (self->tizen_buffer_pool, &tz_buffer_pool_listener, self);
+    tizen_buffer_pool_add_listener (self->tizen_buffer_pool,
+        &tz_buffer_pool_listener, self);
 
     /* make sure all tizen_buffer_pool's events are handled */
     wl_display_roundtrip (self->display);

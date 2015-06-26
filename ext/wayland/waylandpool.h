@@ -31,18 +31,15 @@
 #endif
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_WAYLAND_BUFFER_POOL      (gst_wayland_buffer_pool_get_type())
 #define GST_IS_WAYLAND_BUFFER_POOL(obj)   (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WAYLAND_BUFFER_POOL))
 #define GST_WAYLAND_BUFFER_POOL(obj)      (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WAYLAND_BUFFER_POOL, GstWaylandBufferPool))
 #define GST_WAYLAND_BUFFER_POOL_CAST(obj) ((GstWaylandBufferPool*)(obj))
-
 #if 1
 #define FUNCTION_ENTER()	GST_INFO("<ENTER>")
 #else
 #define FUNCTION_ENTER()
 #endif
-
 typedef struct _GstWaylandBufferPool GstWaylandBufferPool;
 typedef struct _GstWaylandBufferPoolClass GstWaylandBufferPoolClass;
 
@@ -52,12 +49,13 @@ typedef struct _GstWlMeta GstWlMeta;
 GType gst_wl_meta_api_get_type (void);
 #define GST_WL_META_API_TYPE  (gst_wl_meta_api_get_type())
 
-const GstMetaInfo * gst_wl_meta_get_info (void);
+const GstMetaInfo *gst_wl_meta_get_info (void);
 #define GST_WL_META_INFO  (gst_wl_meta_get_info())
 
 #define gst_buffer_get_wl_meta(b) ((GstWlMeta*)gst_buffer_get_meta((b),GST_WL_META_API_TYPE))
 
-struct _GstWlMeta {
+struct _GstWlMeta
+{
   GstMeta meta;
 
   GstWaylandBufferPool *pool;
@@ -99,5 +97,4 @@ void gst_wayland_compositor_acquire_buffer (GstWaylandBufferPool * self,
 void gst_wayland_compositor_release_all_buffers (GstWaylandBufferPool * self);
 
 G_END_DECLS
-
 #endif /*__GST_WAYLAND_BUFFER_POOL_H__*/
