@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.4.1
-Release:        4
+Release:        5
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework

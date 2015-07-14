@@ -35,7 +35,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #ifdef GST_WLSINK_ENHANCEMENT
-#define DUMP_BUFFER
+//#define DUMP_BUFFER
 #ifdef DUMP_BUFFER
 int dump_cnt = 0;
 int _write_rawdata (const char *file, const void *data, unsigned int size);
@@ -99,7 +99,6 @@ static gboolean gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool);
 static gboolean gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool);
 static GstFlowReturn gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool,
     GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
-static void tizen_buffer_release (void *data, struct wl_buffer *wl_buffer);
 #endif
 
 #define gst_wayland_buffer_pool_parent_class parent_class
@@ -176,6 +175,7 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
       meta->used_by_compositor = FALSE;
       /* unlock before unref because stop() may be called from here */
       g_mutex_unlock (&self->buffers_map_mutex);
+	  GST_ERROR("gst_buffer_unref");
       gst_buffer_unref (buffer);
       return;
     }
@@ -453,7 +453,7 @@ gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
   tbm_bo_handle vitual_addr;
   guint size = 0;
 
-  if (self->display->is_special_format == TRUE) {
+  if (self->display->is_native_format == TRUE) {
     /*in case of SN12 or ST12 video  format */
     size = self->display->native_video_size * 15;
     vitual_addr.ptr = NULL;
@@ -530,7 +530,7 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
   GstWlMeta *meta;
   tbm_bo_handle vitual_addr;
 
-  if (self->display->is_special_format == TRUE) {
+  if (self->display->is_native_format == TRUE) {
     /*in case of SN12 or ST12 video  format */
     unsigned int name[NV_BUF_PLANE_NUM];
     unsigned int offset[NV_BUF_PLANE_NUM] = { 0, };
