@@ -151,7 +151,7 @@ gst_wl_display_finalize (GObject * gobject)
     g_thread_join (self->thread);
 
 #ifdef GST_WLSINK_ENHANCEMENT
-  if (self->is_special_format == FALSE) {       /*need to remove */
+  if (self->is_native_format == FALSE) {
     /*in case of normal video format */
     if (self->tbm_bo)
       tbm_bo_unref (self->tbm_bo);

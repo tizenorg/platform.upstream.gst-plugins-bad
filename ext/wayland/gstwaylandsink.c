@@ -226,10 +226,14 @@ gst_wayland_sink_finalize (GObject * object)
     gst_buffer_unref (sink->last_buffer);
   if (sink->display) {
     /* see comment about this call in gst_wayland_sink_change_state() */
-    if (sink->pool) {
+#ifdef GST_WLSINK_ENHANCEMENT
+    if (sink->pool && !sink->display->is_native_format)
+#else
+    if (sink->pool)
+#endif
       gst_wayland_compositor_release_all_buffers (GST_WAYLAND_BUFFER_POOL
           (sink->pool));
-    }
+
     g_object_unref (sink->display);
   }
   if (sink->window)
@@ -391,10 +395,13 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
          * unref the pool and therefore the display, which will try to
          * stop the thread from within itself and cause a deadlock.
          */
-        if (sink->pool) {
+#ifdef GST_WLSINK_ENHANCEMENT
+        if (sink->pool && !sink->display->is_native_format)
+#else
+        if (sink->pool)
+#endif
           gst_wayland_compositor_release_all_buffers (GST_WAYLAND_BUFFER_POOL
               (sink->pool));
-        }
         g_clear_object (&sink->display);
         g_clear_object (&sink->pool);
       }
@@ -530,9 +537,9 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_SN12 ||
       GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_ST12) {
-    sink->display->is_special_format = TRUE;
+    sink->display->is_native_format = TRUE;
   } else {
-    sink->display->is_special_format = FALSE;
+    sink->display->is_native_format = FALSE;
 
     /* create a new pool for the new configuration */
     newpool = gst_wayland_buffer_pool_new (sink->display);
@@ -610,7 +617,7 @@ gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
   guint size;
   gboolean need_pool;
 
-  if (sink->display->is_special_format == TRUE)
+  if (sink->display->is_native_format == TRUE)
     return TRUE;
 
   gst_query_parse_allocation (query, &caps, &need_pool);
@@ -811,7 +818,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     GST_LOG_OBJECT (sink, "buffer %p not from our pool, copying", buffer);
 
 #ifdef GST_WLSINK_ENHANCEMENT
-    if (sink->display->is_special_format == TRUE) {
+    if (sink->display->is_native_format == TRUE) {
       /*in case of SN12 or ST12 video  format */
       GstMemory *mem;
       GstMapInfo mem_info = GST_MAP_INFO_INIT;
