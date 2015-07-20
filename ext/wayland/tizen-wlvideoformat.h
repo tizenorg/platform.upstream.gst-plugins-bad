@@ -28,7 +28,7 @@
 #include <gst/video/video.h>
 
 #ifdef GST_WLSINK_ENHANCEMENT
-#include "protocol/tizen-bufferpoolprotocol.h"
+#include <tizen-extension-client-protocol.h>
 
 G_BEGIN_DECLS
     enum tizen_buffer_pool_format

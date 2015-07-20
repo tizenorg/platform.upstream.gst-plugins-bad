@@ -175,8 +175,8 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
       window->surface, parent);
   wl_subsurface_set_desync (window->subsurface);
 #ifdef GST_WLSINK_ENHANCEMENT
-  if (display->tizen_subsurface)
-    tizen_subsurface_place_below_parent (display->tizen_subsurface,
+  if (display->tizen_policy)
+    tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->subsurface);
 
   wl_surface_commit (parent);

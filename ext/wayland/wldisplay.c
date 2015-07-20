@@ -190,8 +190,8 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_disconnect (self->display);
   }
 #ifdef GST_WLSINK_ENHANCEMENT
-  if (self->tizen_subsurface)
-    tizen_subsurface_destroy (self->tizen_subsurface);
+  if (self->tizen_policy)
+    tizen_policy_destroy (self->tizen_policy);
   if (self->tizen_buffer_pool) {
     tizen_buffer_pool_destroy (self->tizen_buffer_pool);
     self->tizen_buffer_pool = NULL;
@@ -278,9 +278,9 @@ registry_handle_global (void *data, struct wl_registry *registry,
   } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
 #ifdef GST_WLSINK_ENHANCEMENT
-  } else if (g_strcmp0 (interface, "tizen_subsurface") == 0) {
-    self->tizen_subsurface =
-        wl_registry_bind (registry, id, &tizen_subsurface_interface, 1);
+  } else if (g_strcmp0 (interface, "tizen_policy") == 0) {
+    self->tizen_policy =
+        wl_registry_bind (registry, id, &tizen_policy_interface, 1);
   } else if (g_strcmp0 (interface, "tizen_buffer_pool") == 0) {
 
     self->tizen_buffer_pool =

@@ -36,6 +36,7 @@ BuildRequires:  pkgconfig(libtbm)
 BuildRequires:	pkgconfig(mm-common)
 %if %{with wayland}
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
+BuildRequires:  pkgconfig(tizen-extension-client)
 %endif
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
