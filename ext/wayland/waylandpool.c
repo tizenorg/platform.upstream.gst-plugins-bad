@@ -63,6 +63,11 @@ gst_wl_meta_api_get_type (void)
 static void
 gst_wl_meta_free (GstWlMeta * meta, GstBuffer * buffer)
 {
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (!meta || !meta->pool)
+    return;
+  g_hash_table_remove (meta->pool->buffers_map, meta->wbuffer);
+#endif
   GST_DEBUG ("destroying wl_buffer %p", meta->wbuffer);
   wl_buffer_destroy (meta->wbuffer);
 }
@@ -117,7 +122,6 @@ gst_wayland_buffer_pool_class_init (GstWaylandBufferPoolClass * klass)
 #ifdef GST_WLSINK_ENHANCEMENT
   gobject_class->finalize = gst_wayland_tizen_buffer_pool_finalize;
   gstbufferpool_class->start = gst_wayland_tizen_buffer_pool_start;
-  gstbufferpool_class->stop = gst_wayland_tizen_buffer_pool_stop;
   gstbufferpool_class->alloc_buffer = gst_wayland_tizen_buffer_pool_alloc;
 #else
   gobject_class->finalize = gst_wayland_buffer_pool_finalize;
@@ -174,9 +178,9 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
     if (meta->used_by_compositor) {
       meta->used_by_compositor = FALSE;
       /* unlock before unref because stop() may be called from here */
-      g_mutex_unlock (&self->buffers_map_mutex);
-	  GST_ERROR("gst_buffer_unref");
+      GST_LOG_OBJECT (self, "Decrease ref count of buffer");
       gst_buffer_unref (buffer);
+      g_mutex_unlock (&self->buffers_map_mutex);
       return;
     }
   }
@@ -201,6 +205,7 @@ gst_wayland_compositor_acquire_buffer (GstWaylandBufferPool * self,
   g_return_if_fail (meta->used_by_compositor == FALSE);
 
   meta->used_by_compositor = TRUE;
+  GST_LOG_OBJECT(self, "Increase ref count of buffer");
   gst_buffer_ref (buffer);
 }
 
@@ -213,7 +218,8 @@ unref_used_buffers (gpointer key, gpointer value, gpointer data)
   GstWlMeta *meta = gst_buffer_get_wl_meta (buffer);
   GList **to_unref = data;
 
-  g_return_if_fail (meta != NULL);
+  if (meta == NULL)
+    return;
 
   if (meta->used_by_compositor) {
     meta->used_by_compositor = FALSE;
@@ -230,12 +236,11 @@ gst_wayland_compositor_release_all_buffers (GstWaylandBufferPool * self)
 
   g_mutex_lock (&self->buffers_map_mutex);
   g_hash_table_foreach (self->buffers_map, unref_used_buffers, &to_unref);
-  g_mutex_unlock (&self->buffers_map_mutex);
 
-  /* unref without the lock because stop() may be called from here */
   if (to_unref) {
     g_list_free_full (to_unref, (GDestroyNotify) gst_buffer_unref);
   }
+  g_mutex_unlock (&self->buffers_map_mutex);
 }
 
 static gboolean
@@ -504,6 +509,9 @@ gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool)
 
   self->size = 0;
   self->used = 0;
+
+  tizen_buffer_pool_destroy (self->display->tizen_buffer_pool);
+  self->display->tizen_buffer_pool = NULL;
 
   /* all buffers are about to be destroyed;
    * we should no longer do anything with them */

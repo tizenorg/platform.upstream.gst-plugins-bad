@@ -192,10 +192,6 @@ gst_wl_display_finalize (GObject * gobject)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->tizen_policy)
     tizen_policy_destroy (self->tizen_policy);
-  if (self->tizen_buffer_pool) {
-    tizen_buffer_pool_destroy (self->tizen_buffer_pool);
-    self->tizen_buffer_pool = NULL;
-  }
   if (self->device_name)
     free (self->device_name);
   if (self->drm_fd >= 0)
