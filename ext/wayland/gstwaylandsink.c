@@ -395,13 +395,10 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
          * unref the pool and therefore the display, which will try to
          * stop the thread from within itself and cause a deadlock.
          */
-#ifdef GST_WLSINK_ENHANCEMENT
-        if (sink->pool && !sink->display->is_native_format)
-#else
-        if (sink->pool)
-#endif
+        if (sink->pool) {
           gst_wayland_compositor_release_all_buffers (GST_WAYLAND_BUFFER_POOL
               (sink->pool));
+        }
         g_clear_object (&sink->display);
         g_clear_object (&sink->pool);
       }
@@ -886,8 +883,6 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       if (ret != GST_FLOW_OK)
         goto no_buffer;
 
-
-
     } else {
       /*in case of normal video format and pool is not our pool */
 
@@ -926,8 +921,10 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
   gst_buffer_replace (&sink->last_buffer, to_render);
   render_last_buffer (sink);
 
-  if (buffer != to_render)
-    gst_buffer_unref (to_render);
+  if (buffer != to_render) {
+    GST_LOG_OBJECT (sink, "Decrease ref count of buffer");
+   gst_buffer_unref (to_render);
+ }
   goto done;
 
 no_window_size:
