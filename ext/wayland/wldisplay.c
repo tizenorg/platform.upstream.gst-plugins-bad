@@ -28,6 +28,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <xf86drm.h>
+#include <string.h>
+#include <stdlib.h>
 
 static void
 handle_tizen_buffer_pool_device (void *data,
