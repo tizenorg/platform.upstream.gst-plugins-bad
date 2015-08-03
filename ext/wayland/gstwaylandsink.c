@@ -235,14 +235,21 @@ gst_wayland_sink_finalize (GObject * object)
           (sink->pool));
 
     g_object_unref (sink->display);
+    sink->display = NULL;
   }
-  if (sink->window)
+  if (sink->window) {
     g_object_unref (sink->window);
-  if (sink->pool)
+    sink->window = NULL;
+  }
+  if (sink->pool) {
     gst_object_unref (sink->pool);
+    sink->pool = NULL;
+  }
 
-  if (sink->display_name)
+  if (sink->display_name) {
     g_free (sink->display_name);
+    sink->display_name = NULL;
+  }
 
   g_mutex_clear (&sink->display_lock);
   g_mutex_clear (&sink->render_lock);
