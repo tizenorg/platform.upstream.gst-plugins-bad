@@ -55,6 +55,14 @@ struct _GstWlWindow
   gint video_width, video_height;
   /* the size of the (sub)surface */
   gint surface_width, surface_height;
+#ifdef GST_WLSINK_ENHANCEMENT
+  /*Display geometry method*/
+  guint disp_geo_method;
+  guint rotate_angle;
+  guint orientation;
+  guint dst_roi_mode;
+  GstVideoRectangle dst_roi;
+#endif
 };
 
 struct _GstWlWindowClass

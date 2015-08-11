@@ -53,6 +53,73 @@
 #include <gst/wayland/wayland.h>
 #include <gst/video/videooverlay.h>
 
+#ifdef GST_WLSINK_ENHANCEMENT
+#define GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_display_geometry_method_get_type())
+#define GST_TYPE_WAYLANDSINK_ROTATE_ANGLE (gst_waylandsink_rotate_angle_get_type())
+#define GST_TYPE_WAYLANDSINK_ROI_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_roi_display_geometry_method_get_type())
+
+static GType
+gst_waylandsink_rotate_angle_get_type(void)
+{
+  static GType waylandsink_rotate_angle_type = 0;
+  static const GEnumValue rotate_angle_type[] = {
+      { 0, "No rotate", "DEGREE_0"},
+      { 1, "Rotate 90 degree", "DEGREE_90"},
+      { 2, "Rotate 180 degree", "DEGREE_180"},
+      { 3, "Rotate 270 degree", "DEGREE_270"},
+      { 4, NULL, NULL},
+  };
+
+  if (!waylandsink_rotate_angle_type) {
+    waylandsink_rotate_angle_type = g_enum_register_static ("GstWaylandSinkRotateAngleType", rotate_angle_type);
+  }
+
+  return waylandsink_rotate_angle_type;
+}
+
+
+static GType
+gst_waylandsink_display_geometry_method_get_type (void)
+{
+  static GType waylandsink_display_geometry_method_type = 0;
+  static const GEnumValue display_geometry_method_type[] = {
+    {0, "Letter box", "LETTER_BOX"},
+    {1, "Origin size", "ORIGIN_SIZE"},
+    {2, "Full-screen", "FULL_SCREEN"},
+    {3, "Cropped full-screen", "CROPPED_FULL_SCREEN"},
+    {4, "Origin size(if screen size is larger than video size(width/height)) or Letter box(if video size(width/height) is larger than screen size)", "ORIGIN_SIZE_OR_LETTER_BOX"},
+    {5, "Explicitly described destination ROI", "CUSTOM_DST_ROI"},
+    {6, NULL, NULL},
+  };
+
+  if (!waylandsink_display_geometry_method_type) {
+    waylandsink_display_geometry_method_type =
+        g_enum_register_static ("GstWaylandSinkDisplayGeometryMethodType",
+        display_geometry_method_type);
+  }
+  return waylandsink_display_geometry_method_type;
+}
+
+static GType
+gst_waylandsink_roi_display_geometry_method_get_type(void)
+{
+       static GType waylandsink_roi_display_geometry_method_type = 0;
+       static const GEnumValue roi_display_geometry_method_type[] = {
+               { 0, "ROI-Full-screen", "FULL_SCREEN"},
+               { 1, "ROI-Letter box", "LETTER_BOX"},
+               { 2, NULL, NULL},
+       };
+
+       if (!waylandsink_roi_display_geometry_method_type) {
+               waylandsink_roi_display_geometry_method_type = g_enum_register_static("GstWaylandSinkROIDisplayGeometryMethodType", roi_display_geometry_method_type);
+       }
+
+       return waylandsink_roi_display_geometry_method_type;
+}
+
+#endif
+
+
 /* signals */
 enum
 {
@@ -64,7 +131,17 @@ enum
 enum
 {
   PROP_0,
-  PROP_DISPLAY
+  PROP_DISPLAY,
+#ifdef GST_WLSINK_ENHANCEMENT
+  PROP_ROTATE_ANGLE,
+  PROP_DISPLAY_GEOMETRY_METHOD,
+  PROP_ORIENTATION,
+  PROP_DST_ROI_MODE,
+  PROP_DST_ROI_X,
+  PROP_DST_ROI_Y,
+  PROP_DST_ROI_W,
+  PROP_DST_ROI_H
+#endif
 };
 
 GST_DEBUG_CATEGORY (gstwayland_debug);
@@ -166,12 +243,70 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
       g_param_spec_string ("display", "Wayland Display name", "Wayland "
           "display name to connect to, if not supplied via the GstContext",
           NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#ifdef GST_WLSINK_ENHANCEMENT
+  g_object_class_install_property (gobject_class, PROP_ROTATE_ANGLE,
+      g_param_spec_enum ("rotate", "Rotate angle",
+          "Rotate angle of display output",
+          GST_TYPE_WAYLANDSINK_ROTATE_ANGLE, DEGREE_270,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DISPLAY_GEOMETRY_METHOD,
+      g_param_spec_enum ("display-geometry-method", "Display geometry method",
+          "Geometrical method for display",
+          GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD,
+          DEFAULT_DISPLAY_GEOMETRY_METHOD,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_ORIENTATION,
+      g_param_spec_enum ("orientation",
+          "Orientation information used for ROI/ZOOM",
+          "Orientation information for display",
+          GST_TYPE_WAYLANDSINK_ROTATE_ANGLE, DEGREE_0,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  
+  g_object_class_install_property (gobject_class, PROP_DST_ROI_MODE,
+      g_param_spec_enum ("dst-roi-mode", "Display geometry method of ROI",
+          "Geometrical method of ROI for display",
+          GST_TYPE_WAYLANDSINK_ROI_DISPLAY_GEOMETRY_METHOD,
+          DEF_ROI_DISPLAY_GEOMETRY_METHOD,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DST_ROI_X,
+	  g_param_spec_int ("dst-roi-x", "Dst-ROI-X",
+		  "X value of Destination ROI(only effective \"CUSTOM_ROI\")", 0,
+		  WL_SCREEN_SIZE_WIDTH, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DST_ROI_Y,
+	  g_param_spec_int ("dst-roi-y", "Dst-ROI-Y",
+		  "Y value of Destination ROI(only effective \"CUSTOM_ROI\")", 0,
+		  WL_SCREEN_SIZE_HEIGHT, 0,
+		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DST_ROI_W,
+	  g_param_spec_int ("dst-roi-w", "Dst-ROI-W",
+		  "W value of Destination ROI(only effective \"CUSTOM_ROI\")", 0,
+		  WL_SCREEN_SIZE_WIDTH, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DST_ROI_H,
+	  g_param_spec_int ("dst-roi-h", "Dst-ROI-H",
+		  "H value of Destination ROI(only effective \"CUSTOM_ROI\")", 0,
+		  WL_SCREEN_SIZE_HEIGHT, 0,
+		  G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  
+  
+#endif
 }
 
 static void
 gst_wayland_sink_init (GstWaylandSink * sink)
 {
   FUNCTION_ENTER ();
+
+  sink->display_geometry_method = DEF_DISPLAY_GEOMETRY_METHOD;
+  sink->rotate_angle = DEGREE_270;
+  sink->dst_roi_mode = DEF_ROI_DISPLAY_GEOMETRY_METHOD;
+  sink->orientation = DEGREE_0;
+
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
 }
@@ -189,6 +324,32 @@ gst_wayland_sink_get_property (GObject * object,
       g_value_set_string (value, sink->display_name);
       GST_OBJECT_UNLOCK (sink);
       break;
+#ifdef GST_WLSINK_ENHANCEMENT
+    case PROP_ROTATE_ANGLE:
+      g_value_set_enum (value, sink->rotate_angle);
+      break;
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      g_value_set_enum (value, sink->display_geometry_method);
+      break;
+    case PROP_ORIENTATION:
+      g_value_set_enum (value, sink->orientation);
+	  break;
+	  case PROP_DST_ROI_MODE:
+		g_value_set_enum (value, sink->dst_roi_mode);
+		break;
+	  case PROP_DST_ROI_X:
+		g_value_set_int (value, sink->dst_roi.x);
+		break;
+	  case PROP_DST_ROI_Y:
+		g_value_set_int (value, sink->dst_roi.y);
+		break;
+	  case PROP_DST_ROI_W:
+		g_value_set_int (value, sink->dst_roi.w);
+		break;
+	  case PROP_DST_ROI_H:
+		g_value_set_int (value, sink->dst_roi.h);
+		break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -208,6 +369,61 @@ gst_wayland_sink_set_property (GObject * object,
       sink->display_name = g_value_dup_string (value);
       GST_OBJECT_UNLOCK (sink);
       break;
+#ifdef GST_WLSINK_ENHANCEMENT
+	case PROP_ROTATE_ANGLE:
+		sink->rotate_angle = g_value_get_enum (value);
+		GST_ERROR_OBJECT (sink, "Rotate angle is set (%d)", sink->rotate_angle);
+		if (sink->window) {
+		  sink->window->rotate_angle = sink->rotate_angle;
+		}
+		if (GST_STATE (sink) == GST_STATE_PAUSED) {
+		  /*need to set rotate angley */
+		  sink->video_info_changed = TRUE;
+		}
+      break;
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      sink->display_geometry_method = g_value_get_enum (value);
+      GST_ERROR_OBJECT (sink, "Display geometry method is set (%d)",
+          sink->display_geometry_method);
+	  if (sink->window) {
+		sink->window->disp_geo_method = sink->display_geometry_method;
+	  }
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to set geometry */
+        sink->video_info_changed = TRUE;
+      }
+      break;
+	case PROP_ORIENTATION:
+      sink->orientation = g_value_get_enum (value);
+	  GST_ERROR_OBJECT (sink, "Orientation is set (%d)", sink->orientation);
+	  if (sink->window) {
+		sink->window->orientation = sink->orientation;
+	  }
+	  break;
+    case PROP_DST_ROI_MODE:
+      sink->dst_roi_mode = g_value_get_enum (value);
+      GST_ERROR_OBJECT (sink, "Overlay geometry(%d) for ROI is changed", sink->dst_roi_mode);
+	  if (sink->window) {
+		sink->window->dst_roi_mode = sink->dst_roi_mode;
+	  }
+      break;
+    case PROP_DST_ROI_X:
+      sink->dst_roi.x = g_value_get_int (value);
+	  sink->window->dst_roi.x = sink->dst_roi.x;
+      break;
+    case PROP_DST_ROI_Y:
+      sink->dst_roi.y = g_value_get_int (value);
+	  sink->window->dst_roi.y = sink->dst_roi.y;
+      break;
+    case PROP_DST_ROI_W:
+      sink->dst_roi.w = g_value_get_int (value);
+	  sink->window->dst_roi.w = sink->dst_roi.w;
+      break;
+    case PROP_DST_ROI_H:
+      sink->dst_roi.h = g_value_get_int (value);
+	  sink->window->dst_roi.h = sink->dst_roi.h;
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
