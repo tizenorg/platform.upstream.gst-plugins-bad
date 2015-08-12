@@ -41,7 +41,6 @@ BuildRequires:  pkgconfig(x11)
 Requires(post): glib2-tools
 Requires(postun): glib2-tools
 Requires:       gstreamer >= 1.0.2
-Enhances:       gstreamer
 
 %description
 GStreamer is a streaming media framework based on graphs of filters
