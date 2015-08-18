@@ -72,7 +72,7 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
-export CFLAGS="-DGST_WLSINK_ENHANCEMENT"
+export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT"
 %configure\
     --disable-static\
     --disable-examples\
