@@ -25,6 +25,10 @@
 #endif
 
 #include "wlwindow.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include "gstwaylandsink.h"
+#define SWAP(a, b) { (a) ^= (b) ^= (a) ^= (b); }
+#endif
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
@@ -220,15 +224,180 @@ gst_wl_window_resize_internal (GstWlWindow * window, gboolean commit)
   FUNCTION_ENTER ();
 
   GstVideoRectangle src = { 0, };
-  GstVideoRectangle res;
+  GstVideoRectangle res;        //dst
 
   src.w = window->video_width;
   src.h = window->video_height;
-  gst_video_sink_center_rect (src, window->render_rectangle, &res, TRUE);
+#ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
+  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
+  GstVideoRectangle src_input = { 0, 0, 0, 0 };
+  GstVideoRectangle dst = { 0, 0, 0, 0 };
 
+  gint rotate = 0;
+  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
+
+  src.x = src.y = 0;
+  src_input.w = src_origin.w = window->video_width;
+  src_input.h = src_origin.h = window->video_height;
+  GST_INFO ("video (%d x %d)", window->video_width, window->video_height);
+  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
+      src_input.h);
+  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
+      src_origin.w, src_origin.h);
+
+  if (window->rotate_angle == DEGREE_0 || window->rotate_angle == DEGREE_180) {
+    src.w = window->video_width;        //video_width
+    src.h = window->video_height;       //video_height
+  } else {
+    src.w = window->video_height;
+    src.h = window->video_width;
+  }
+  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
+
+  /*default res.w and res.h */
+  dst.w = window->render_rectangle.w;
+  dst.h = window->render_rectangle.h;
+  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
+  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
+      window->render_rectangle.x, window->render_rectangle.y,
+      window->render_rectangle.w, window->render_rectangle.h);
+  switch (window->disp_geo_method) {
+    case DISP_GEO_METHOD_LETTER_BOX:
+      GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
+      gst_video_sink_center_rect (src, dst, &res, TRUE);
+      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      res.x += window->render_rectangle.x;
+      res.y += window->render_rectangle.y;
+      break;
+    case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
+      if (src.w > dst.w || src.h > dst.h) {
+        /*LETTER BOX */
+        GST_INFO
+            ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
+        gst_video_sink_center_rect (src, dst, &res, TRUE);
+        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+        res.x += window->render_rectangle.x;
+        res.y += window->render_rectangle.y;
+      } else {
+        /*ORIGIN SIZE */
+        GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
+        gst_video_sink_center_rect (src, dst, &res, FALSE);
+        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      }
+      break;
+    case DISP_GEO_METHOD_ORIGIN_SIZE:  //is working
+      GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
+      gst_video_sink_center_rect (src, dst, &res, FALSE);
+      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      break;
+    case DISP_GEO_METHOD_FULL_SCREEN:  //is working
+      GST_INFO ("DISP_GEO_METHOD_FULL_SCREEN");
+      res.x = res.y = 0;
+      res.w = window->render_rectangle.w;
+      res.h = window->render_rectangle.h;
+      break;
+    case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
+      GST_INFO ("DISP_GEO_METHOD_CROPPED_FULL_SCREEN");
+      gst_video_sink_center_rect (src, dst, &res, FALSE);
+      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      res.x = res.y = 0;
+      res.w = dst.w;
+      res.h = dst.h;
+      break;
+    default:
+      break;
+  }
+
+  switch (window->rotate_angle) {
+    case DEGREE_0:
+      transform = WL_OUTPUT_TRANSFORM_NORMAL;
+      break;
+    case DEGREE_90:
+      transform = WL_OUTPUT_TRANSFORM_90;
+      break;
+    case DEGREE_180:
+      transform = WL_OUTPUT_TRANSFORM_180;
+      break;
+    case DEGREE_270:
+      transform = WL_OUTPUT_TRANSFORM_270;
+      break;
+
+    default:
+      GST_ERROR ("Unsupported rotation [%d]... set DEGREE 0.",
+          window->rotate_angle);
+      break;
+  }
+
+  switch (window->flip) {
+    case FLIP_NONE:
+      break;
+    case FLIP_VERTICAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
+      break;
+    case FLIP_HORIZONTAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
+      break;
+    case FLIP_BOTH:
+      transform = WL_OUTPUT_TRANSFORM_180;
+      break;
+    default:
+      GST_ERROR ("Unsupported flip [%d]... set FLIP_NONE.", window->flip);
+  }
+
+  GST_INFO
+      ("window[%d x %d] src[%d,%d,%d x %d],dst[%d,%d,%d x %d],input[%d,%d,%d x %d],result[%d,%d,%d x %d]",
+      window->render_rectangle.w, window->render_rectangle.h,
+      src.x, src.y, src.w, src.h,
+      dst.x, dst.y, dst.w, dst.h,
+      src_input.x, src_input.y, src_input.w, src_input.h,
+      res.x, res.y, res.w, res.h);
+
+  GST_INFO ("video (%d x %d)", window->video_width, window->video_height);
+  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
+      src_input.h);
+  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
+      src_origin.w, src_origin.h);
+  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
+  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
+  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
+      window->render_rectangle.x, window->render_rectangle.y,
+      window->render_rectangle.w, window->render_rectangle.h);
+  GST_INFO ("res(%d, %d, %d x %d)", res.x, res.y, res.w, res.h);
+
+  if (window->subsurface) {
+    GST_INFO ("have window->subsurface");
+    wl_subsurface_set_position (window->subsurface,
+        window->render_rectangle.x + res.x, window->render_rectangle.y + res.y);
+    GST_INFO ("wl_subsurface_set_position(%d,%d)",
+        window->render_rectangle.x + res.x, window->render_rectangle.y + res.y);
+  }
+  wl_viewport_set_destination (window->viewport, res.w, res.h);
+  GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
+
+  wl_viewport_set_source (window->viewport, wl_fixed_from_int (src_input.x),
+      wl_fixed_from_int (src_input.y), wl_fixed_from_int (src_input.w),
+      wl_fixed_from_int (src_input.h));
+  GST_INFO ("wl_viewport_set_source(%d,%d, %d x %d)", src_input.x, src_input.y,
+      src_input.w, src_input.h);
+
+  wl_surface_set_buffer_transform (window->surface, transform);
+  GST_INFO ("wl_surface_set_buffer_transform (%d)", transform);
+
+  if (commit) {
+    wl_surface_damage (window->surface, 0, 0, res.w, res.h);
+    wl_surface_commit (window->surface);
+  }
+
+  /* this is saved for use in wl_surface_damage */
+  window->surface_width = res.w;
+  window->surface_height = res.h;
+
+#else
+  gst_video_sink_center_rect (src, window->render_rectangle, &res, TRUE);
   if (window->subsurface)
     wl_subsurface_set_position (window->subsurface,
         window->render_rectangle.x + res.x, window->render_rectangle.y + res.y);
+
   wl_viewport_set_destination (window->viewport, res.w, res.h);
 
   if (commit) {
@@ -239,6 +408,7 @@ gst_wl_window_resize_internal (GstWlWindow * window, gboolean commit)
   /* this is saved for use in wl_surface_damage */
   window->surface_width = res.w;
   window->surface_height = res.h;
+#endif
 }
 
 void

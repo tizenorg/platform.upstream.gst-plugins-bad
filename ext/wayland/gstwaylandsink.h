@@ -43,6 +43,42 @@ G_BEGIN_DECLS
 	    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_WAYLAND_SINK))
 #define GST_WAYLAND_SINK_GET_CLASS(inst) \
         (G_TYPE_INSTANCE_GET_CLASS ((inst), GST_TYPE_WAYLAND_SINK, GstWaylandSinkClass))
+#ifdef GST_WLSINK_ENHANCEMENT
+    enum
+{
+  DISP_GEO_METHOD_LETTER_BOX = 0,
+  DISP_GEO_METHOD_ORIGIN_SIZE,
+  DISP_GEO_METHOD_FULL_SCREEN,
+  DISP_GEO_METHOD_CROPPED_FULL_SCREEN,
+  DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX,
+  DISP_GEO_METHOD_NUM,
+};
+
+enum
+{
+  DEGREE_0,
+  DEGREE_90,
+  DEGREE_180,
+  DEGREE_270,
+  DEGREE_NUM,
+};
+
+enum
+{
+  FLIP_NONE = 0,
+  FLIP_HORIZONTAL,
+  FLIP_VERTICAL,
+  FLIP_BOTH,
+  FLIP_NUM,
+};
+
+#define DEF_DISPLAY_FLIP            FLIP_NONE
+#define DEF_DISPLAY_GEOMETRY_METHOD         DISP_GEO_METHOD_FULL_SCREEN
+
+#define WL_SCREEN_SIZE_WIDTH 4096
+#define WL_SCREEN_SIZE_HEIGHT 4096
+
+#endif
 #if 1
 #define FUNCTION_ENTER()	GST_INFO("<ENTER>")
 #else
@@ -63,8 +99,13 @@ struct _GstWaylandSink
   gboolean video_info_changed;
   GstVideoInfo video_info;
 
+  /*property */
   gchar *display_name;
 #ifdef GST_WLSINK_ENHANCEMENT
+  guint rotate_angle;
+  guint display_geometry_method;
+  guint orientation;
+  guint flip;
   GstCaps *caps;
 #endif
   gboolean redraw_pending;
