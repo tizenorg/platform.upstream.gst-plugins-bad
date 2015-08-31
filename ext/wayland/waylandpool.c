@@ -205,7 +205,7 @@ gst_wayland_compositor_acquire_buffer (GstWaylandBufferPool * self,
   g_return_if_fail (meta->used_by_compositor == FALSE);
 
   meta->used_by_compositor = TRUE;
-  GST_LOG_OBJECT(self, "Increase ref count of buffer");
+  GST_LOG_OBJECT (self, "Increase ref count of buffer");
   gst_buffer_ref (buffer);
 }
 
@@ -562,13 +562,13 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
 #ifdef DUMP_BUFFER
     int ret;
     char file_name[128];
-	if (dump_cnt < 10) {
-	  sprintf (file_name, "/root/WLSINK_OUT_DUMP_%2.2d.dump", dump_cnt++);
-      ret = _write_rawdata (file_name, vitual_addr.ptr,size);
+    if (dump_cnt < 10) {
+      sprintf (file_name, "/root/WLSINK_OUT_DUMP_%2.2d.dump", dump_cnt++);
+      ret = _write_rawdata (file_name, vitual_addr.ptr, size);
       if (ret) {
         GST_ERROR_OBJECT (pool, "_write_rawdata() failed");
       }
-	}
+    }
 #endif
     /* create buffer and its metadata object */
     *buffer = gst_buffer_new ();
@@ -590,9 +590,9 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
     }
 
     meta->wbuffer =
-        tizen_buffer_pool_create_planar_buffer (self->display->
-        tizen_buffer_pool, width, height, format, name[0], offset[0], stride[0],
-        name[1], offset[1], stride[1], 0, 0, 0);
+        tizen_buffer_pool_create_planar_buffer (self->
+        display->tizen_buffer_pool, width, height, format, name[0], offset[0],
+        stride[0], name[1], offset[1], stride[1], 0, 0, 0);
     meta->used_by_compositor = FALSE;
 
     GST_DEBUG ("tizen_buffer_pool_create_planar_buffer create wl_buffer %p",
@@ -664,8 +664,8 @@ gst_wayland_tizen_buffer_pool_finalize (GObject * object)
   if (pool->display->tizen_buffer_pool) {
     gst_wayland_tizen_buffer_pool_stop (GST_BUFFER_POOL (pool));
   } else {
-    /*already stop*/
-	return;
+    /*already stop */
+    return;
   }
   g_mutex_clear (&pool->buffers_map_mutex);
   g_hash_table_unref (pool->buffers_map);
