@@ -80,6 +80,10 @@ struct _GstWaylandBufferPool
 
   GMutex buffers_map_mutex;
   GHashTable *buffers_map;
+#ifdef GST_WLSINK_ENHANCEMENT
+  GMutex displaying_buffers_map_mutex;
+  GHashTable *displaying_buffers_map;
+#endif
 };
 
 struct _GstWaylandBufferPoolClass
@@ -95,6 +99,8 @@ GstBufferPool *gst_wayland_buffer_pool_new (GstWlDisplay * display);
 void gst_wayland_compositor_acquire_buffer (GstWaylandBufferPool * self,
     GstBuffer * buffer);
 void gst_wayland_compositor_release_all_buffers (GstWaylandBufferPool * self);
+void gst_wayland_buffer_pool_add_displaying_buffer (GstBufferPool * pool,
+    GstWlMeta * meta, GstBuffer * buffer);
 
 G_END_DECLS
 #endif /*__GST_WAYLAND_BUFFER_POOL_H__*/
