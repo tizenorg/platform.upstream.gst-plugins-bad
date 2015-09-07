@@ -345,7 +345,7 @@ gst_wayland_sink_set_property (GObject * object,
       }
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render current buffer*/
+        /*need to render current buffer */
       }
       break;
     case PROP_DISPLAY_GEOMETRY_METHOD:
@@ -353,11 +353,12 @@ gst_wayland_sink_set_property (GObject * object,
       GST_INFO_OBJECT (sink, "Display geometry method is set (%d)",
           sink->display_geometry_method);
       if (sink->window) {
-        gst_wl_window_set_disp_geo_method (sink->window, sink->display_geometry_method);
+        gst_wl_window_set_disp_geo_method (sink->window,
+            sink->display_geometry_method);
       }
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render current buffer*/
+        /*need to render current buffer */
       }
       break;
     case PROP_ORIENTATION:
@@ -368,7 +369,7 @@ gst_wayland_sink_set_property (GObject * object,
       }
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render current buffer*/
+        /*need to render current buffer */
       }
       break;
     case PROP_FLIP:
@@ -379,7 +380,7 @@ gst_wayland_sink_set_property (GObject * object,
       }
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render current buffer*/
+        /*need to render current buffer */
       }
       break;
 #endif
@@ -1070,6 +1071,12 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       if (ret != GST_FLOW_OK)
         goto no_buffer;
 
+
+      /*add displaying buffer */
+      GstWlMeta *meta;
+      meta = gst_buffer_get_wl_meta (to_render);
+      gst_wayland_buffer_fool_add_displaying_buffer (sink->pool, meta, buffer);
+
     } else {
       /*in case of normal video format and pool is not our pool */
 
@@ -1087,7 +1094,6 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       gst_buffer_fill (to_render, 0, src.data, src.size);
       gst_buffer_unmap (buffer, &src);
     }
-
 #else
     if (!sink->pool)
       goto no_pool;
@@ -1215,7 +1221,8 @@ gst_wayland_sink_update_window_geometry (GstWaylandSink * sink)
     return;
 
   gst_wl_window_set_rotate_angle (sink->window, sink->rotate_angle);
-  gst_wl_window_set_disp_geo_method (sink->window, sink->display_geometry_method);
+  gst_wl_window_set_disp_geo_method (sink->window,
+      sink->display_geometry_method);
   gst_wl_window_set_orientation (sink->window, sink->orientation);
   gst_wl_window_set_flip (sink->window, sink->flip);
 }
