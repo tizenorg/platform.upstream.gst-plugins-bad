@@ -196,6 +196,7 @@ static void gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video);
 static void gst_wayland_sink_end_geometry_change (GstWaylandVideo * video);
 #ifdef GST_WLSINK_ENHANCEMENT
 static void gst_wayland_sink_update_window_geometry (GstWaylandSink * sink);
+static void render_last_buffer (GstWaylandSink * sink);
 #endif
 
 #define gst_wayland_sink_parent_class parent_class
@@ -237,7 +238,9 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
 
   gstbasesink_class->get_caps = GST_DEBUG_FUNCPTR (gst_wayland_sink_get_caps);
   gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR (gst_wayland_sink_set_caps);
+#ifndef GST_WLSINK_ENHANCEMENT
   gstbasesink_class->preroll = GST_DEBUG_FUNCPTR (gst_wayland_sink_preroll);
+#endif
   gstbasesink_class->propose_allocation =
       GST_DEBUG_FUNCPTR (gst_wayland_sink_propose_allocation);
   gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_wayland_sink_render);
@@ -346,6 +349,14 @@ gst_wayland_sink_set_property (GObject * object,
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render current buffer */
+        if (G_UNLIKELY (sink->video_info_changed)) {
+          g_mutex_lock (&sink->render_lock);
+          gst_wl_window_set_video_info (sink->window, &sink->video_info);
+          sink->video_info_changed = FALSE;
+          if (sink->last_buffer)
+            render_last_buffer (sink);
+          g_mutex_unlock (&sink->render_lock);
+        }
       }
       break;
     case PROP_DISPLAY_GEOMETRY_METHOD:
@@ -359,6 +370,14 @@ gst_wayland_sink_set_property (GObject * object,
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render current buffer */
+        if (G_UNLIKELY (sink->video_info_changed)) {
+          g_mutex_lock (&sink->render_lock);
+          gst_wl_window_set_video_info (sink->window, &sink->video_info);
+          sink->video_info_changed = FALSE;
+          if (sink->last_buffer)
+            render_last_buffer (sink);
+          g_mutex_unlock (&sink->render_lock);
+        }
       }
       break;
     case PROP_ORIENTATION:
@@ -370,6 +389,14 @@ gst_wayland_sink_set_property (GObject * object,
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render current buffer */
+        if (G_UNLIKELY (sink->video_info_changed)) {
+          g_mutex_lock (&sink->render_lock);
+          gst_wl_window_set_video_info (sink->window, &sink->video_info);
+          sink->video_info_changed = FALSE;
+          if (sink->last_buffer)
+            render_last_buffer (sink);
+          g_mutex_unlock (&sink->render_lock);
+        }
       }
       break;
     case PROP_FLIP:
@@ -381,6 +408,14 @@ gst_wayland_sink_set_property (GObject * object,
       sink->video_info_changed = TRUE;
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render current buffer */
+        if (G_UNLIKELY (sink->video_info_changed)) {
+          g_mutex_lock (&sink->render_lock);
+          gst_wl_window_set_video_info (sink->window, &sink->video_info);
+          sink->video_info_changed = FALSE;
+          if (sink->last_buffer)
+            render_last_buffer (sink);
+          g_mutex_unlock (&sink->render_lock);
+        }
       }
       break;
 #endif
@@ -975,7 +1010,6 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
   if (G_UNLIKELY (sink->video_info_changed)) {
     gst_wl_window_set_video_info (sink->window, &sink->video_info);
     sink->video_info_changed = FALSE;
-
   }
   GST_INFO ("window->render_rectangle(%d,%d %d x %d)",
       sink->window->render_rectangle.x,
