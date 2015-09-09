@@ -179,16 +179,17 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
   GstWlMeta *meta;
 
   g_mutex_lock (&self->buffers_map_mutex);
+#ifdef GST_WLSINK_ENHANCEMENT
 
+  buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
+  if (buffer) {
+    meta = gst_buffer_get_wl_meta (buffer);
+  }
   /*remove displaying buffer */
   gst_wayland_buffer_pool_remove_displaying_buffer (self, meta, wl_buffer);
 
-  buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
-
   GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
-
-  if (buffer) {
-    meta = gst_buffer_get_wl_meta (buffer);
+  if (meta) {
     if (meta->used_by_compositor) {
       meta->used_by_compositor = FALSE;
       /* unlock before unref because stop() may be called from here */
@@ -196,6 +197,19 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
       gst_buffer_unref (buffer);
     }
   }
+ #else
+ GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
+
+ if (buffer) {
+   meta = gst_buffer_get_wl_meta (buffer);
+   if (meta->used_by_compositor) {
+	 meta->used_by_compositor = FALSE;
+	 /* unlock before unref because stop() may be called from here */
+	 GST_LOG_OBJECT (self, "Decrease ref count of buffer");
+	 gst_buffer_unref (buffer);
+   }
+ }
+ #endif
   g_mutex_unlock (&self->buffers_map_mutex);
 }
 
