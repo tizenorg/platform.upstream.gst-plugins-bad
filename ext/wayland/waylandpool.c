@@ -105,8 +105,7 @@ static gboolean gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool);
 static GstFlowReturn gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool,
     GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
 void gst_wayland_buffer_pool_remove_displaying_buffer (GstWaylandBufferPool *
-    self, GstWlMeta * meta, struct wl_buffer *wl_buffer);
-
+    self, struct wl_buffer *wl_buffer);
 #endif
 
 #define gst_wayland_buffer_pool_parent_class parent_class
@@ -179,17 +178,18 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
   GstWlMeta *meta;
 
   g_mutex_lock (&self->buffers_map_mutex);
-#ifdef GST_WLSINK_ENHANCEMENT
 
-  buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
-  if (buffer) {
-    meta = gst_buffer_get_wl_meta (buffer);
-  }
+#ifdef GST_WLSINK_ENHANCEMENT
   /*remove displaying buffer */
-  gst_wayland_buffer_pool_remove_displaying_buffer (self, meta, wl_buffer);
+  if (self->display->is_native_format == TRUE)
+    gst_wayland_buffer_pool_remove_displaying_buffer (self, wl_buffer);
+#endif
+  buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
 
   GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
-  if (meta) {
+
+  if (buffer) {
+    meta = gst_buffer_get_wl_meta (buffer);
     if (meta->used_by_compositor) {
       meta->used_by_compositor = FALSE;
       /* unlock before unref because stop() may be called from here */
@@ -197,19 +197,6 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
       gst_buffer_unref (buffer);
     }
   }
- #else
- GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
-
- if (buffer) {
-   meta = gst_buffer_get_wl_meta (buffer);
-   if (meta->used_by_compositor) {
-	 meta->used_by_compositor = FALSE;
-	 /* unlock before unref because stop() may be called from here */
-	 GST_LOG_OBJECT (self, "Decrease ref count of buffer");
-	 gst_buffer_unref (buffer);
-   }
- }
- #endif
   g_mutex_unlock (&self->buffers_map_mutex);
 }
 
@@ -731,11 +718,10 @@ gst_wayland_buffer_pool_add_displaying_buffer (GstBufferPool * pool,
 
 void
 gst_wayland_buffer_pool_remove_displaying_buffer (GstWaylandBufferPool * self,
-    GstWlMeta * meta, struct wl_buffer *wl_buffer)
+    struct wl_buffer *wl_buffer)
 {
   FUNCTION_ENTER ();
   g_return_val_if_fail (self, NULL);
-  g_return_val_if_fail (meta, NULL);
   g_return_val_if_fail (wl_buffer, NULL);
 
   GstBuffer *buffer;
@@ -743,7 +729,7 @@ gst_wayland_buffer_pool_remove_displaying_buffer (GstWaylandBufferPool * self,
   buffer = g_hash_table_lookup (self->displaying_buffers_map, wl_buffer);
   if (buffer) {
     GST_LOG_OBJECT (self, "Decrease ref count of buffer(%p) from omx", buffer);
-    g_hash_table_remove (self->displaying_buffers_map, meta->wbuffer);
+    g_hash_table_remove (self->displaying_buffers_map, wl_buffer);
     gst_buffer_unref (buffer);
   }
   g_mutex_unlock (&self->displaying_buffers_map_mutex);
