@@ -66,6 +66,8 @@ gst_wl_meta_free (GstWlMeta * meta, GstBuffer * buffer)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (!meta || !meta->pool)
     return;
+  if (meta->tsurface)
+    tbm_surface_destroy (meta->tsurface);
   g_hash_table_remove (meta->pool->buffers_map, meta->wbuffer);
 #endif
   GST_DEBUG ("destroying wl_buffer %p", meta->wbuffer);
@@ -480,7 +482,7 @@ gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
     /*in case of normal video format */
     size = GST_VIDEO_INFO_SIZE (&self->info) * 15;
 
-    self->display->tbm_bufmgr = tbm_bufmgr_init (self->display->drm_fd);
+    self->display->tbm_bufmgr = wayland_tbm_client_get_bufmgr(self->display->tbm_client);
     g_return_if_fail (self->display->tbm_bufmgr != NULL);
 
     self->display->tbm_bo =
@@ -488,8 +490,6 @@ gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
     if (!self->display->tbm_bo) {
       GST_ERROR_OBJECT (pool, "alloc tbm bo(size:%d) failed: %s", size,
           strerror (errno));
-      tbm_bufmgr_deinit (self->display->tbm_bufmgr);
-      self->display->tbm_bufmgr = NULL;
       return FALSE;
     }
 
@@ -497,9 +497,7 @@ gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool)
     if (!vitual_addr.ptr) {
       GST_ERROR_OBJECT (pool, "get tbm bo handle failed: %s", strerror (errno));
       tbm_bo_unref (self->display->tbm_bo);
-      tbm_bufmgr_deinit (self->display->tbm_bufmgr);
       self->display->tbm_bo = NULL;
-      self->display->tbm_bufmgr = NULL;
       return FALSE;
     }
   }
@@ -523,8 +521,7 @@ gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool)
   self->size = 0;
   self->used = 0;
 
-  tizen_buffer_pool_destroy (self->display->tizen_buffer_pool);
-  self->display->tizen_buffer_pool = NULL;
+  self->display->tbm_bufmgr = NULL;
 
   /* all buffers are about to be destroyed;
    * we should no longer do anything with them */
@@ -549,17 +546,16 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
 
   gint width, height;
   gsize size;
-  enum tizen_buffer_pool_format format;
+  uint32_t format;
   gint data_offset;
   void *data;
   GstWlMeta *meta;
   tbm_bo_handle vitual_addr;
+  tbm_surface_info_s info;
+  int num_bo;
 
   if (self->display->is_native_format == TRUE) {
     /*in case of SN12 or ST12 video  format */
-    unsigned int name[NV_BUF_PLANE_NUM];
-    unsigned int offset[NV_BUF_PLANE_NUM] = { 0, };
-    unsigned int stride[NV_BUF_PLANE_NUM] = { 0, };
     width = GST_VIDEO_INFO_WIDTH (&self->info);
     height = GST_VIDEO_INFO_HEIGHT (&self->info);
     size = self->display->native_video_size;
@@ -593,23 +589,23 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
     meta->pool = self;
     GST_DEBUG ("TBM bo %p %p %p", self->display->bo[0],
         self->display->bo[1], 0);
-    for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
-      if (self->display->bo[i] != NULL) {
-        name[i] = tbm_bo_export (self->display->bo[i]);
-        offset[i] = 0;
-      } else {
-        name[i] = 0;
-        if (i > 0) {
-          offset[i] = offset[i - 1] + self->display->plane_size[i - 1];
-        }
-      }
-      stride[i] = self->display->stride_width[i];
-    }
 
+    info.width = width;
+    info.height = height;
+    info.format = format;
+    info.bpp = tbm_surface_internal_get_bpp (info.format);
+    info.num_planes = tbm_surface_internal_get_num_planes (info.format);
+    info.planes[0].stride = self->display->stride_width[0];
+    info.planes[1].stride = self->display->stride_width[1];
+    info.planes[0].offset = 0;
+    info.planes[1].offset = (self->display->bo[1])?0:self->display->plane_size[0];
+    num_bo = (self->display->bo[1])?2:1;
+
+    meta->tsurface =
+        tbm_surface_internal_create_with_bos(&info, self->display->bo, num_bo);
     meta->wbuffer =
-        tizen_buffer_pool_create_planar_buffer (self->display->
-        tizen_buffer_pool, width, height, format, name[0], offset[0], stride[0],
-        name[1], offset[1], stride[1], 0, 0, 0);
+        wayland_tbm_client_create_buffer(self->display->tbm_client, meta->tsurface);
+    wl_proxy_set_queue ((struct wl_proxy *)meta->wbuffer, self->display->queue);
     meta->used_by_compositor = FALSE;
 
     GST_DEBUG ("tizen_buffer_pool_create_planar_buffer create wl_buffer %p",
@@ -644,9 +640,23 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
     meta = (GstWlMeta *) gst_buffer_add_meta (*buffer, GST_WL_META_INFO, NULL);
     meta->pool = self;
 
+    info.width = width;
+    info.height = height;
+    info.format = format;
+    info.bpp = tbm_surface_internal_get_bpp (info.format);
+    info.num_planes = tbm_surface_internal_get_num_planes (info.format);
+    info.planes[0].stride = GST_VIDEO_INFO_PLANE_STRIDE (&self->info, 0);
+    info.planes[1].stride = GST_VIDEO_INFO_PLANE_STRIDE (&self->info, 1);
+    info.planes[2].stride = GST_VIDEO_INFO_PLANE_STRIDE (&self->info, 2);
+    info.planes[0].offset = GST_VIDEO_INFO_PLANE_OFFSET (&self->info, 0);
+    info.planes[1].offset = GST_VIDEO_INFO_PLANE_OFFSET (&self->info, 1);
+    info.planes[2].offset = GST_VIDEO_INFO_PLANE_OFFSET (&self->info, 2);
+
+    meta->tsurface =
+        tbm_surface_internal_create_with_bos(&info, &self->display->tbm_bo, 1);
     meta->wbuffer =
-        tizen_buffer_pool_create_buffer (self->display->tizen_buffer_pool,
-        tbm_bo_export (self->display->tbm_bo), width, height, stride, format);
+        wayland_tbm_client_create_buffer(self->display->tbm_client, meta->tsurface);
+    wl_proxy_set_queue ((struct wl_proxy *)meta->wbuffer, self->display->queue);
     meta->used_by_compositor = FALSE;
   }
 
@@ -678,7 +688,7 @@ gst_wayland_tizen_buffer_pool_finalize (GObject * object)
 
   GstWaylandBufferPool *pool = GST_WAYLAND_BUFFER_POOL_CAST (object);
 
-  if (pool->display->tizen_buffer_pool) {
+  if (pool->display->tbm_bufmgr) {
     gst_wayland_tizen_buffer_pool_stop (GST_BUFFER_POOL (pool));
   } else {
     /*already stop */

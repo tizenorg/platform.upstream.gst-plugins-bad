@@ -32,87 +32,20 @@
 #include <stdlib.h>
 
 static void
-handle_tizen_buffer_pool_device (void *data,
-    struct tizen_buffer_pool *tizen_buffer_pool, const char *device_name)
+handle_tizen_video_format (void *data,
+    struct tizen_video *tizen_video, uint32_t format)
 {
   FUNCTION_ENTER ();
   GstWlDisplay *self = data;
 
-  g_return_if_fail (self != NULL);
-  g_return_if_fail (device_name != NULL);
-
-  self->device_name = strdup (device_name);
-}
-
-static void
-handle_tizen_buffer_pool_authenticated (void *data,
-    struct tizen_buffer_pool *tizen_buffer_pool)
-{
-  FUNCTION_ENTER ();
-
-  GstWlDisplay *self = data;
-  g_return_if_fail (self != NULL);
-
-  /* authenticated */
-  self->authenticated = 1;
-}
-
-static void
-handle_tizen_buffer_pool_capabilities (void *data,
-    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t value)
-{
-  FUNCTION_ENTER ();
-  GstWlDisplay *self = data;
-  g_return_if_fail (self != NULL);
-
-  drm_magic_t magic;
-
-  /* check if buffer_pool has video capability */
-  if (!(value & TIZEN_BUFFER_POOL_CAPABILITY_VIDEO))
-    return;
-
-  self->has_capability = 1;
-
-  /* do authenticate only if a pool has the video capability */
-#ifdef O_CLOEXEC
-  self->drm_fd = open (self->device_name, O_RDWR | O_CLOEXEC);
-  if (self->drm_fd == -1 && errno == EINVAL)
-#endif
-  {
-    self->drm_fd = open (self->device_name, O_RDWR);
-    if (self->drm_fd != -1)
-      fcntl (self->drm_fd, F_SETFD, fcntl (self->drm_fd, F_GETFD) | FD_CLOEXEC);
-  }
-
-  g_return_if_fail (self->drm_fd >= 0);
-
-  if (drmGetMagic (self->drm_fd, &magic) != 0) {
-    close (self->drm_fd);
-    self->drm_fd = -1;
-    return;
-  }
-
-  tizen_buffer_pool_authenticate (tizen_buffer_pool, magic);
-  wl_display_roundtrip (self->display);
-}
-
-static void
-handle_tizen_buffer_pool_format (void *data,
-    struct tizen_buffer_pool *tizen_buffer_pool, uint32_t format)
-{
-  FUNCTION_ENTER ();
-  GstWlDisplay *self = data;
   g_return_if_fail (self != NULL);
 
   GST_INFO ("format is %d", format);
   g_array_append_val (self->formats, format);
 }
 
-static const struct tizen_buffer_pool_listener tz_buffer_pool_listener = {
-  handle_tizen_buffer_pool_device,
-  handle_tizen_buffer_pool_authenticated,
-  handle_tizen_buffer_pool_capabilities,
-  handle_tizen_buffer_pool_format
+static const struct tizen_video_listener tz_video_listener = {
+  handle_tizen_video_format
 };
 #endif
 
@@ -157,10 +90,11 @@ gst_wl_display_finalize (GObject * gobject)
     /*in case of normal video format */
     if (self->tbm_bo)
       tbm_bo_unref (self->tbm_bo);
-    if (self->tbm_bufmgr)
-      tbm_bufmgr_deinit (self->tbm_bufmgr);
+    if (self->tbm_client)
+      wayland_tbm_client_deinit (self->tbm_client);
     self->tbm_bo = NULL;
     self->tbm_bufmgr = NULL;
+    self->tbm_client = NULL;
   }
 #endif
 
@@ -194,10 +128,8 @@ gst_wl_display_finalize (GObject * gobject)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->tizen_policy)
     tizen_policy_destroy (self->tizen_policy);
-  if (self->device_name)
-    free (self->device_name);
-  if (self->drm_fd >= 0)
-    close (self->drm_fd);
+  if (self->tizen_video)
+    tizen_video_destroy (self->tizen_video);
 #endif
 
   G_OBJECT_CLASS (gst_wl_display_parent_class)->finalize (gobject);
@@ -279,21 +211,14 @@ registry_handle_global (void *data, struct wl_registry *registry,
   } else if (g_strcmp0 (interface, "tizen_policy") == 0) {
     self->tizen_policy =
         wl_registry_bind (registry, id, &tizen_policy_interface, 1);
-  } else if (g_strcmp0 (interface, "tizen_buffer_pool") == 0) {
-
-    self->tizen_buffer_pool =
-        wl_registry_bind (registry, id, &tizen_buffer_pool_interface, 1);
-    g_return_if_fail (self->tizen_buffer_pool != NULL);
+  } else if (g_strcmp0 (interface, "tizen_video") == 0) {
+    self->tizen_video =
+        wl_registry_bind (registry, id, &tizen_video_interface, version);
+    g_return_if_fail (self->tizen_video != NULL);
 
     GST_INFO ("id(%d)", id);
-    self->name = id;
-    self->drm_fd = -1;
 
-    tizen_buffer_pool_add_listener (self->tizen_buffer_pool,
-        &tz_buffer_pool_listener, self);
-
-    /* make sure all tizen_buffer_pool's events are handled */
-    wl_display_roundtrip (self->display);
+    tizen_video_add_listener (self->tizen_video, &tz_video_listener, self);
   }
 #endif
 }
@@ -404,7 +329,14 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
 #ifdef GST_WLSINK_ENHANCEMENT
-  VERIFY_INTERFACE_EXISTS (tizen_buffer_pool, "tizen_buffer_pool");
+  VERIFY_INTERFACE_EXISTS (tizen_video, "tizen_video");
+  self->tbm_client = wayland_tbm_client_init (self->display);
+  if (!self->tbm_client) {
+    *error = g_error_new (g_quark_from_static_string ("GstWlDisplay"), 0,
+        "Error initializing wayland-tbm");
+    g_object_unref (self);
+    return NULL;
+  }
 #else
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
 #endif

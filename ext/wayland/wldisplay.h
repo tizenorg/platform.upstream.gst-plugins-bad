@@ -26,6 +26,7 @@
 #include "scaler-client-protocol.h"
 #ifdef GST_WLSINK_ENHANCEMENT
 #include <tbm_bufmgr.h>
+#include <wayland-tbm-client.h>
 #include <tizen-extension-client-protocol.h>
 #define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
 #endif
@@ -69,14 +70,9 @@ struct _GstWlDisplay
 #ifdef GST_WLSINK_ENHANCEMENT
   /*video output layer */
   struct tizen_policy *tizen_policy;
+  struct tizen_video *tizen_video;
 
-  /*tizen buffer pool */
-  struct tizen_buffer_pool *tizen_buffer_pool;
-  uint32_t name;
-  int has_capability;
-  char *device_name;
-  int drm_fd;
-  int authenticated;
+  struct wayland_tbm_client *tbm_client;
   tbm_bufmgr tbm_bufmgr;
   tbm_bo tbm_bo;
 
