@@ -730,7 +730,7 @@ case $host in
     LIBS=$old_LIBS
     CFLAGS=$old_CFLAGS
 
-    PKG_CHECK_MODULES(WAYLAND_EGL, wayland-client >= 1.0 wayland-cursor >= 1.0 wayland-egl >= 9.0 tizen-extension-client, HAVE_WAYLAND_EGL=yes, HAVE_WAYLAND_EGL=no)
+    PKG_CHECK_MODULES(WAYLAND_EGL, wayland-client >= 1.0 wayland-cursor >= 1.0 wayland-egl >= 9.0 wayland-tbm-client tizen-extension-client, HAVE_WAYLAND_EGL=yes, HAVE_WAYLAND_EGL=no)
   ;;
 esac
 
@@ -2006,7 +2006,7 @@ AG_GST_CHECK_FEATURE(DIRECTFB, [directfb], dfbvideosink , [
 dnl **** Wayland ****
 translit(dnm, m, l) AM_CONDITIONAL(USE_WAYLAND, true)
 AG_GST_CHECK_FEATURE(WAYLAND, [wayland sink], wayland , [
-  PKG_CHECK_MODULES(WAYLAND, wayland-client >= 1.4.0 wayland-scanner tizen-extension-client, [
+  PKG_CHECK_MODULES(WAYLAND, wayland-client >= 1.4.0 wayland-scanner wayland-tbm-client tizen-extension-client, [
     HAVE_WAYLAND="yes" ], [ HAVE_WAYLAND="no"
   ])
 ])

@@ -28,6 +28,7 @@
 #include "wldisplay.h"
 #ifdef GST_WLSINK_ENHANCEMENT
 #include <tbm_bufmgr.h>
+#include <tbm_surface.h>
 #endif
 
 G_BEGIN_DECLS
@@ -61,6 +62,9 @@ struct _GstWlMeta
   GstWaylandBufferPool *pool;
   struct wl_buffer *wbuffer;
   gboolean used_by_compositor;
+#ifdef GST_WLSINK_ENHANCEMENT
+  tbm_surface_h tsurface;
+#endif
 };
 
 /* buffer pool */

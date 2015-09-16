@@ -644,7 +644,7 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
     GArray *formats;
     gint i;
 #ifdef GST_WLSINK_ENHANCEMENT
-    enum tizen_buffer_pool_format fmt;
+    uint32_t fmt;
 #else
     enum wl_shm_format fmt;
 #endif
@@ -657,6 +657,16 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
       fmt = g_array_index (formats, uint32_t, i);
       g_value_set_string (&value, gst_wayland_format_to_string (fmt));
       gst_value_list_append_value (&list, &value);
+#ifdef GST_WLSINK_ENHANCEMENT
+      /* TBM doesn't support SN12. So we add SN12 manually as supported format.
+       * SN12 is exactly same with NV12.
+       */
+      if (fmt == TBM_FORMAT_NV12) {
+        g_value_set_string (&value,
+            gst_video_format_to_string (GST_VIDEO_FORMAT_SN12));
+        gst_value_list_append_value (&list, &value);
+      }
+#endif
     }
 
     caps = gst_caps_make_writable (caps);
@@ -688,7 +698,7 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   GstBufferPool *newpool;
   GstVideoInfo info;
 #ifdef GST_WLSINK_ENHANCEMENT
-  enum tizen_buffer_pool_format format;
+  uint32_t format;
 #else
   enum wl_shm_format format;
 #endif
