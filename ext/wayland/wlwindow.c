@@ -445,7 +445,8 @@ gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
 }
 
 #ifdef GST_WLSINK_ENHANCEMENT
-void gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
+void
+gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
 {
   FUNCTION_ENTER ();
   g_return_if_fail (window != NULL);
@@ -453,21 +454,27 @@ void gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
   GST_INFO ("rotate_angle value is (%d)", window->rotate_angle);
 
 }
-void gst_wl_window_set_disp_geo_method (GstWlWindow * window, guint disp_geo_method)
+
+void
+gst_wl_window_set_disp_geo_method (GstWlWindow * window, guint disp_geo_method)
 {
   FUNCTION_ENTER ();
   g_return_if_fail (window != NULL);
   window->disp_geo_method = disp_geo_method;
   GST_INFO ("disp_geo_method value is (%d)", window->disp_geo_method);
 }
-void gst_wl_window_set_orientation (GstWlWindow * window, guint orientation)
+
+void
+gst_wl_window_set_orientation (GstWlWindow * window, guint orientation)
 {
   FUNCTION_ENTER ();
   g_return_if_fail (window != NULL);
   window->orientation = orientation;
   GST_INFO ("orientation value is (%d)", window->orientation);
 }
-void gst_wl_window_set_flip (GstWlWindow * window, guint flip)
+
+void
+gst_wl_window_set_flip (GstWlWindow * window, guint flip)
 {
   FUNCTION_ENTER ();
   g_return_if_fail (window != NULL);
