@@ -29,6 +29,7 @@
 #ifdef GST_WLSINK_ENHANCEMENT
 #include <tbm_bufmgr.h>
 #include <tbm_surface.h>
+#include <tbm_surface_internal.h>
 #endif
 
 G_BEGIN_DECLS
