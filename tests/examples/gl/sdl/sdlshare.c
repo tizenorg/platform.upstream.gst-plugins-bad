@@ -26,7 +26,6 @@
 #endif
 
 #include <GL/gl.h>
-#include <GL/glu.h>
 #include "SDL/SDL.h"
 #include "SDL/SDL_opengl.h"
 
@@ -38,6 +37,9 @@
 
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
+
+static GstGLContext *sdl_context;
+static GstGLDisplay *sdl_gl_display;
 
 /* rotation angle for the triangle. */
 float rtri = 0.0f;
@@ -58,8 +60,6 @@ InitGL (int Width, int Height)  // We call this right after our OpenGL window is
 
   glMatrixMode (GL_PROJECTION);
   glLoadIdentity ();            // Reset The Projection Matrix
-
-  gluPerspective (45.0f, (GLfloat) Width / (GLfloat) Height, 0.1f, 100.0f);     // Calculate The Aspect Ratio Of The Window
 
   glMatrixMode (GL_MODELVIEW);
 }
@@ -84,17 +84,17 @@ DrawGLScene (GstBuffer * buf)
   glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Clear The Screen And The Depth Buffer
   glLoadIdentity ();            // Reset The View
 
-  glTranslatef (-1.5f, 0.0f, -6.0f);    // Move Left 1.5 Units And Into The Screen 6.0
+  glTranslatef (-0.4f, 0.0f, 0.0f);     // Move Left 1.5 Units And Into The Screen 6.0
 
   glRotatef (rtri, 0.0f, 1.0f, 0.0f);   // Rotate The Triangle On The Y axis 
   // draw a triangle (in smooth coloring mode)
   glBegin (GL_POLYGON);         // start drawing a polygon
   glColor3f (1.0f, 0.0f, 0.0f); // Set The Color To Red
-  glVertex3f (0.0f, 1.0f, 0.0f);        // Top
+  glVertex3f (0.0f, 0.4f, 0.0f);        // Top
   glColor3f (0.0f, 1.0f, 0.0f); // Set The Color To Green
-  glVertex3f (1.0f, -1.0f, 0.0f);       // Bottom Right
+  glVertex3f (0.4f, -0.4f, 0.0f);       // Bottom Right
   glColor3f (0.0f, 0.0f, 1.0f); // Set The Color To Blue
-  glVertex3f (-1.0f, -1.0f, 0.0f);      // Bottom Left  
+  glVertex3f (-0.4f, -0.4f, 0.0f);      // Bottom Left  
   glEnd ();                     // we're done with the polygon (smooth color interpolation)
 
   glEnable (GL_TEXTURE_2D);
@@ -106,20 +106,20 @@ DrawGLScene (GstBuffer * buf)
   glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
   glLoadIdentity ();            // make sure we're no longer rotated.
-  glTranslatef (1.5f, 0.0f, -6.0f);     // Move Right 3 Units, and back into the screen 6.0
+  glTranslatef (0.5f, 0.0f, 0.0f);      // Move Right 3 Units, and back into the screen 6.0
 
   glRotatef (rquad, 1.0f, 0.0f, 0.0f);  // Rotate The Quad On The X axis 
   // draw a square (quadrilateral)
-  glColor3f (0.5f, 0.5f, 1.0f); // set color to a blue shade.
+  glColor3f (0.4f, 0.4f, 1.0f); // set color to a blue shade.
   glBegin (GL_QUADS);           // start drawing a polygon (4 sided)
   glTexCoord3f (0.0f, 1.0f, 0.0f);
-  glVertex3f (-1.0f, 1.0f, 0.0f);       // Top Left
+  glVertex3f (-0.4f, 0.4f, 0.0f);       // Top Left
   glTexCoord3f (1.0f, 1.0f, 0.0f);
-  glVertex3f (1.0f, 1.0f, 0.0f);        // Top Right
+  glVertex3f (0.4f, 0.4f, 0.0f);        // Top Right
   glTexCoord3f (1.0f, 0.0f, 0.0f);
-  glVertex3f (1.0f, -1.0f, 0.0f);       // Bottom Right
+  glVertex3f (0.4f, -0.4f, 0.0f);       // Bottom Right
   glTexCoord3f (0.0f, 0.0f, 0.0f);
-  glVertex3f (-1.0f, -1.0f, 0.0f);      // Bottom Left  
+  glVertex3f (-0.4f, -0.4f, 0.0f);      // Bottom Left  
   glEnd ();                     // done with the polygon
 
   glBindTexture (GL_TEXTURE_2D, 0);
@@ -129,6 +129,8 @@ DrawGLScene (GstBuffer * buf)
 
   // swap buffers to display, since we're double buffered.
   SDL_GL_SwapBuffers ();
+
+  gst_video_frame_unmap (&v_frame);
 }
 
 static gboolean
@@ -229,6 +231,39 @@ end_stream_cb (GstBus * bus, GstMessage * msg, GMainLoop * loop)
   g_main_loop_quit (loop);
 }
 
+static gboolean
+sync_bus_call (GstBus * bus, GstMessage * msg, gpointer data)
+{
+  switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_NEED_CONTEXT:
+    {
+      const gchar *context_type;
+
+      gst_message_parse_context_type (msg, &context_type);
+      g_print ("got need context %s\n", context_type);
+
+      if (g_strcmp0 (context_type, GST_GL_DISPLAY_CONTEXT_TYPE) == 0) {
+        GstContext *display_context =
+            gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+        gst_context_set_gl_display (display_context, sdl_gl_display);
+        gst_element_set_context (GST_ELEMENT (msg->src), display_context);
+        return TRUE;
+      } else if (g_strcmp0 (context_type, "gst.gl.app_context") == 0) {
+        GstContext *app_context = gst_context_new ("gst.gl.app_context", TRUE);
+        GstStructure *s = gst_context_writable_structure (app_context);
+        gst_structure_set (s, "context", GST_GL_TYPE_CONTEXT, sdl_context,
+            NULL);
+        gst_element_set_context (GST_ELEMENT (msg->src), app_context);
+        return TRUE;
+      }
+      break;
+    }
+    default:
+      break;
+  }
+  return FALSE;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -246,13 +281,10 @@ main (int argc, char **argv)
   GMainLoop *loop = NULL;
   GstPipeline *pipeline = NULL;
   GstBus *bus = NULL;
-  GstElement *glfilter = NULL;
   GstElement *fakesink = NULL;
   GstState state;
   GAsyncQueue *queue_input_buf = NULL;
   GAsyncQueue *queue_output_buf = NULL;
-  GstGLDisplay *display;
-  GstGLContext *sdl_context;
   const gchar *platform;
 
   /* Initialize SDL for video output */
@@ -284,40 +316,39 @@ main (int argc, char **argv)
   sdl_dc = wglGetCurrentDC ();
   wglMakeCurrent (0, 0);
   platform = "wgl";
-  display = gst_gl_display_new ();
+  sdl_gl_display = gst_gl_display_new ();
 #else
   SDL_VERSION (&info.version);
   SDL_GetWMInfo (&info);
   /* FIXME: This display is different to the one that SDL uses to create the
    * GL context inside SDL_SetVideoMode() above which fails on Intel hardware
    */
-  sdl_display = info.info.x11.display;
+  sdl_display = info.info.x11.gfxdisplay;
   sdl_win = info.info.x11.window;
   sdl_gl_context = glXGetCurrentContext ();
   glXMakeCurrent (sdl_display, None, 0);
   platform = "glx";
-  display = (GstGLDisplay *) gst_gl_display_x11_new_with_display (sdl_display);
+  sdl_gl_display =
+      (GstGLDisplay *) gst_gl_display_x11_new_with_display (sdl_display);
 #endif
 
-  sdl_context = gst_gl_context_new_wrapped (display, (guintptr) sdl_gl_context,
+  sdl_context =
+      gst_gl_context_new_wrapped (sdl_gl_display, (guintptr) sdl_gl_context,
       gst_gl_platform_from_string (platform), GST_GL_API_OPENGL);
 
   pipeline =
       GST_PIPELINE (gst_parse_launch
       ("videotestsrc ! video/x-raw, width=320, height=240, framerate=(fraction)30/1 ! "
-          "gleffects effect=5 ! fakesink sync=1", NULL));
+          "glupload ! gleffects effect=5 ! fakesink sync=1", NULL));
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
   gst_bus_add_signal_watch (bus);
   g_signal_connect (bus, "message::error", G_CALLBACK (end_stream_cb), loop);
   g_signal_connect (bus, "message::warning", G_CALLBACK (end_stream_cb), loop);
   g_signal_connect (bus, "message::eos", G_CALLBACK (end_stream_cb), loop);
+  gst_bus_enable_sync_message_emission (bus);
+  g_signal_connect (bus, "sync-message", G_CALLBACK (sync_bus_call), NULL);
   gst_object_unref (bus);
-
-  /* sdl_gl_context is an external OpenGL context with which gst-plugins-gl want to share textures */
-  glfilter = gst_bin_get_by_name (GST_BIN (pipeline), "gleffects0");
-  g_object_set (G_OBJECT (glfilter), "other-context", sdl_context, NULL);
-  gst_object_unref (glfilter);
 
   /* NULL to PAUSED state pipeline to make sure the gst opengl context is created and
    * shared with the sdl one */

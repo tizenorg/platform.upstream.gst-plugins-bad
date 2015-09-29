@@ -39,7 +39,7 @@
 #endif
 
 #include <string.h>
-#include <opus/opus.h>
+#include <opus.h>
 #include "gstopusheader.h"
 #include "gstopusparse.h"
 
@@ -199,6 +199,11 @@ gst_opus_parse_handle_frame (GstBaseParse * base,
 
       /* for ad hoc framing, heed the framing, so we eat any padding */
       payload_offset = packet_size;
+    } else {
+      /* Add up all the frame sizes found */
+      int f;
+      for (f = 0; f < nframes; ++f)
+        payload_offset += frame_sizes[f];
     }
   }
 
@@ -354,7 +359,7 @@ gst_opus_parse_parse_frame (GstBaseParse * base, GstBaseParseFrame * frame)
       channel_mapping_family = 0;
       channel_mapping[0] = 0;
       channel_mapping[1] = 1;
-      gst_opus_header_create_caps (&caps, &parse->headers, channels, 1, 0,
+      gst_opus_header_create_caps (&caps, &parse->headers, channels, 1, 48000,
           channel_mapping_family, channel_mapping, NULL);
     }
 

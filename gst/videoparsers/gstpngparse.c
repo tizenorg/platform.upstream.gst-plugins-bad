@@ -49,6 +49,7 @@ GST_STATIC_PAD_TEMPLATE ("sink", GST_PAD_SINK,
 G_DEFINE_TYPE (GstPngParse, gst_png_parse, GST_TYPE_BASE_PARSE);
 
 static gboolean gst_png_parse_start (GstBaseParse * parse);
+static gboolean gst_png_parse_event (GstBaseParse * parse, GstEvent * event);
 static GstFlowReturn gst_png_parse_handle_frame (GstBaseParse * parse,
     GstBaseParseFrame * frame, gint * skipsize);
 static GstFlowReturn gst_png_parse_pre_push_frame (GstBaseParse * parse,
@@ -72,6 +73,7 @@ gst_png_parse_class_init (GstPngParseClass * klass)
 
   /* Override BaseParse vfuncs */
   parse_class->start = GST_DEBUG_FUNCPTR (gst_png_parse_start);
+  parse_class->sink_event = GST_DEBUG_FUNCPTR (gst_png_parse_event);
   parse_class->handle_frame = GST_DEBUG_FUNCPTR (gst_png_parse_handle_frame);
   parse_class->pre_push_frame =
       GST_DEBUG_FUNCPTR (gst_png_parse_pre_push_frame);
@@ -80,6 +82,8 @@ gst_png_parse_class_init (GstPngParseClass * klass)
 static void
 gst_png_parse_init (GstPngParse * pngparse)
 {
+  GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (pngparse));
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (pngparse));
 }
 
 static gboolean
@@ -100,6 +104,24 @@ gst_png_parse_start (GstBaseParse * parse)
   return TRUE;
 }
 
+static gboolean
+gst_png_parse_event (GstBaseParse * parse, GstEvent * event)
+{
+  gboolean res;
+
+  res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_FLUSH_STOP:
+      /* the start code and at least 2 empty frames (IHDR and IEND) */
+      gst_base_parse_set_min_frame_size (parse, 8 + 12 + 12);
+      break;
+    default:
+      break;
+  }
+
+  return res;
+}
 
 static GstFlowReturn
 gst_png_parse_handle_frame (GstBaseParse * parse,
@@ -155,18 +177,27 @@ gst_png_parse_handle_frame (GstBaseParse * parse,
     if (!gst_byte_reader_get_uint32_le (&reader, &code))
       goto beach;
 
+    GST_TRACE_OBJECT (parse, "%" GST_FOURCC_FORMAT " chunk, %u bytes",
+        GST_FOURCC_ARGS (code), length);
+
     if (code == GST_MAKE_FOURCC ('I', 'H', 'D', 'R')) {
       if (!gst_byte_reader_get_uint32_be (&reader, &width))
         goto beach;
       if (!gst_byte_reader_get_uint32_be (&reader, &height))
         goto beach;
       length -= 8;
+    } else if (code == GST_MAKE_FOURCC ('I', 'D', 'A', 'T')) {
+      gst_base_parse_set_min_frame_size (parse,
+          gst_byte_reader_get_pos (&reader) + 4 + length + 12);
     }
 
     if (!gst_byte_reader_skip (&reader, length + 4))
       goto beach;
 
     if (code == GST_MAKE_FOURCC ('I', 'E', 'N', 'D')) {
+      /* the start code and at least 2 empty frames (IHDR and IEND) */
+      gst_base_parse_set_min_frame_size (parse, 8 + 12 + 12);
+
       if (pngparse->width != width || pngparse->height != height) {
         GstCaps *caps, *sink_caps;
 
@@ -192,6 +223,8 @@ gst_png_parse_handle_frame (GstBaseParse * parse,
           } else {
             GST_WARNING_OBJECT (pngparse, "No framerate set");
           }
+
+          gst_caps_unref (sink_caps);
         }
 
         if (!gst_pad_set_caps (GST_BASE_PARSE_SRC_PAD (parse), caps))
@@ -234,8 +267,8 @@ gst_png_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (pngparse),
-        gst_event_new_tag (taglist));
+    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
+    gst_tag_list_unref (taglist);
 
     /* also signals the end of first-frame processing */
     pngparse->sent_codec_tag = TRUE;

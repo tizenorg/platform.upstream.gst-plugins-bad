@@ -1,3 +1,4 @@
+
 ### all of the standard pc files we need to generate
 pcverfiles =  \
 	gstreamer-plugins-bad-@GST_API_VERSION@.pc \
@@ -16,11 +17,6 @@ pcverfiles += gstreamer-gl-@GST_API_VERSION@.pc
 pcverfiles_uninstalled += gstreamer-gl-@GST_API_VERSION@-uninstalled.pc
 endif
 
-if USE_WAYLAND
-pcverfiles += gstreamer-wayland-@GST_API_VERSION@.pc
-pcverfiles_uninstalled += gstreamer-wayland-@GST_API_VERSION@-uninstalled.pc
-endif
-
 all-local: $(pcverfiles) $(pcverfiles_uninstalled)
 
 cp_verbose = $(cp_verbose_$(V))
@@ -37,16 +33,12 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = $(pcverfiles)
 
 CLEANFILES = $(pcverfiles) $(pcverfiles_uninstalled)
-
 pcinfiles = \
            gstreamer-plugins-bad.pc.in gstreamer-plugins-bad-uninstalled.pc.in \
            gstreamer-codecparsers.pc.in gstreamer-codecparsers-uninstalled.pc.in \
            gstreamer-gl.pc.in gstreamer-gl-uninstalled.pc.in \
            gstreamer-insertbin.pc.in gstreamer-insertbin-uninstalled.pc.in \
            gstreamer-mpegts.pc.in gstreamer-mpegts-uninstalled.pc.in
-if USE_WAYLAND
-pcinfiles += gstreamer-wayland.pc.in gstreamer-wayland-uninstalled.pc.in
-endif
 
 DISTCLEANFILES = $(pcinfiles:.in=)
 EXTRA_DIST = $(pcinfiles)

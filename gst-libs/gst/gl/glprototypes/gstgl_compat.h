@@ -36,5 +36,29 @@ typedef ptrdiff_t GLsizeiptr;
 #if !GST_GL_HAVE_GLINTPTR
 typedef ptrdiff_t GLintptr;
 #endif
+#if !GST_GL_HAVE_GLSYNC
+typedef gpointer GLsync;
+#endif
+#if !GST_GL_HAVE_GLUINT64
+typedef guint64 GLuint64;
+#endif
+
+#if !defined(GST_GL_DEBUG_PROC)
+#if defined(GLDEBUGPROC)
+#define GST_GL_DEBUG_PROC GLDEBUGPROC
+#elif defined(GLDEBUGPROCARB)
+#define GST_GL_DEBUG_PROC GLDEBUGPROCARB
+#elif defined(GLDEBUGPROCKHR)
+#define GST_GL_DEBUG_PROC GLDEBUGPROCKHR
+#else
+typedef void (GSTGLAPI *GST_GL_DEBUG_PROC) (GLenum source,
+                                            GLenum type,
+                                            GLuint id,
+                                            GLenum severity,
+                                            GLsizei length,
+                                            const gchar* message,
+                                            gpointer user_data);
+#endif
+#endif
 
 #endif

@@ -184,7 +184,7 @@ gst_gl_shadervariables_parse (GstGLShader * shader, char *variables,
     return 0;
 
   p0 = variables;
-  trimright (p0, " \t\n");
+  trimright (p0, " \t\r\n");
   lim = variables + strlen (variables);
   e = strchr (p0, ';');
   while (p0 < lim) {
@@ -201,13 +201,13 @@ gst_gl_shadervariables_parse (GstGLShader * shader, char *variables,
     e[1] = e1;
 
     trimright (p, " \t");
-    trimleft (p, " \t\n");
+    trimleft (p, " \t\r\n");
 
     t = strtok_r (p, " \t", &saveptr);
     if (!t)
       goto parse_error;
     trimleft (t, " \t");
-    trimright (t, " \t\n");
+    trimright (t, " \t\r\n");
 
     if (t[0]) {
 
@@ -254,12 +254,12 @@ gst_gl_shadervariables_parse (GstGLShader * shader, char *variables,
       trimright (t, " \t");
 
       if (arraysize) {
-        char *s = g_malloc (strlen (vartype) + 32);
-        sprintf (s, "%s[%d]", vartype, arraysize);
+        gchar *s = g_strdup_printf ("%s[%d]", vartype, arraysize);
         if (strcmp (t, s)) {
           g_free (s);
           goto parse_error;
         }
+        g_free (s);
       } else {
         if (strcmp (t, vartype))
           goto parse_error;
@@ -318,7 +318,7 @@ parse_error:
     t = p = p0;
   } else {
     e[1] = 0;
-    trimleft (p0, " \t\n");
+    trimleft (p0, " \t\r\n");
     GST_ERROR ("\n%s", p0);
     e[1] = e1;
   }
@@ -741,7 +741,7 @@ parsevalue (char *value, char *_saveptr, struct gst_gl_shadervariable_desc *ret)
             return _saveptr + j;
         }
         ret->value = (void *) g_malloc (sizeof (float));
-        *((float *) ret->value) = (float) strtod (value, NULL);
+        *((float *) ret->value) = (float) g_ascii_strtod (value, NULL);
 
       } else {
         ret->value = g_malloc (sizeof (float) * ret->count);
@@ -762,7 +762,7 @@ parsevalue (char *value, char *_saveptr, struct gst_gl_shadervariable_desc *ret)
               return _saveptr + (saveptr - t) + j;
           }
 
-          ((float *) ret->value)[i] = (float) strtod (t, NULL);
+          ((float *) ret->value)[i] = (float) g_ascii_strtod (t, NULL);
           t = strtok_r (0, ",", &saveptr);
         }
       }
@@ -925,7 +925,7 @@ vec_parsevalue (int n, char *value, char *_saveptr,
           return _saveptr + (saveptr - t) + j;
       }
 
-      ((float *) ret->value)[i] = (float) strtod (t, NULL);
+      ((float *) ret->value)[i] = (float) g_ascii_strtod (t, NULL);
       t = strtok_r (0, ",", &saveptr);
     }
 
@@ -975,7 +975,7 @@ vec_parsevalue (int n, char *value, char *_saveptr,
             return _saveptr + (t - value) + j;
         }
 
-        ((float *) ret->value)[k * n + i] = (float) strtod (t, NULL);
+        ((float *) ret->value)[k * n + i] = (float) g_ascii_strtod (t, NULL);
         t = strtok_r (0, ",", &saveptr);
         if (i < (n - 1) && !t)
           return _saveptr + (saveptr - value);
@@ -1424,7 +1424,7 @@ mat_parsevalue (int n, int m, char *value, char *_saveptr,
           return _saveptr + (saveptr - t) + j;
       }
 
-      ((float *) ret->value)[i] = (float) strtod (t, NULL);
+      ((float *) ret->value)[i] = (float) g_ascii_strtod (t, NULL);
       t = strtok_r (0, ",", &saveptr);
     }
 
@@ -1474,7 +1474,8 @@ mat_parsevalue (int n, int m, char *value, char *_saveptr,
             return _saveptr + (t - value) + j;
         }
 
-        ((float *) ret->value)[k * n * m + i] = (float) strtod (t, NULL);
+        ((float *) ret->value)[k * n * m + i] =
+            (float) g_ascii_strtod (t, NULL);
         t = strtok_r (0, ",", &saveptr);
         if (i < (n * m - 1) && !t)
           return _saveptr + (saveptr - value);

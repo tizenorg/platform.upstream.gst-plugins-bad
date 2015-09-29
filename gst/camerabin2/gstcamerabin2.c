@@ -167,15 +167,9 @@
 #include <gst/pbutils/pbutils.h>
 #include <gst/glib-compat-private.h>
 
-#if GLIB_CHECK_VERSION(2,29,6)
-#define gst_camerabin2_atomic_int_add g_atomic_int_add
-#else
-#define gst_camerabin2_atomic_int_add g_atomic_int_exchange_and_add
-#endif
-
 #define GST_CAMERA_BIN2_PROCESSING_INC(c)                                \
 {                                                                       \
-  gint bef = gst_camerabin2_atomic_int_add (&c->processing_counter, 1); \
+  gint bef = g_atomic_int_add (&c->processing_counter, 1); \
   if (bef == 0)                                                         \
     g_object_notify (G_OBJECT (c), "idle");                             \
   GST_DEBUG_OBJECT ((c), "Processing counter incremented to: %d",       \
@@ -988,14 +982,7 @@ gst_camera_bin_video_reset_elements (gpointer u_data)
   if (camerabin->audio_src) {
     gst_element_set_state (camerabin->audio_capsfilter, GST_STATE_READY);
     gst_element_set_state (camerabin->audio_volume, GST_STATE_READY);
-
-    /* FIXME We need to set audiosrc to null to make it resync the ringbuffer
-     * while bug https://bugzilla.gnome.org/show_bug.cgi?id=648359 isn't
-     * fixed.
-     *
-     * Also, we don't reinit the audiosrc to keep audio devices from being open
-     * and running until we really need them */
-    gst_element_set_state (camerabin->audio_src, GST_STATE_NULL);
+    gst_element_set_state (camerabin->audio_src, GST_STATE_READY);
 
     if (camerabin->audio_filter) {
       gst_element_set_state (camerabin->audio_filter, GST_STATE_READY);
@@ -1101,17 +1088,24 @@ gst_camera_bin_handle_message (GstBin * bin, GstMessage * message)
 
         g_mutex_lock (&camerabin->video_capture_mutex);
         GST_DEBUG_OBJECT (bin, "EOS from video branch");
-        g_assert (camerabin->video_state == GST_CAMERA_BIN_VIDEO_FINISHING);
-
-        if (!g_thread_try_new ("reset-element-thread",
-                gst_camera_bin_video_reset_elements, gst_object_ref (camerabin),
-                NULL)) {
-          GST_WARNING_OBJECT (camerabin,
-              "Failed to create thread to "
-              "reset video elements' state, video recordings may not work "
-              "anymore");
-          gst_object_unref (camerabin);
-          camerabin->video_state = GST_CAMERA_BIN_VIDEO_IDLE;
+        if (camerabin->video_state == GST_CAMERA_BIN_VIDEO_FINISHING) {
+          if (!g_thread_try_new ("reset-element-thread",
+                  gst_camera_bin_video_reset_elements,
+                  gst_object_ref (camerabin), NULL)) {
+            GST_WARNING_OBJECT (camerabin,
+                "Failed to create thread to "
+                "reset video elements' state, video recordings may not work "
+                "anymore");
+            gst_object_unref (camerabin);
+            camerabin->video_state = GST_CAMERA_BIN_VIDEO_IDLE;
+          }
+        } else if (camerabin->video_state == GST_CAMERA_BIN_VIDEO_IDLE) {
+          GST_DEBUG_OBJECT (camerabin, "Received EOS from video branch but "
+              "video recording is idle, ignoring");
+        } else {
+          GST_WARNING_OBJECT (camerabin, "Received EOS from video branch but "
+              "video is recording and stop-capture wasn't requested");
+          g_assert_not_reached ();
         }
 
         g_mutex_unlock (&camerabin->video_capture_mutex);
@@ -1331,10 +1325,18 @@ static void
 gst_camera_bin_src_notify_max_zoom_cb (GObject * self, GParamSpec * pspec,
     gpointer user_data)
 {
+  GParamSpecFloat *zoom_pspec;
   GstCameraBin2 *camera = (GstCameraBin2 *) user_data;
 
   g_object_get (self, "max-zoom", &camera->max_zoom, NULL);
   GST_DEBUG_OBJECT (camera, "Max zoom updated to %f", camera->max_zoom);
+
+  /* update zoom pspec */
+  zoom_pspec =
+      G_PARAM_SPEC_FLOAT (g_object_class_find_property (G_OBJECT_GET_CLASS
+          (G_OBJECT (camera)), "zoom"));
+  zoom_pspec->maximum = camera->max_zoom;
+
   g_object_notify (G_OBJECT (camera), "max-zoom");
 }
 
@@ -1760,7 +1762,7 @@ gst_camera_bin_create_elements (GstCameraBin2 * camera)
         G_CALLBACK (gst_camera_bin_src_notify_readyforcapture), camera);
 
     if (!gst_element_link_pads (camera->src, "vfsrc",
-	    camera->viewfinderbin_queue, "sink")) {
+            camera->viewfinderbin_queue, "sink")) {
       GST_ERROR_OBJECT (camera,
           "Failed to link camera source's vfsrc pad to viewfinder queue");
       goto fail;
@@ -2024,7 +2026,7 @@ gst_camera_bin_set_audio_src (GstCameraBin2 * camera, GstElement * src)
     g_object_unref (camera->user_audio_src);
 
   if (src)
-    g_object_ref (src);
+    gst_object_ref (src);
   camera->user_audio_src = src;
 }
 
@@ -2038,7 +2040,7 @@ gst_camera_bin_set_camera_src (GstCameraBin2 * camera, GstElement * src)
     g_object_unref (camera->user_src);
 
   if (src)
-    g_object_ref (src);
+    gst_object_ref (src);
   camera->user_src = src;
 }
 

@@ -64,6 +64,8 @@ struct _GstGLWindowX11
   gint          depth;
   gint          device_width;
   gint          device_height;
+  gint          current_width;
+  gint          current_height;
   gint          connection;
   XVisualInfo  *visual_info;
   Window        parent_win;
@@ -72,8 +74,6 @@ struct _GstGLWindowX11
   Window        internal_win_id;
 
   GSource *x11_source;
-  GMainContext *main_context;
-  GMainLoop *loop;
 
   /*< private >*/
   GstGLWindowX11Private *priv;

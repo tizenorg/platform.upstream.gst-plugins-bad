@@ -57,7 +57,7 @@ static GType
 gst_voamrwbenc_bandmode_get_type (void)
 {
   static GType gst_voamrwbenc_bandmode_type = 0;
-  static GEnumValue gst_voamrwbenc_bandmode[] = {
+  static const GEnumValue gst_voamrwbenc_bandmode[] = {
     {MR660, "MR660", "MR660"},
     {MR885, "MR885", "MR885"},
     {MR1265, "MR1265", "MR1265"},
@@ -190,6 +190,8 @@ gst_voamrwbenc_class_init (GstVoAmrWbEncClass * klass)
 static void
 gst_voamrwbenc_init (GstVoAmrWbEnc * amrwbenc)
 {
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (amrwbenc));
+
   /* init rest */
   amrwbenc->handle = NULL;
   amrwbenc->channels = 0;

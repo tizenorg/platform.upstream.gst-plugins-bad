@@ -95,11 +95,11 @@ gst_fragment_get_property (GObject * object,
       break;
 
     case PROP_BUFFER:
-      g_value_set_boxed (value, gst_fragment_get_buffer (fragment));
+      g_value_take_boxed (value, gst_fragment_get_buffer (fragment));
       break;
 
     case PROP_CAPS:
-      g_value_set_boxed (value, gst_fragment_get_caps (fragment));
+      g_value_take_boxed (value, gst_fragment_get_caps (fragment));
       break;
 
     default:
@@ -167,6 +167,7 @@ gst_fragment_init (GstFragment * fragment)
   fragment->name = g_strdup ("");
   fragment->completed = FALSE;
   fragment->discontinuous = FALSE;
+  fragment->headers = NULL;
 }
 
 GstFragment *
@@ -183,6 +184,8 @@ gst_fragment_finalize (GObject * gobject)
   g_free (fragment->uri);
   g_free (fragment->redirect_uri);
   g_free (fragment->name);
+  if (fragment->headers)
+    gst_structure_free (fragment->headers);
   g_mutex_clear (&fragment->priv->lock);
 
   G_OBJECT_CLASS (gst_fragment_parent_class)->finalize (gobject);

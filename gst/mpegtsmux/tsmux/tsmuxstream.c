@@ -180,6 +180,7 @@ tsmux_stream_new (guint16 pid, TsMuxStreamType stream_type)
     case TSMUX_ST_PS_TELETEXT:
       /* needs fixes PES header length */
       stream->pi.pes_header_length = 36;
+      /* fall through */
     case TSMUX_ST_PS_DVB_SUBPICTURE:
       /* private stream 1 */
       stream->id = 0xBD;
@@ -190,13 +191,22 @@ tsmux_stream_new (guint16 pid, TsMuxStreamType stream_type)
           TSMUX_PACKET_FLAG_PES_DATA_ALIGNMENT;
 
       break;
+    case TSMUX_ST_PS_KLV:
+      /* FIXME: assign sequential extended IDs? */
+      stream->id = 0xBD;
+      stream->stream_type = TSMUX_ST_PRIVATE_DATA;
+      stream->is_meta = TRUE;
+      stream->pi.flags |=
+          TSMUX_PACKET_FLAG_PES_FULL_HEADER |
+          TSMUX_PACKET_FLAG_PES_DATA_ALIGNMENT;
+      break;
     default:
       g_critical ("Stream type 0x%0x not yet implemented", stream_type);
       break;
   }
 
-  stream->last_pts = -1;
-  stream->last_dts = -1;
+  stream->last_pts = GST_CLOCK_STIME_NONE;
+  stream->last_dts = GST_CLOCK_STIME_NONE;
 
   stream->pcr_ref = 0;
   stream->last_pcr = -1;
@@ -278,10 +288,10 @@ tsmux_stream_consume (TsMuxStream * stream, guint len)
   if (stream->cur_buffer_consumed == 0)
     return;
 
-  if (stream->cur_buffer->pts != -1) {
+  if (GST_CLOCK_STIME_IS_VALID (stream->cur_buffer->pts)) {
     stream->last_pts = stream->cur_buffer->pts;
     stream->last_dts = stream->cur_buffer->dts;
-  } else if (stream->cur_buffer->dts != -1)
+  } else if (GST_CLOCK_STIME_IS_VALID (stream->cur_buffer->dts))
     stream->last_dts = stream->cur_buffer->dts;
 
   if (stream->cur_buffer_consumed == stream->cur_buffer->size) {
@@ -406,10 +416,12 @@ tsmux_stream_initialize_pes_packet (TsMuxStream * stream)
   stream->pi.flags &= ~(TSMUX_PACKET_FLAG_PES_WRITE_PTS_DTS |
       TSMUX_PACKET_FLAG_PES_WRITE_PTS);
 
-  if (stream->pts != -1 && stream->dts != -1 && stream->pts != stream->dts)
+  if (GST_CLOCK_STIME_IS_VALID (stream->pts)
+      && GST_CLOCK_STIME_IS_VALID (stream->dts)
+      && stream->pts != stream->dts)
     stream->pi.flags |= TSMUX_PACKET_FLAG_PES_WRITE_PTS_DTS;
   else {
-    if (stream->pts != -1)
+    if (GST_CLOCK_STIME_IS_VALID (stream->pts))
       stream->pi.flags |= TSMUX_PACKET_FLAG_PES_WRITE_PTS;
   }
 
@@ -545,8 +557,8 @@ tsmux_stream_find_pts_dts_within (TsMuxStream * stream, guint bound,
 {
   GList *cur;
 
-  *pts = -1;
-  *dts = -1;
+  *pts = GST_CLOCK_STIME_NONE;
+  *dts = GST_CLOCK_STIME_NONE;
 
   for (cur = stream->buffers; cur; cur = cur->next) {
     TsMuxStreamBuffer *curbuf = cur->data;
@@ -561,7 +573,8 @@ tsmux_stream_find_pts_dts_within (TsMuxStream * stream, guint bound,
     }
 
     /* Have we found a buffer with pts/dts set? */
-    if (curbuf->pts != -1 || curbuf->dts != -1) {
+    if (GST_CLOCK_STIME_IS_VALID (curbuf->pts)
+        || GST_CLOCK_STIME_IS_VALID (curbuf->dts)) {
       *pts = curbuf->pts;
       *dts = curbuf->dts;
       return;
@@ -655,7 +668,7 @@ tsmux_stream_write_pes_header (TsMuxStream * stream, guint8 * data)
  *
  * Submit @len bytes of @data into @stream. @pts and @dts can be set to the
  * timestamp (against a 90Hz clock) of the first access unit in @data. A
- * timestamp of -1 for @pts or @dts means unknown.
+ * timestamp of GST_CLOCK_STIME_NNOE for @pts or @dts means unknown.
  *
  * @user_data will be passed to the release function as set with
  * tsmux_stream_set_buffer_release_func() when @data can be freed.
@@ -897,6 +910,11 @@ tsmux_stream_get_es_descrs (TsMuxStream * stream,
         g_ptr_array_add (pmt_stream->descriptors, descriptor);
         break;
       }
+      if (stream->is_meta) {
+        descriptor = gst_mpegts_descriptor_from_registration ("KLVA", NULL, 0);
+        GST_ERROR ("adding KLVA registration descriptor!");
+        g_ptr_array_add (pmt_stream->descriptors, descriptor);
+      }
     default:
       break;
   }
@@ -956,7 +974,7 @@ tsmux_stream_is_pcr (TsMuxStream * stream)
 guint64
 tsmux_stream_get_pts (TsMuxStream * stream)
 {
-  g_return_val_if_fail (stream != NULL, -1);
+  g_return_val_if_fail (stream != NULL, GST_CLOCK_STIME_NONE);
 
   return stream->last_pts;
 }

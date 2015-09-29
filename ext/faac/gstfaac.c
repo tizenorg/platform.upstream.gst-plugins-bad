@@ -55,12 +55,6 @@
                     "64000, " \
                     "88200, " \
                     "96000"
-#define SINK_CAPS \
-    "audio/x-raw, "                \
-    "format = (string) "GST_AUDIO_NE (S16) ", "  \
-    "layout = (string) interleaved, " \
-    "rate = (int) {" SAMPLE_RATES "}, "   \
-    "channels = (int) [ 1, 6 ] "
 
 /* these don't seem to work? */
 #if 0
@@ -82,22 +76,19 @@
     "channels = (int) [ 1, 6 ], "      \
     "rate = (int) {" SAMPLE_RATES "}, "   \
     "stream-format = (string) { adts, raw }, " \
-    "base-profile = (string) { main, lc, ssr, ltp }; " \
+    "base-profile = (string) { main, lc, ssr, ltp }, " \
+    "framed = (boolean) true; " \
     "audio/mpeg, "                     \
     "mpegversion = (int) 2, "   \
     "channels = (int) [ 1, 6 ], "      \
     "rate = (int) {" SAMPLE_RATES "}, "   \
     "stream-format = (string) { adts, raw }, " \
-    "profile = (string) { main, lc }"
+    "profile = (string) { main, lc }," \
+    "framed = (boolean) true; "
 static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS (SRC_CAPS));
-
-static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS (SINK_CAPS));
 
 enum
 {
@@ -122,9 +113,9 @@ static void gst_faac_set_property (GObject * object,
 static void gst_faac_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
+static GstCaps *gst_faac_enc_generate_sink_caps (void);
 static gboolean gst_faac_configure_source_pad (GstFaac * faac,
     GstAudioInfo * info);
-static GstCaps *gst_faac_getcaps (GstAudioEncoder * enc, GstCaps * filter);
 
 static gboolean gst_faac_stop (GstAudioEncoder * enc);
 static gboolean gst_faac_set_format (GstAudioEncoder * enc,
@@ -152,7 +143,7 @@ gst_faac_brtype_get_type (void)
   static GType gst_faac_brtype_type = 0;
 
   if (!gst_faac_brtype_type) {
-    static GEnumValue gst_faac_brtype[] = {
+    static const GEnumValue gst_faac_brtype[] = {
       {VBR, "VBR", "VBR encoding"},
       {ABR, "ABR", "ABR encoding"},
       {0, NULL, NULL},
@@ -172,7 +163,7 @@ gst_faac_shortctl_get_type (void)
   static GType gst_faac_shortctl_type = 0;
 
   if (!gst_faac_shortctl_type) {
-    static GEnumValue gst_faac_shortctl[] = {
+    static const GEnumValue gst_faac_shortctl[] = {
       {SHORTCTL_NORMAL, "SHORTCTL_NORMAL", "Normal block type"},
       {SHORTCTL_NOSHORT, "SHORTCTL_NOSHORT", "No short blocks"},
       {SHORTCTL_NOLONG, "SHORTCTL_NOLONG", "No long blocks"},
@@ -192,14 +183,20 @@ gst_faac_class_init (GstFaacClass * klass)
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
   GstAudioEncoderClass *base_class = GST_AUDIO_ENCODER_CLASS (klass);
+  GstCaps *sink_caps;
+  GstPadTemplate *sink_templ;
 
   gobject_class->set_property = gst_faac_set_property;
   gobject_class->get_property = gst_faac_get_property;
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&src_template));
-  gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&sink_template));
+
+  sink_caps = gst_faac_enc_generate_sink_caps ();
+  sink_templ = gst_pad_template_new ("sink",
+      GST_PAD_SINK, GST_PAD_ALWAYS, sink_caps);
+  gst_element_class_add_pad_template (gstelement_class, sink_templ);
+  gst_caps_unref (sink_caps);
 
   gst_element_class_set_static_metadata (gstelement_class, "AAC audio encoder",
       "Codec/Encoder/Audio",
@@ -209,7 +206,6 @@ gst_faac_class_init (GstFaacClass * klass)
   base_class->stop = GST_DEBUG_FUNCPTR (gst_faac_stop);
   base_class->set_format = GST_DEBUG_FUNCPTR (gst_faac_set_format);
   base_class->handle_frame = GST_DEBUG_FUNCPTR (gst_faac_handle_frame);
-  base_class->getcaps = GST_DEBUG_FUNCPTR (gst_faac_getcaps);
 
   /* properties */
   g_object_class_install_property (gobject_class, PROP_QUALITY,
@@ -247,6 +243,7 @@ gst_faac_class_init (GstFaacClass * klass)
 static void
 gst_faac_init (GstFaac * faac)
 {
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (faac));
 }
 
 static void
@@ -297,58 +294,51 @@ static const GstAudioChannelPosition aac_channel_positions[][8] = {
 };
 
 static GstCaps *
-gst_faac_getcaps (GstAudioEncoder * enc, GstCaps * filter)
+gst_faac_enc_generate_sink_caps (void)
 {
-  static volatile gsize sinkcaps = 0;
+  GstCaps *caps = gst_caps_new_empty ();
+  GstStructure *s, *t;
+  gint i, c;
+  static const int rates[] = {
+    8000, 11025, 12000, 16000, 22050, 24000,
+    32000, 44100, 48000, 64000, 88200, 96000
+  };
+  GValue rates_arr = { 0, };
+  GValue tmp_v = { 0, };
 
-  if (g_once_init_enter (&sinkcaps)) {
-    GstCaps *tmp = gst_caps_new_empty ();
-    GstStructure *s, *t;
-    gint i, c;
-    static const int rates[] = {
-      8000, 11025, 12000, 16000, 22050, 24000,
-      32000, 44100, 48000, 64000, 88200, 96000
-    };
-    GValue rates_arr = { 0, };
-    GValue tmp_v = { 0, };
-
-    g_value_init (&rates_arr, GST_TYPE_LIST);
-    g_value_init (&tmp_v, G_TYPE_INT);
-    for (i = 0; i < G_N_ELEMENTS (rates); i++) {
-      g_value_set_int (&tmp_v, rates[i]);
-      gst_value_list_append_value (&rates_arr, &tmp_v);
-    }
-    g_value_unset (&tmp_v);
-
-    s = gst_structure_new ("audio/x-raw",
-        "format", G_TYPE_STRING, GST_AUDIO_NE (S16),
-        "layout", G_TYPE_STRING, "interleaved", NULL);
-    gst_structure_set_value (s, "rate", &rates_arr);
-
-    for (i = 1; i <= 6; i++) {
-      guint64 channel_mask = 0;
-      t = gst_structure_copy (s);
-
-      gst_structure_set (t, "channels", G_TYPE_INT, i, NULL);
-      if (i > 1) {
-        for (c = 0; c < i; c++)
-          channel_mask |=
-              G_GUINT64_CONSTANT (1) << aac_channel_positions[i - 1][c];
-
-        gst_structure_set (t, "channel-mask", GST_TYPE_BITMASK, channel_mask,
-            NULL);
-      }
-      gst_caps_append_structure (tmp, t);
-    }
-    gst_structure_free (s);
-    g_value_unset (&rates_arr);
-
-    GST_DEBUG_OBJECT (enc, "Generated sinkcaps: %" GST_PTR_FORMAT, tmp);
-
-    g_once_init_leave (&sinkcaps, (gsize) tmp);
+  g_value_init (&rates_arr, GST_TYPE_LIST);
+  g_value_init (&tmp_v, G_TYPE_INT);
+  for (i = 0; i < G_N_ELEMENTS (rates); i++) {
+    g_value_set_int (&tmp_v, rates[i]);
+    gst_value_list_append_value (&rates_arr, &tmp_v);
   }
+  g_value_unset (&tmp_v);
 
-  return gst_audio_encoder_proxy_getcaps (enc, (GstCaps *) sinkcaps, filter);
+  s = gst_structure_new ("audio/x-raw",
+      "format", G_TYPE_STRING, GST_AUDIO_NE (S16),
+      "layout", G_TYPE_STRING, "interleaved", NULL);
+  gst_structure_set_value (s, "rate", &rates_arr);
+
+  t = gst_structure_copy (s);
+  gst_structure_set (t, "channels", G_TYPE_INT, 1, NULL);
+  gst_caps_append_structure (caps, t);
+
+  for (i = 2; i <= 6; i++) {
+    guint64 channel_mask = 0;
+    t = gst_structure_copy (s);
+
+    gst_structure_set (t, "channels", G_TYPE_INT, i, NULL);
+    for (c = 0; c < i; c++)
+      channel_mask |= G_GUINT64_CONSTANT (1) << aac_channel_positions[i - 1][c];
+
+    gst_structure_set (t, "channel-mask", GST_TYPE_BITMASK, channel_mask, NULL);
+    gst_caps_append_structure (caps, t);
+  }
+  gst_structure_free (s);
+  g_value_unset (&rates_arr);
+
+  GST_DEBUG ("Generated sinkcaps: %" GST_PTR_FORMAT, caps);
+  return caps;
 }
 
 static gboolean
@@ -550,7 +540,7 @@ gst_faac_configure_source_pad (GstFaac * faac, GstAudioInfo * info)
       "channels", G_TYPE_INT, info->channels,
       "rate", G_TYPE_INT, info->rate,
       "stream-format", G_TYPE_STRING, (faac->outputformat ? "adts" : "raw"),
-      NULL);
+      "framed", G_TYPE_BOOLEAN, TRUE, NULL);
 
   /* DecoderSpecificInfo is only available for mpegversion=4 */
   if (faac->mpegversion == 4) {

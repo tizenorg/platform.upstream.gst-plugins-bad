@@ -38,74 +38,16 @@ static GstGLPlatform gst_gl_context_cocoa_get_gl_platform (GstGLContext * contex
 #define GST_GL_CONTEXT_COCOA_GET_PRIVATE(o)  \
   (G_TYPE_INSTANCE_GET_PRIVATE((o), GST_GL_TYPE_CONTEXT_COCOA, GstGLContextCocoaPrivate))
 
-G_DEFINE_TYPE (GstGLContextCocoa, gst_gl_context_cocoa, GST_GL_TYPE_CONTEXT);
+GST_DEBUG_CATEGORY_STATIC (gst_gl_context_cocoa_debug);
+#define GST_CAT_DEFAULT gst_gl_context_cocoa_debug
 
-#ifndef GNUSTEP
-static GMutex nsapp_lock;
-static GCond nsapp_cond;
-
-static gboolean
-gst_gl_window_cocoa_init_nsapp (gpointer data)
-{
-  NSAutoreleasePool *pool = nil;
-
-  g_mutex_lock (&nsapp_lock);
-
-  pool = [[NSAutoreleasePool alloc] init];
-
-  /* The sharedApplication class method initializes
-   * the display environment and connects your program
-   * to the window server and the display server
-   */
-
-  /* TODO: so consider to create GstGLDisplayCocoa
-   * in gst/gl/cocoa/gstgldisplay_cocoa.h/c
-   */
-
-  /* has to be called in the main thread */
-  [NSApplication sharedApplication];
-
-  GST_DEBUG ("NSApp initialized from a GTimeoutSource");
-
-  [pool release];
-
-  g_cond_signal (&nsapp_cond);
-  g_mutex_unlock (&nsapp_lock);
-
-  return FALSE;
-}
-
-static gboolean
-gst_gl_window_cocoa_nsapp_iteration (gpointer data)
-{
-  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-
-  NSEvent *event = nil;
-
-  if ([NSThread isMainThread]) {
-
-    while ((event = ([NSApp nextEventMatchingMask:NSAnyEventMask
-      untilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]
-      inMode:NSDefaultRunLoopMode dequeue:YES])) != nil) {
-
-      [NSApp sendEvent:event];
-    }
-  }
-
-  [pool release];
-
-  return TRUE;
-}
-#endif
+G_DEFINE_TYPE_WITH_CODE (GstGLContextCocoa, gst_gl_context_cocoa,
+    GST_GL_TYPE_CONTEXT, GST_DEBUG_CATEGORY_INIT (gst_gl_context_cocoa_debug, "glcontext_cocoa", 0, "Cocoa GL Context"); );
 
 static void
 gst_gl_context_cocoa_class_init (GstGLContextCocoaClass * klass)
 {
   GstGLContextClass *context_class = (GstGLContextClass *) klass;
-
-#ifndef GNUSTEP
-  NSAutoreleasePool* pool = nil;
-#endif
 
   g_type_class_add_private (klass, sizeof (GstGLContextCocoaPrivate));
 
@@ -120,62 +62,6 @@ gst_gl_context_cocoa_class_init (GstGLContextCocoaClass * klass)
       GST_DEBUG_FUNCPTR (gst_gl_context_cocoa_get_gl_api);
   context_class->get_gl_platform =
       GST_DEBUG_FUNCPTR (gst_gl_context_cocoa_get_gl_platform);
-
-#ifndef GNUSTEP
-  pool = [[NSAutoreleasePool alloc] init];
-
-  /* [NSApplication sharedApplication] will usually be
-   * called in your application so it's not necessary
-   * to do that the following. Except for debugging 
-   * purpose like when using gst-launch.
-   * So here we handle the two cases where the first
-   * GstGLContext is either created in the main thread
-   * or from another thread like a streaming thread
-   */
-
-  if ([NSThread isMainThread]) {
-    /* In the main thread so just do the call now */
-    
-    /* The sharedApplication class method initializes
-     * the display environment and connects your program
-     * to the window server and the display server
-     */
-
-    /* TODO: so consider to create GstGLDisplayCocoa
-     * in gst/gl/cocoa/gstgldisplay_cocoa.h/c
-     */
-
-    /* has to be called in the main thread */
-    [NSApplication sharedApplication];
-
-    GST_DEBUG ("NSApp initialized");
-  } else {
-    /* Not in the main thread, assume there is a
-     * glib main loop running this is for debugging
-     * purposes so that's ok to let us a chance
-     */
-    gboolean is_loop_running = FALSE;
-    gint64 end_time = 0;
-
-    g_mutex_init (&nsapp_lock);
-    g_cond_init (&nsapp_cond);
-
-    g_mutex_lock (&nsapp_lock);
-    g_idle_add_full (G_PRIORITY_HIGH, gst_gl_window_cocoa_init_nsapp, NULL, NULL);
-    end_time = g_get_monotonic_time () + 2 * 1000 * 1000;
-    is_loop_running = g_cond_wait_until (&nsapp_cond, &nsapp_lock, end_time);
-    g_mutex_unlock (&nsapp_lock);
-
-    if (!is_loop_running) {
-      GST_WARNING ("no mainloop running");
-    }
-
-    g_cond_clear (&nsapp_cond);
-    g_mutex_clear (&nsapp_lock);
-  }
-
-  [pool release];
-#endif
 }
 
 static void
@@ -186,11 +72,91 @@ gst_gl_context_cocoa_init (GstGLContextCocoa * context)
 
 /* Must be called in the gl thread */
 GstGLContextCocoa *
-gst_gl_context_cocoa_new (void)
+gst_gl_context_cocoa_new (GstGLDisplay * display)
 {
-  GstGLContextCocoa *context = g_object_new (GST_GL_TYPE_CONTEXT_COCOA, NULL);
+  if ((gst_gl_display_get_handle_type (display) & GST_GL_DISPLAY_TYPE_COCOA) == 0)
+    /* we require an cocoa display to create CGL contexts */
+    return NULL;
 
-  return context;
+  return g_object_new (GST_GL_TYPE_CONTEXT_COCOA, NULL);
+}
+
+struct pixel_attr
+{
+  CGLPixelFormatAttribute attr;
+  const gchar *attr_name;
+};
+
+static struct pixel_attr pixel_attrs[] = {
+  {kCGLPFAAllRenderers, "All Renderers"},
+  {kCGLPFADoubleBuffer, "Double Buffered"},
+  {kCGLPFAStereo, "Stereo"},
+  {kCGLPFAAuxBuffers, "Aux Buffers"},
+  {kCGLPFAColorSize, "Color Size"},
+  {kCGLPFAAlphaSize, "Alpha Size"},
+  {kCGLPFADepthSize, "Depth Size"},
+  {kCGLPFAStencilSize, "Stencil Size"},
+  {kCGLPFAAccumSize, "Accum Size"},
+  {kCGLPFAMinimumPolicy, "Minimum Policy"},
+  {kCGLPFAMaximumPolicy, "Maximum Policy"},
+  {kCGLPFASampleBuffers, "Sample Buffers"},
+  {kCGLPFASamples, "Samples"},
+  {kCGLPFAAuxDepthStencil, "Aux Depth Stencil"},
+  {kCGLPFAColorFloat, "Color Float"},
+  {kCGLPFAMultisample, "Multisample"},
+  {kCGLPFASupersample, "Supersample"},
+  {kCGLPFARendererID, "Renderer ID"},
+  {kCGLPFANoRecovery, "No Recovery"},
+  {kCGLPFAAccelerated, "Accelerated"},
+  {kCGLPFAClosestPolicy, "Closest Policy"},
+  {kCGLPFABackingStore, "Backing Store"},
+  {kCGLPFADisplayMask, "Display Mask"},
+  {kCGLPFAAllowOfflineRenderers, "Allow Offline Renderers"},
+  {kCGLPFAAcceleratedCompute, "Accelerated Compute"},
+  {kCGLPFAOpenGLProfile, "OpenGL Profile"},
+  {kCGLPFAVirtualScreenCount, "Virtual Screen Count"},
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1090
+  {kCGLPFACompliant, "Compliant"},
+  {kCGLPFARemotePBuffer, "Remote PBuffer"},
+  {kCGLPFASingleRenderer, "Single Renderer"},
+  {kCGLPFAWindow, "Window"},
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
+//  {kCGLPFAOffScreen, "Off Screen"},
+//  {kCGLPFAPBuffer, "PBuffer"},
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1060
+//  {kCGLPFAFullScreen, "Full Screen"},
+#endif
+#if MAC_OS_X_VERSION_MAX_ALLOWED < 1050
+//  {kCGLPFAMPSafe, "MP Safe"},
+//  {kCGLPFAMultiScreen, "Multi Screen"},
+//  {kCGLPFARobust, "Robust"},
+#endif
+};
+
+void
+gst_gl_context_cocoa_dump_pixel_format (CGLPixelFormatObj fmt)
+{
+  int i;
+
+  for (i = 0; i < G_N_ELEMENTS (pixel_attrs); i++) {
+    gint val;
+    CGLError ret = CGLDescribePixelFormat (fmt, 0, pixel_attrs[i].attr, &val);
+
+    if (ret != kCGLNoError) {
+      GST_WARNING ("failed to get pixel format %p attribute %s", fmt, pixel_attrs[i].attr_name);
+    } else {
+      GST_DEBUG ("Pixel format %p attr %s = %i", fmt, pixel_attrs[i].attr_name,
+          val);
+    }
+  }
+}
+
+CGLPixelFormatObj
+gst_gl_context_cocoa_get_pixel_format (GstGLContextCocoa *context)
+{
+  return context->priv->pixel_format;
 }
 
 static gboolean
@@ -201,116 +167,125 @@ gst_gl_context_cocoa_create_context (GstGLContext *context, GstGLAPI gl_api,
   GstGLContextCocoaPrivate *priv = context_cocoa->priv;
   GstGLWindow *window = gst_gl_context_get_window (context);
   GstGLWindowCocoa *window_cocoa = GST_GL_WINDOW_COCOA (window);
-  GstGLNSOpenGLView *glView = nil;
-  NSWindow *window_handle;
-  NSRect rect;
-  NSAutoreleasePool *pool;
-  NSOpenGLPixelFormat *fmt = nil;
-  NSOpenGLContext *glContext = nil;
-  NSOpenGLPixelFormatAttribute attribs[] = {
-    NSOpenGLPFADoubleBuffer,
-    NSOpenGLPFAAccumSize, 32,
+  GstGLAPI context_api = GST_GL_API_NONE;
+  const GLint swapInterval = 1;
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  CGLPixelFormatObj fmt = NULL;
+  CGLContextObj glContext;
+  CGLPixelFormatAttribute attribs[] = {
+    kCGLPFADoubleBuffer,
+    kCGLPFAAccumSize, 32,
     0
   };
+  CGLError ret;
+  gint pix_fmt_i = 0;
+  gint npix;
+
+  if ((gl_api & (GST_GL_API_OPENGL | GST_GL_API_OPENGL3)) == GST_GL_API_NONE) {
+    g_set_error (error, GST_GL_CONTEXT_ERROR,
+        GST_GL_CONTEXT_ERROR_CREATE_CONTEXT,
+        "The CGL backend only supports GL and GL3");
+    goto error;
+  }
 
   priv->gl_context = nil;
   if (other_context)
-    priv->external_gl_context = (NSOpenGLContext *) gst_gl_context_get_gl_context (other_context);
+    priv->external_gl_context = (CGLContextObj) gst_gl_context_get_gl_context (other_context);
   else
     priv->external_gl_context = NULL;
 
-#ifdef GNUSTEP
-  GSRegisterCurrentThread();
+  if (priv->external_gl_context) {
+    gint profile;
+
+    fmt = CGLGetPixelFormat (priv->external_gl_context);
+
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+    /* core profile is only available in >= 10.7 */
+    if (kCGLNoError == CGLDescribePixelFormat (fmt, 0, kCGLPFAOpenGLProfile,
+          &profile)) {
+      if (profile == kCGLOGLPVersion_3_2_Core) {
+        context_api = GST_GL_API_OPENGL3;
+      } else {
+        context_api =GST_GL_API_OPENGL;
+      }
+    }
+#else
+    context_api = GST_GL_API_OPENGL;
 #endif
-
-  pool = [[NSAutoreleasePool alloc] init];
-
-#ifdef GNUSTEP
-  [NSApplication sharedApplication];
-#endif
-
-  rect.origin.x = 0;
-  rect.origin.y = 0;
-  rect.size.width = 320;
-  rect.size.height = 240;
-
-  priv->rect = rect;
-
-  gst_gl_window_cocoa_create_window (window_cocoa);
-  window_handle = (NSWindow *) gst_gl_window_get_window_handle (window);
-
-  glView = [GstGLNSOpenGLView alloc];
-
-  fmt = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
-
-  if (!fmt) {
-    gst_object_unref (window);
-    GST_WARNING ("cannot create NSOpenGLPixelFormat");
-    return FALSE;
   }
 
-  glView = [glView initWithFrame:window_cocoa rect:rect pixelFormat:fmt];
-
-  [window_handle setContentView:glView];
-
-#ifndef GNUSTEP
-  glContext = [[NSOpenGLContext alloc] initWithFormat:fmt 
-    shareContext:context_cocoa->priv->external_gl_context];
-
-  GST_DEBUG ("NSOpenGL context created: %"G_GUINTPTR_FORMAT, (guintptr) glContext);
-
-  context_cocoa->priv->gl_context = glContext;
-
-  [glContext setView:glView];
-
-  [glView setOpenGLContext:glContext];
-
+  if (!fmt) {
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
+    if (gl_api & GST_GL_API_OPENGL3) {
+      attribs[pix_fmt_i++] = kCGLPFAOpenGLProfile;
+      attribs[pix_fmt_i++] = (int) kCGLOGLPVersion_3_2_Core;
+      context_api = GST_GL_API_OPENGL3;
+    } else {
+      context_api = GST_GL_API_OPENGL;
+    }
 #else
-  /* FIXME try to make context sharing work in GNUstep */
-  context_cocoa->priv->gl_context = [glView openGLContext];
+    context_api = GST_GL_API_OPENGL;
 #endif
 
-  /* OpenGL context is made current only one time threre.
-   * Indeed, all OpenGL calls are made in only one thread,
-   * the Application thread */
-  [glContext makeCurrentContext];
+    attribs[pix_fmt_i++] = 0;
 
-  [glContext update];
+    ret = CGLChoosePixelFormat (attribs, &fmt, &npix);
+    if (ret != kCGLNoError) {
+      g_set_error (error, GST_GL_CONTEXT_ERROR,
+          GST_GL_CONTEXT_ERROR_WRONG_CONFIG, "cannot choose a pixel format: %s", CGLErrorString (ret));
+      goto error;
+    }
+  }
+
+  gst_gl_context_cocoa_dump_pixel_format (fmt);
+
+  ret = CGLCreateContext (fmt, priv->external_gl_context, &glContext);
+  if (ret != kCGLNoError) {
+    g_set_error (error, GST_GL_CONTEXT_ERROR, GST_GL_CONTEXT_ERROR_CREATE_CONTEXT,
+        "failed to create context: %s", CGLErrorString (ret));
+    goto error;
+  }
+
+  context_cocoa->priv->pixel_format = fmt;
+  context_cocoa->priv->gl_context = glContext;
+
+  _invoke_on_main ((GstGLWindowCB) gst_gl_window_cocoa_create_window,
+      window_cocoa);
+
+  if (!context_cocoa->priv->gl_context) {
+    goto error;
+  }
+
+  GST_INFO_OBJECT (context, "GL context created: %p", context_cocoa->priv->gl_context);
+
+  CGLSetCurrentContext (context_cocoa->priv->gl_context);
 
   /* Back and front buffers are swapped only during the vertical retrace of the monitor.
    * Discarded if you configured your driver to Never-use-V-Sync.
    */
-  NS_DURING {
-    if (glContext) {
-#ifdef GNUSTEP
-      const long swapInterval = 1;
-#else
-      const GLint swapInterval = 1;
-#endif
-      [[glView openGLContext] setValues:&swapInterval forParameter:NSOpenGLCPSwapInterval];
-    }
-  } NS_HANDLER {
-     GST_DEBUG ("your back-end does not implement NSOpenglContext::setValues\n");
-  }
-  NS_ENDHANDLER
+  CGLSetParameter (context_cocoa->priv->gl_context, kCGLCPSwapInterval, &swapInterval);
 
-  GST_DEBUG ("opengl GstGLNSWindow initialized: %d x %d\n",
-    (gint) rect.size.width, (gint) rect.size.height);
+  context_cocoa->priv->context_api = context_api;
 
+  if (window)
+    gst_object_unref (window);
   [pool release];
 
-#ifndef GNUSTEP
-  priv->source_id = g_timeout_add_seconds (1, gst_gl_window_cocoa_nsapp_iteration, NULL);
-#endif
-
-  gst_object_unref (window);
-
   return TRUE;
+
+error:
+  {
+    if (window)
+      gst_object_unref (window);
+    [pool release];
+    return FALSE;
+  }
 }
 
 static void
 gst_gl_context_cocoa_destroy_context (GstGLContext *context)
 {
+  /* FIXME: Need to release context and other things? */
 }
 
 static guintptr
@@ -322,28 +297,31 @@ gst_gl_context_cocoa_get_gl_context (GstGLContext * context)
 static gboolean
 gst_gl_context_cocoa_activate (GstGLContext * context, gboolean activate)
 {
-  GstGLContextCocoa *context_cocoa;
+  GstGLContextCocoa *context_cocoa = GST_GL_CONTEXT_COCOA (context);
+  gpointer context_handle = activate ? context_cocoa->priv->gl_context : NULL;
 
-  context_cocoa = GST_GL_CONTEXT_COCOA (context);
-
-  if (activate)
-    [context_cocoa->priv->gl_context makeCurrentContext];
-#if 0
-  else
-    /* FIXME */
-    [context_cocoa->priv->gl_context clearCurrentContext];
-#endif
-  return TRUE;
+  return kCGLNoError == CGLSetCurrentContext (context_handle);
 }
 
 static GstGLAPI
 gst_gl_context_cocoa_get_gl_api (GstGLContext * context)
 {
-  return GST_GL_API_OPENGL;
+  GstGLContextCocoa *context_cocoa = GST_GL_CONTEXT_COCOA (context);
+
+  if (context_cocoa->priv->gl_context)
+    return context_cocoa->priv->context_api;
+
+  return GST_GL_API_OPENGL | GST_GL_API_OPENGL3;
 }
 
 static GstGLPlatform
 gst_gl_context_cocoa_get_gl_platform (GstGLContext * context)
 {
   return GST_GL_PLATFORM_CGL;
+}
+
+guintptr
+gst_gl_context_cocoa_get_current_context (void)
+{
+  return (guintptr) CGLGetCurrentContext ();
 }

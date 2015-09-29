@@ -94,18 +94,61 @@ enum
   COLOR_Format24BitABGR6666 = 43,
   COLOR_FormatAndroidOpaque = 0x7F000789,
   COLOR_TI_FormatYUV420PackedSemiPlanar = 0x7f000100,
+  COLOR_INTEL_FormatYUV420PackedSemiPlanar = 0x7fa00e00,
+  COLOR_INTEL_FormatYUV420PackedSemiPlanar_Tiled = 0x7fa00f00,
   COLOR_QCOM_FormatYUV420SemiPlanar = 0x7fa30c00,
   COLOR_QCOM_FormatYUV420PackedSemiPlanar64x32Tile2m8ka = 0x7fa30c03,
   /* NV12 but with stride and plane heights aligned to 32 */
   COLOR_QCOM_FormatYVU420SemiPlanar32m = 0x7fa30c04,
+  /* NV12 but with stride and plane heights aligned to 32, Stores two images,
+   * one after the other in top-bottom layout */
+  COLOR_QCOM_FormatYVU420SemiPlanar32mMultiView = 0x7fa30c05,
   /* From hardware/ti/omap4xxx/domx/omx_core/inc/OMX_TI_IVCommon.h */
   COLOR_TI_FormatYUV420PackedSemiPlanarInterlaced = 0x7f000001,
+  COLOR_FormatYUV420Flexible = 0x7f420888,
   /* This format is Exynos specific from the OMX vendor-specific
    * numeric range, but is defined in the Android OMX headers, so
    * we shouldn't find incompatible usage and crash horribly... right?
    * FIXME: Not actually implemented in the video decoder, it will just error out
    * The format seems to be equiv to V4L2_PIX_FMT_NV12MT_16X16 */
-  COLOR_OMX_SEC_FormatNV12Tiled = 0x7fc00002
+  COLOR_OMX_SEC_FormatNV12Tiled = 0x7fc00002,
+  /* YV12: http://developer.android.com/reference/android/graphics/ImageFormat.html#YV12 */
+  COLOR_FormatYV12 = 0x32315659,
+};
+
+enum
+{
+  HEVCProfileMain    = 0x01,
+  HEVCProfileMain10  = 0x02
+};
+
+enum
+{
+  HEVCMainTierLevel1  = 0x1,
+  HEVCHighTierLevel1  = 0x2,
+  HEVCMainTierLevel2  = 0x4,
+  HEVCHighTierLevel2  = 0x8,
+  HEVCMainTierLevel21 = 0x10,
+  HEVCHighTierLevel21 = 0x20,
+  HEVCMainTierLevel3  = 0x40,
+  HEVCHighTierLevel3  = 0x80,
+  HEVCMainTierLevel31 = 0x100,
+  HEVCHighTierLevel31 = 0x200,
+  HEVCMainTierLevel4  = 0x400,
+  HEVCHighTierLevel4  = 0x800,
+  HEVCMainTierLevel41 = 0x1000,
+  HEVCHighTierLevel41 = 0x2000,
+  HEVCMainTierLevel5  = 0x4000,
+  HEVCHighTierLevel5  = 0x8000,
+  HEVCMainTierLevel51 = 0x10000,
+  HEVCHighTierLevel51 = 0x20000,
+  HEVCMainTierLevel52 = 0x40000,
+  HEVCHighTierLevel52 = 0x80000,
+  HEVCMainTierLevel6  = 0x100000,
+  HEVCHighTierLevel6  = 0x200000,
+  HEVCMainTierLevel61 = 0x400000,
+  HEVCHighTierLevel61 = 0x800000,
+  HEVCMainTierLevel62 = 0x1000000
 };
 
 enum

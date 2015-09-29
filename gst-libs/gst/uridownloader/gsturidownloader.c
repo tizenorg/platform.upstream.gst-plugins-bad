@@ -178,6 +178,20 @@ gst_uri_downloader_sink_event (GstPad * pad, GstObject * parent,
       gst_event_unref (event);
       break;
     }
+    case GST_EVENT_CUSTOM_DOWNSTREAM_STICKY:{
+      const GstStructure *str;
+      str = gst_event_get_structure (event);
+      if (gst_structure_has_name (str, "http-headers")) {
+        GST_OBJECT_LOCK (downloader);
+        if (downloader->priv->download != NULL) {
+          if (downloader->priv->download->headers)
+            gst_structure_free (downloader->priv->download->headers);
+          downloader->priv->download->headers = gst_structure_copy (str);
+        }
+        GST_OBJECT_UNLOCK (downloader);
+      }
+    }
+      /* falls through */
     default:
       ret = gst_pad_event_default (pad, parent, event);
       break;
@@ -261,6 +275,7 @@ gst_uri_downloader_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
   GST_OBJECT_LOCK (downloader);
   if (downloader->priv->download == NULL) {
     /* Download cancelled, quit */
+    gst_buffer_unref (buf);
     GST_OBJECT_UNLOCK (downloader);
     goto done;
   }
@@ -268,8 +283,10 @@ gst_uri_downloader_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
   GST_LOG_OBJECT (downloader, "The uri fetcher received a new buffer "
       "of size %" G_GSIZE_FORMAT, gst_buffer_get_size (buf));
   downloader->priv->got_buffer = TRUE;
-  if (!gst_fragment_add_buffer (downloader->priv->download, buf))
+  if (!gst_fragment_add_buffer (downloader->priv->download, buf)) {
     GST_WARNING_OBJECT (downloader, "Could not add buffer to fragment");
+    gst_buffer_unref (buf);
+  }
   GST_OBJECT_UNLOCK (downloader);
 
 done:
@@ -425,6 +442,23 @@ gst_uri_downloader_set_uri (GstUriDownloader * downloader, const gchar * uri,
   return TRUE;
 }
 
+static gboolean
+gst_uri_downloader_set_method (GstUriDownloader * downloader,
+    const gchar * method)
+{
+  GObjectClass *gobject_class;
+
+  if (!downloader->priv->urisrc)
+    return FALSE;
+
+  gobject_class = G_OBJECT_GET_CLASS (downloader->priv->urisrc);
+  if (g_object_class_find_property (gobject_class, "method")) {
+    g_object_set (downloader->priv->urisrc, "method", method, NULL);
+    return TRUE;
+  }
+  return FALSE;
+}
+
 GstFragment *
 gst_uri_downloader_fetch_uri (GstUriDownloader * downloader,
     const gchar * uri, const gchar * referer, gboolean compress,
@@ -471,7 +505,11 @@ gst_uri_downloader_fetch_uri_with_range (GstUriDownloader *
   }
 
   gst_bus_set_flushing (downloader->priv->bus, FALSE);
+  if (downloader->priv->download)
+    g_object_unref (downloader->priv->download);
   downloader->priv->download = gst_fragment_new ();
+  downloader->priv->download->range_start = range_start;
+  downloader->priv->download->range_end = range_end;
   GST_OBJECT_UNLOCK (downloader);
   ret = gst_element_set_state (downloader->priv->urisrc, GST_STATE_READY);
   GST_OBJECT_LOCK (downloader);
@@ -485,9 +523,16 @@ gst_uri_downloader_fetch_uri_with_range (GstUriDownloader *
     goto quit;
   }
 
-  if (!gst_uri_downloader_set_range (downloader, range_start, range_end)) {
-    GST_WARNING_OBJECT (downloader, "Failed to set range");
-    goto quit;
+  if (range_start < 0 && range_end < 0) {
+    if (!gst_uri_downloader_set_method (downloader, "HEAD")) {
+      GST_WARNING_OBJECT (downloader, "Failed to set HTTP method");
+      goto quit;
+    }
+  } else {
+    if (!gst_uri_downloader_set_range (downloader, range_start, range_end)) {
+      GST_WARNING_OBJECT (downloader, "Failed to set range");
+      goto quit;
+    }
   }
 
   GST_OBJECT_UNLOCK (downloader);
@@ -526,9 +571,13 @@ gst_uri_downloader_fetch_uri_with_range (GstUriDownloader *
   download = downloader->priv->download;
   downloader->priv->download = NULL;
   if (!downloader->priv->got_buffer) {
-    g_object_unref (download);
-    download = NULL;
-    GST_ERROR_OBJECT (downloader, "Didn't retrieve a buffer before EOS");
+    if (download->range_start < 0 && download->range_end < 0) {
+      /* HEAD request, so we don't expect a response */
+    } else {
+      g_object_unref (download);
+      download = NULL;
+      GST_ERROR_OBJECT (downloader, "Didn't retrieve a buffer before EOS");
+    }
   }
 
   if (download != NULL)

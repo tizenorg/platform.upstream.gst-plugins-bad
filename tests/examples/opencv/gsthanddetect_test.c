@@ -4,19 +4,20 @@
  *  gsthanddetect_test: gsteramer handdetect plugin demo application,
  *  part work of GSoc 2012 project
  *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
  *
- *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
  *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
  *
  */
 
@@ -107,8 +108,6 @@ main (gint argc, gchar ** argv)
   GstBus *bus;
   gchar *uri;
 
-  const gchar *video_device = "/dev/video0";
-
   if (argc < 2) {
     fprintf (stderr, "oops, please give a file to play\n");
     return -1;
@@ -143,7 +142,6 @@ main (gint argc, gchar ** argv)
 
   /* set values */
   g_object_set (G_OBJECT (playbin), "uri", uri, NULL);
-  g_object_set (G_OBJECT (v4l2src), "device", video_device, NULL);
 
   /* set caps */
   caps =

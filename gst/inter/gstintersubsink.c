@@ -47,8 +47,6 @@ GST_DEBUG_CATEGORY_STATIC (gst_inter_sub_sink_debug_category);
 #define GST_CAT_DEFAULT gst_inter_sub_sink_debug_category
 
 /* prototypes */
-
-
 static void gst_inter_sub_sink_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_inter_sub_sink_get_property (GObject * object,
@@ -68,8 +66,9 @@ enum
   PROP_CHANNEL
 };
 
-/* pad templates */
+#define DEFAULT_CHANNEL ("default")
 
+/* pad templates */
 static GstStaticPadTemplate gst_inter_sub_sink_sink_template =
 GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
@@ -112,14 +111,13 @@ gst_inter_sub_sink_class_init (GstInterSubSinkClass * klass)
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
       g_param_spec_string ("channel", "Channel",
           "Channel name to match inter src and sink elements",
-          "default", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
+          DEFAULT_CHANNEL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void
 gst_inter_sub_sink_init (GstInterSubSink * intersubsink)
 {
-  intersubsink->channel = g_strdup ("default");
+  intersubsink->channel = g_strdup (DEFAULT_CHANNEL);
 
   intersubsink->fps_n = 1;
   intersubsink->fps_d = 1;
@@ -169,7 +167,6 @@ gst_inter_sub_sink_finalize (GObject * object)
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
-
 static void
 gst_inter_sub_sink_get_times (GstBaseSink * sink, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end)
@@ -188,8 +185,6 @@ gst_inter_sub_sink_get_times (GstBaseSink * sink, GstBuffer * buffer,
       }
     }
   }
-
-
 }
 
 static gboolean

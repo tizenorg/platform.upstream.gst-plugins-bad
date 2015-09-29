@@ -30,31 +30,25 @@ gst_gl_effects_sin_callback (gint width, gint height, guint texture,
   GstGLShader *shader;
   GstGLEffects *effects = GST_GL_EFFECTS (data);
   GstGLFilter *filter = GST_GL_FILTER (effects);
-  GstGLContext *context = filter->context;
+  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
   GstGLFuncs *gl = context->gl_vtable;
 
-  shader = g_hash_table_lookup (effects->shaderstable, "sin0");
+  shader = gst_gl_effects_get_fragment_shader (effects, "sin",
+      sin_fragment_source_gles2);
 
-  if (!shader) {
-    shader = gst_gl_shader_new (context);
-    g_hash_table_insert (effects->shaderstable, (gchar *) "sin0", shader);
-  }
-
-  if (!gst_gl_shader_compile_and_check (shader,
-          sin_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
-    gst_gl_context_set_error (context, "Failed to initialize sin shader");
-    GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
-        ("%s", gst_gl_context_get_error ()), (NULL));
+  if (!shader)
     return;
-  }
 
-  gl->MatrixMode (GL_PROJECTION);
-  gl->LoadIdentity ();
+#if GST_GL_HAVE_OPENGL
+  if (USING_OPENGL (context)) {
+    gl->MatrixMode (GL_PROJECTION);
+    gl->LoadIdentity ();
+  }
+#endif
 
   gst_gl_shader_use (shader);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
 
   gst_gl_shader_set_uniform_1i (shader, "tex", 0);

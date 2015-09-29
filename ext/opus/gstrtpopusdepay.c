@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <gst/rtp/gstrtpbuffer.h>
+#include <gst/audio/audio.h>
 #include "gstrtpopusdepay.h"
 
 GST_DEBUG_CATEGORY_STATIC (rtpopusdepay_debug);
@@ -39,14 +40,14 @@ GST_STATIC_PAD_TEMPLATE ("sink",
         "media = (string) \"audio\", "
         "payload = (int) " GST_RTP_PAYLOAD_DYNAMIC_STRING ","
         "clock-rate = (int) 48000, "
-        "encoding-name = (string) \"X-GST-OPUS-DRAFT-SPITTKA-00\"")
+        "encoding-name = (string) { \"OPUS\", \"X-GST-OPUS-DRAFT-SPITTKA-00\" }")
     );
 
 static GstStaticPadTemplate gst_rtp_opus_depay_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("audio/x-opus")
+    GST_STATIC_CAPS ("audio/x-opus, multistream = (boolean) FALSE")
     );
 
 static GstBuffer *gst_rtp_opus_depay_process (GstRTPBaseDepayload * depayload,
@@ -92,9 +93,40 @@ static gboolean
 gst_rtp_opus_depay_setcaps (GstRTPBaseDepayload * depayload, GstCaps * caps)
 {
   GstCaps *srccaps;
+  GstStructure *s;
   gboolean ret;
+  const gchar *sprop_stereo, *sprop_maxcapturerate;
 
-  srccaps = gst_caps_new_empty_simple ("audio/x-opus");
+  srccaps =
+      gst_caps_new_simple ("audio/x-opus", "multistream", G_TYPE_BOOLEAN, FALSE,
+      NULL);
+
+  s = gst_caps_get_structure (caps, 0);
+  if ((sprop_stereo = gst_structure_get_string (s, "sprop-stereo"))) {
+    if (strcmp (sprop_stereo, "0") == 0)
+      gst_caps_set_simple (srccaps, "channels", G_TYPE_INT, 1, NULL);
+    else if (strcmp (sprop_stereo, "1") == 0)
+      gst_caps_set_simple (srccaps, "channels", G_TYPE_INT, 2, NULL);
+    else
+      GST_WARNING_OBJECT (depayload, "Unknown sprop-stereo value '%s'",
+          sprop_stereo);
+  }
+
+  if ((sprop_maxcapturerate =
+          gst_structure_get_string (s, "sprop-maxcapturerate"))) {
+    gulong rate;
+    gchar *tailptr;
+
+    rate = strtoul (sprop_maxcapturerate, &tailptr, 10);
+    if (rate > INT_MAX || *tailptr != '\0') {
+      GST_WARNING_OBJECT (depayload,
+          "Failed to parse sprop-maxcapturerate value '%s'",
+          sprop_maxcapturerate);
+    } else {
+      gst_caps_set_simple (srccaps, "rate", G_TYPE_INT, rate, NULL);
+    }
+  }
+
   ret = gst_pad_set_caps (GST_RTP_BASE_DEPAYLOAD_SRCPAD (depayload), srccaps);
 
   GST_DEBUG_OBJECT (depayload,
@@ -106,6 +138,25 @@ gst_rtp_opus_depay_setcaps (GstRTPBaseDepayload * depayload, GstCaps * caps)
   return ret;
 }
 
+static gboolean
+foreach_metadata (GstBuffer * inbuf, GstMeta ** meta, gpointer user_data)
+{
+  GstRTPOpusDepay *depay = user_data;
+  const GstMetaInfo *info = (*meta)->info;
+  const gchar *const *tags = gst_meta_api_type_get_tags (info->api);
+
+  if (!tags || (g_strv_length ((gchar **) tags) == 1
+          && gst_meta_api_type_has_tag (info->api,
+              g_quark_from_string (GST_META_TAG_AUDIO_STR)))) {
+    GST_DEBUG_OBJECT (depay, "keeping metadata %s", g_type_name (info->api));
+  } else {
+    GST_DEBUG_OBJECT (depay, "dropping metadata %s", g_type_name (info->api));
+    *meta = NULL;
+  }
+
+  return TRUE;
+}
+
 static GstBuffer *
 gst_rtp_opus_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
 {
@@ -115,6 +166,10 @@ gst_rtp_opus_depay_process (GstRTPBaseDepayload * depayload, GstBuffer * buf)
   gst_rtp_buffer_map (buf, GST_MAP_READ, &rtpbuf);
   outbuf = gst_rtp_buffer_get_payload_buffer (&rtpbuf);
   gst_rtp_buffer_unmap (&rtpbuf);
+
+  outbuf = gst_buffer_make_writable (outbuf);
+  /* Filter away all metas that are not sensible to copy */
+  gst_buffer_foreach_meta (outbuf, foreach_metadata, depayload);
 
   return outbuf;
 }

@@ -51,39 +51,73 @@ struct _GstGLImageSink
 {
     GstVideoSink video_sink;
 
-    //properties
-    gchar *display_name;
-
     guintptr window_id;
     guintptr new_window_id;
+    gulong mouse_sig_id;
+    gulong key_sig_id;
 
-    //caps
-    GstVideoInfo info;
+    /* GstVideoOverlay::set_render_rectangle() cache */
+    gint x;
+    gint y;
+    gint width;
+    gint height;
+
+    /* Input info before 3d stereo output conversion, if any */
+    GstVideoInfo in_info;
+
+    /* format/caps we actually hand off to the app */
+    GstVideoInfo out_info;
+    GstCaps *out_caps;
 
     GstGLDisplay *display;
     GstGLContext *context;
     GstGLContext *other_context;
+    gboolean handle_events;
+    gboolean ignore_alpha;
 
-    GstGLUpload *upload;
+    GstGLViewConvert *convert_views;
+
+    /* Original input RGBA buffer, ready for display,
+     * or possible reconversion through the views filter */
+    GstBuffer *input_buffer;
+    /* Secondary view buffer - when operating in frame-by-frame mode */
+    GstBuffer *input_buffer2;
+
     guint      next_tex;
+    GstBuffer *next_buffer;
+    GstBuffer *next_buffer2; /* frame-by-frame 2nd view */
+    GstBuffer *next_sync;
 
     volatile gint to_quit;
     gboolean keep_aspect_ratio;
     gint par_n, par_d;
 
-    GstBufferPool *pool;
-
     /* avoid replacing the stored_buffer while drawing */
     GMutex drawing_lock;
-    GstBuffer *stored_buffer;
+    GstBuffer *stored_buffer[2];
+    GstBuffer *stored_sync;
     GLuint redisplay_texture;
 
-#if GST_GL_HAVE_GLES2
-  GstGLShader *redisplay_shader;
-  GLint redisplay_attr_position_loc;
-  GLint redisplay_attr_texture_loc;
-#endif
+    gboolean caps_change;
+    guint window_width;
+    guint window_height;
+    gboolean update_viewport;
 
+    GstVideoRectangle display_rect;
+
+    GstGLShader *redisplay_shader;
+    GLuint vao;
+    GLuint vbo_indices;
+    GLuint vertex_buffer;
+    GLint  attr_position;
+    GLint  attr_texture;
+
+    GstVideoMultiviewMode mview_output_mode;
+    GstVideoMultiviewFlags mview_output_flags;
+    gboolean output_mode_changed;
+    GstGLStereoDownmix mview_downmix_mode;
+
+    GstGLOverlayCompositor *overlay_compositor;
 };
 
 struct _GstGLImageSinkClass
@@ -92,6 +126,7 @@ struct _GstGLImageSinkClass
 };
 
 GType gst_glimage_sink_get_type(void);
+GType gst_gl_image_sink_bin_get_type(void);
 
 G_END_DECLS
 

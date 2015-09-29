@@ -104,6 +104,8 @@ static gboolean gst_wayland_tizen_buffer_pool_start (GstBufferPool * pool);
 static gboolean gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool);
 static GstFlowReturn gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool,
     GstBuffer ** buffer, GstBufferPoolAcquireParams * params);
+void gst_wayland_buffer_pool_remove_displaying_buffer (GstWaylandBufferPool *
+    self, struct wl_buffer *wl_buffer);
 #endif
 
 #define gst_wayland_buffer_pool_parent_class parent_class
@@ -139,6 +141,10 @@ gst_wayland_buffer_pool_init (GstWaylandBufferPool * self)
   gst_video_info_init (&self->info);
   g_mutex_init (&self->buffers_map_mutex);
   self->buffers_map = g_hash_table_new (g_direct_hash, g_direct_equal);
+
+  g_mutex_init (&self->displaying_buffers_map_mutex);
+  self->displaying_buffers_map =
+      g_hash_table_new (g_direct_hash, g_direct_equal);
 }
 
 static void
@@ -153,6 +159,9 @@ gst_wayland_buffer_pool_finalize (GObject * object)
 
   g_mutex_clear (&pool->buffers_map_mutex);
   g_hash_table_unref (pool->buffers_map);
+
+  g_mutex_clear (&pool->displaying_buffers_map_mutex);
+  g_hash_table_unref (pool->displaying_buffers_map);
 
   g_object_unref (pool->display);
 
@@ -169,6 +178,12 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
   GstWlMeta *meta;
 
   g_mutex_lock (&self->buffers_map_mutex);
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  /*remove displaying buffer */
+  if (self->display->is_native_format == TRUE)
+    gst_wayland_buffer_pool_remove_displaying_buffer (self, wl_buffer);
+#endif
   buffer = g_hash_table_lookup (self->buffers_map, wl_buffer);
 
   GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", buffer);
@@ -180,8 +195,6 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
       /* unlock before unref because stop() may be called from here */
       GST_LOG_OBJECT (self, "Decrease ref count of buffer");
       gst_buffer_unref (buffer);
-      g_mutex_unlock (&self->buffers_map_mutex);
-      return;
     }
   }
   g_mutex_unlock (&self->buffers_map_mutex);
@@ -519,6 +532,10 @@ gst_wayland_tizen_buffer_pool_stop (GstBufferPool * pool)
   g_hash_table_remove_all (self->buffers_map);
   g_mutex_unlock (&self->buffers_map_mutex);
 
+  g_mutex_lock (&self->displaying_buffers_map_mutex);
+  g_hash_table_remove_all (self->displaying_buffers_map);
+  g_mutex_unlock (&self->displaying_buffers_map_mutex);
+
   return GST_BUFFER_POOL_CLASS (parent_class)->stop (pool);
 }
 
@@ -590,9 +607,9 @@ gst_wayland_tizen_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
     }
 
     meta->wbuffer =
-        tizen_buffer_pool_create_planar_buffer (self->
-        display->tizen_buffer_pool, width, height, format, name[0], offset[0],
-        stride[0], name[1], offset[1], stride[1], 0, 0, 0);
+        tizen_buffer_pool_create_planar_buffer (self->display->
+        tizen_buffer_pool, width, height, format, name[0], offset[0], stride[0],
+        name[1], offset[1], stride[1], 0, 0, 0);
     meta->used_by_compositor = FALSE;
 
     GST_DEBUG ("tizen_buffer_pool_create_planar_buffer create wl_buffer %p",
@@ -670,11 +687,53 @@ gst_wayland_tizen_buffer_pool_finalize (GObject * object)
   g_mutex_clear (&pool->buffers_map_mutex);
   g_hash_table_unref (pool->buffers_map);
 
+  g_mutex_clear (&pool->displaying_buffers_map_mutex);
+  g_hash_table_unref (pool->displaying_buffers_map);
+
   g_object_unref (pool->display);
 
   G_OBJECT_CLASS (gst_wayland_buffer_pool_parent_class)->finalize (object);
 }
 
+void
+gst_wayland_buffer_pool_add_displaying_buffer (GstBufferPool * pool,
+    GstWlMeta * meta, GstBuffer * buffer)
+{
+  FUNCTION_ENTER ();
+  g_return_val_if_fail (pool, NULL);
+  g_return_val_if_fail (meta, NULL);
+  g_return_val_if_fail (buffer, NULL);
+
+  GstWaylandBufferPool *self = GST_WAYLAND_BUFFER_POOL_CAST (pool);
+
+  g_mutex_lock (&self->displaying_buffers_map_mutex);
+
+  GST_LOG_OBJECT (self, "key value is meta->wbuffer(%p)", meta->wbuffer);
+  GST_LOG_OBJECT (self, "Increase ref count of buffer(%p) from omx", buffer);
+  gst_buffer_ref (buffer);
+  g_hash_table_insert (self->displaying_buffers_map, meta->wbuffer, buffer);
+
+  g_mutex_unlock (&self->displaying_buffers_map_mutex);
+}
+
+void
+gst_wayland_buffer_pool_remove_displaying_buffer (GstWaylandBufferPool * self,
+    struct wl_buffer *wl_buffer)
+{
+  FUNCTION_ENTER ();
+  g_return_val_if_fail (self, NULL);
+  g_return_val_if_fail (wl_buffer, NULL);
+
+  GstBuffer *buffer;
+  g_mutex_lock (&self->displaying_buffers_map_mutex);
+  buffer = g_hash_table_lookup (self->displaying_buffers_map, wl_buffer);
+  if (buffer) {
+    GST_LOG_OBJECT (self, "Decrease ref count of buffer(%p) from omx", buffer);
+    g_hash_table_remove (self->displaying_buffers_map, wl_buffer);
+    gst_buffer_unref (buffer);
+  }
+  g_mutex_unlock (&self->displaying_buffers_map_mutex);
+}
 #endif
 #ifdef DUMP_BUFFER
 int

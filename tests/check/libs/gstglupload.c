@@ -168,20 +168,20 @@ draw_render (gpointer data)
     gl->MatrixMode (GL_PROJECTION);
     gl->LoadIdentity ();
 
-    gl->Enable (GL_TEXTURE_2D);
+    gl->ActiveTexture (GL_TEXTURE_2D);
     gl->BindTexture (GL_TEXTURE_2D, tex_id);
 
     gl->EnableClientState (GL_VERTEX_ARRAY);
-    gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
     gl->VertexPointer (2, GL_FLOAT, 0, &verts);
+
+    gl->ClientActiveTexture (GL_TEXTURE0);
+    gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
     gl->TexCoordPointer (2, GL_FLOAT, 0, &texcoords);
 
     gl->DrawArrays (GL_TRIANGLE_FAN, 0, 4);
 
     gl->DisableClientState (GL_VERTEX_ARRAY);
     gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
-
-    gl->Disable (GL_TEXTURE_2D);
   }
 #endif
 #if GST_GL_HAVE_GLES2
@@ -226,20 +226,36 @@ draw_render (gpointer data)
 
 GST_START_TEST (test_upload_data)
 {
-  gpointer data[GST_VIDEO_MAX_PLANES] = { rgba_data, NULL, NULL, NULL };
-  GstVideoInfo in_info;
+  GstCaps *in_caps, *out_caps;
+  GstBuffer *inbuf, *outbuf;
+  GstMapInfo map_info;
   gboolean res;
   gint i = 0;
 
-  gst_video_info_set_format (&in_info, GST_VIDEO_FORMAT_RGBA, WIDTH, HEIGHT);
+  in_caps = gst_caps_from_string ("video/x-raw,format=RGBA,"
+      "width=10,height=10");
+  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
+      "format=RGBA,width=10,height=10");
 
-  gst_gl_upload_set_format (upload, &in_info);
+  gst_gl_upload_set_caps (upload, in_caps, out_caps);
 
-  res = gst_gl_upload_perform_with_data (upload, &tex_id, data);
+  inbuf = gst_buffer_new_wrapped_full (0, rgba_data, WIDTH * HEIGHT * 4,
+      0, WIDTH * HEIGHT * 4, NULL, NULL);
+
+  res = gst_gl_upload_perform_with_buffer (upload, inbuf, &outbuf);
   fail_if (res == FALSE, "Failed to upload buffer: %s\n",
       gst_gl_context_get_error ());
+  fail_unless (GST_IS_BUFFER (outbuf));
 
-  gst_gl_window_draw (window, WIDTH, HEIGHT);
+  res = gst_buffer_map (outbuf, &map_info, GST_MAP_READ | GST_MAP_GL);
+  fail_if (res == FALSE, "Failed to map gl memory");
+
+  tex_id = *(guint *) map_info.data;
+
+  gst_buffer_unmap (outbuf, &map_info);
+
+  gst_gl_window_set_preferred_size (window, WIDTH, HEIGHT);
+  gst_gl_window_draw (window);
 
   gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
 
@@ -248,33 +264,52 @@ GST_START_TEST (test_upload_data)
         context);
     i++;
   }
+
+  gst_buffer_unref (inbuf);
+  gst_buffer_unref (outbuf);
 }
 
 GST_END_TEST;
 
 GST_START_TEST (test_upload_buffer)
 {
-  GstBuffer *buffer;
+  GstBuffer *buffer, *outbuf;
   GstGLMemory *gl_mem;
+  GstCaps *in_caps, *out_caps;
   GstVideoInfo in_info;
+  GstMapInfo map_info;
   gint i = 0;
   gboolean res;
 
-  gst_video_info_set_format (&in_info, GST_VIDEO_FORMAT_RGBA, WIDTH, HEIGHT);
+  in_caps = gst_caps_from_string ("video/x-raw,format=RGBA,width=10,height=10");
+  gst_video_info_from_caps (&in_info, in_caps);
 
   /* create GL buffer */
   buffer = gst_buffer_new ();
-  gl_mem = gst_gl_memory_wrapped (context, FORMAT, WIDTH, HEIGHT, WIDTH * 4,
-      rgba_data, NULL, NULL);
+  gl_mem =
+      gst_gl_memory_wrapped (context, &in_info, 0, NULL, rgba_data, NULL, NULL);
+
+  res =
+      gst_memory_map ((GstMemory *) gl_mem, &map_info,
+      GST_MAP_READ | GST_MAP_GL);
+  fail_if (res == FALSE, "Failed to map gl memory\n");
+  tex_id = *(guint *) map_info.data;
+  gst_memory_unmap ((GstMemory *) gl_mem, &map_info);
+
   gst_buffer_append_memory (buffer, (GstMemory *) gl_mem);
 
-  gst_gl_upload_set_format (upload, &in_info);
+  out_caps = gst_caps_from_string ("video/x-raw(memory:GLMemory),"
+      "format=RGBA,width=10,height=10");
 
-  res = gst_gl_upload_perform_with_buffer (upload, buffer, &tex_id);
+  gst_gl_upload_set_caps (upload, in_caps, out_caps);
+
+  res = gst_gl_upload_perform_with_buffer (upload, buffer, &outbuf);
   fail_if (res == FALSE, "Failed to upload buffer: %s\n",
       gst_gl_context_get_error ());
+  fail_unless (GST_IS_BUFFER (outbuf));
 
-  gst_gl_window_draw (window, WIDTH, HEIGHT);
+  gst_gl_window_set_preferred_size (window, WIDTH, HEIGHT);
+  gst_gl_window_draw (window);
   gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
 
   while (i < 2) {
@@ -285,6 +320,7 @@ GST_START_TEST (test_upload_buffer)
 
   gst_gl_upload_release_buffer (upload);
   gst_buffer_unref (buffer);
+  gst_buffer_unref (outbuf);
 }
 
 GST_END_TEST;
@@ -304,8 +340,8 @@ GST_START_TEST (test_upload_meta_producer)
 
   /* create GL buffer */
   buffer = gst_buffer_new ();
-  gl_mem = gst_gl_memory_wrapped (context, FORMAT, WIDTH, HEIGHT, WIDTH * 4,
-      rgba_data, NULL, NULL);
+  gl_mem =
+      gst_gl_memory_wrapped (context, &in_info, 0, NULL, rgba_data, NULL, NULL);
   gst_buffer_append_memory (buffer, (GstMemory *) gl_mem);
 
   gst_gl_context_gen_texture (context, &tex_ids[0], GST_VIDEO_FORMAT_RGBA,
@@ -314,7 +350,6 @@ GST_START_TEST (test_upload_meta_producer)
   upload_meta = gst_gl_upload_meta_new (context);
   gst_gl_upload_meta_set_format (upload_meta, &in_info);
 
-  gst_gl_upload_set_format (upload, &in_info);
   gst_buffer_add_video_meta_full (buffer, 0, GST_VIDEO_FORMAT_RGBA, WIDTH,
       HEIGHT, 1, in_info.offset, in_info.stride);
   gst_gl_upload_meta_add_to_buffer (upload_meta, buffer);
@@ -327,7 +362,9 @@ GST_START_TEST (test_upload_meta_producer)
   fail_if (res == FALSE, "Failed to upload GstVideoGLTextureUploadMeta\n");
 
   tex_id = tex_ids[0];
-  gst_gl_window_draw (window, WIDTH, HEIGHT);
+
+  gst_gl_window_set_preferred_size (window, WIDTH, HEIGHT);
+  gst_gl_window_draw (window);
   gst_gl_window_send_message (window, GST_GL_WINDOW_CB (init), context);
 
   while (i < 2) {

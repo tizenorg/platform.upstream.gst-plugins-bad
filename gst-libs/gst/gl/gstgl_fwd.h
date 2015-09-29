@@ -39,6 +39,10 @@ typedef struct _GstGLWindow        GstGLWindow;
 typedef struct _GstGLWindowPrivate GstGLWindowPrivate;
 typedef struct _GstGLWindowClass   GstGLWindowClass;
 
+typedef struct _GstGLBaseBuffer GstGLBaseBuffer;
+typedef struct _GstGLBaseBufferAllocator GstGLBaseBufferAllocator;
+typedef struct _GstGLBaseBufferAllocatorClass GstGLBaseBufferAllocatorClass;
+
 typedef struct _GstGLMemory GstGLMemory;
 typedef struct _GstGLAllocator GstGLAllocator;
 typedef struct _GstGLAllocatorClass GstGLAllocatorClass;
@@ -62,6 +66,20 @@ typedef struct _GstGLUploadMetaPrivate GstGLUploadMetaPrivate;
 typedef struct _GstGLColorConvert GstGLColorConvert;
 typedef struct _GstGLColorConvertClass GstGLColorConvertClass;
 typedef struct _GstGLColorConvertPrivate GstGLColorConvertPrivate;
+
+typedef struct _GstGLBaseFilter GstGLBaseFilter;
+typedef struct _GstGLBaseFilterClass GstGLBaseFilterClass;
+typedef struct _GstGLBaseFilterPrivate GstGLBaseFilterPrivate;
+
+typedef struct _GstGLFilter GstGLFilter;
+typedef struct _GstGLFilterClass GstGLFilterClass;
+
+typedef struct _GstGLViewConvert GstGLViewConvert;
+typedef struct _GstGLViewConvertClass GstGLViewConvertClass;
+typedef struct _GstGLViewConvertPrivate GstGLViewConvertPrivate;
+
+typedef struct _GstGLOverlayCompositor GstGLOverlayCompositor;
+typedef struct _GstGLOverlayCompositorClass GstGLOverlayCompositorClass;
 
 G_END_DECLS
 

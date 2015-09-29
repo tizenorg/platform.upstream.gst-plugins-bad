@@ -35,14 +35,9 @@
  * ]| This pipeline only keeps the red color.
  */
 
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-
-/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
- * with newer GLib versions (>= 2.31.0) */
-#define GLIB_DISABLE_DEPRECATION_WARNINGS
 
 #include "gstchromahold.h"
 
@@ -64,8 +59,7 @@ enum
   PROP_TARGET_R,
   PROP_TARGET_G,
   PROP_TARGET_B,
-  PROP_TOLERANCE,
-  PROP_LAST
+  PROP_TOLERANCE
 };
 
 static GstStaticPadTemplate gst_chroma_hold_src_template =

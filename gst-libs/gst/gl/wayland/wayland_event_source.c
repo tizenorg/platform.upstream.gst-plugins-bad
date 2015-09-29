@@ -38,19 +38,58 @@
 
 #include "wayland_event_source.h"
 
+static void
+sync_callback (void *data, struct wl_callback *callback, uint32_t serial)
+{
+  gboolean *done = data;
+
+  *done = TRUE;
+  wl_callback_destroy (callback);
+}
+
+static const struct wl_callback_listener sync_listener = {
+  sync_callback
+};
+
+gint
+gst_gl_wl_display_roundtrip_queue (struct wl_display *display,
+    struct wl_event_queue *queue)
+{
+  struct wl_callback *callback = wl_display_sync (display);
+  gboolean done = FALSE;
+  gint ret = 0;
+
+  if (callback == NULL)
+    return -1;
+  wl_callback_add_listener (callback, &sync_listener, &done);
+  if (queue) {
+    wl_proxy_set_queue ((struct wl_proxy *) callback, queue);
+    while (!done && ret >= 0)
+      ret = wl_display_dispatch_queue (display, queue);
+  } else {
+    while (!done && ret >= 0)
+      ret = wl_display_dispatch (display);
+  }
+
+  if (ret == -1 && !done)
+    wl_callback_destroy (callback);
+
+  return ret;
+}
+
 typedef struct _WaylandEventSource
 {
   GSource source;
   GPollFD pfd;
   uint32_t mask;
   struct wl_display *display;
+  struct wl_event_queue *queue;
 } WaylandEventSource;
 
 static gboolean
 wayland_event_source_prepare (GSource * base, gint * timeout)
 {
   WaylandEventSource *source = (WaylandEventSource *) base;
-  gboolean retval;
 
   *timeout = -1;
 
@@ -59,9 +98,7 @@ wayland_event_source_prepare (GSource * base, gint * timeout)
    * writes on idle */
   wl_display_flush (source->display);
 
-  retval = FALSE;               //clutter_events_pending ();
-
-  return retval;
+  return FALSE;
 }
 
 static gboolean
@@ -70,7 +107,7 @@ wayland_event_source_check (GSource * base)
   WaylandEventSource *source = (WaylandEventSource *) base;
   gboolean retval;
 
-  retval = source->pfd.revents; // || clutter_events_pending();
+  retval = source->pfd.revents;
 
   return retval;
 }
@@ -80,25 +117,18 @@ wayland_event_source_dispatch (GSource * base,
     GSourceFunc callback, gpointer data)
 {
   WaylandEventSource *source = (WaylandEventSource *) base;
-//  ClutterEvent *event;
 
   if (source->pfd.revents) {
-    wl_display_roundtrip (source->display);
+    if (source->queue)
+      wl_display_dispatch_queue_pending (source->display, source->queue);
+    else
+      wl_display_dispatch_pending (source->display);
     source->pfd.revents = 0;
   }
 
   if (callback)
     callback (data);
 
-#if 0
-  event = clutter_event_get ();
-
-  if (event) {
-    /* forward the event into clutter for emission etc. */
-    clutter_do_event (event);
-    clutter_event_free (event);
-  }
-#endif
   return TRUE;
 }
 
@@ -110,13 +140,15 @@ static GSourceFuncs wayland_event_source_funcs = {
 };
 
 GSource *
-wayland_event_source_new (struct wl_display *display)
+wayland_event_source_new (struct wl_display *display,
+    struct wl_event_queue *queue)
 {
   WaylandEventSource *source;
 
   source = (WaylandEventSource *)
       g_source_new (&wayland_event_source_funcs, sizeof (WaylandEventSource));
   source->display = display;
+  source->queue = queue;
   source->pfd.fd = wl_display_get_fd (display);
   source->pfd.events = G_IO_IN | G_IO_ERR;
   g_source_add_poll (&source->source, &source->pfd);

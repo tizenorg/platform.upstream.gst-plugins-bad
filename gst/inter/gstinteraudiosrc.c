@@ -51,14 +51,14 @@ GST_DEBUG_CATEGORY_STATIC (gst_inter_audio_src_debug_category);
 #define GST_CAT_DEFAULT gst_inter_audio_src_debug_category
 
 /* prototypes */
-
-
 static void gst_inter_audio_src_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_inter_audio_src_get_property (GObject * object,
     guint property_id, GValue * value, GParamSpec * pspec);
 static void gst_inter_audio_src_finalize (GObject * object);
 
+static GstCaps *gst_inter_audio_src_get_caps (GstBaseSrc * src,
+    GstCaps * filter);
 static gboolean gst_inter_audio_src_set_caps (GstBaseSrc * src, GstCaps * caps);
 static gboolean gst_inter_audio_src_start (GstBaseSrc * src);
 static gboolean gst_inter_audio_src_stop (GstBaseSrc * src);
@@ -74,22 +74,26 @@ static GstCaps *gst_inter_audio_src_fixate (GstBaseSrc * src, GstCaps * caps);
 enum
 {
   PROP_0,
-  PROP_CHANNEL
+  PROP_CHANNEL,
+  PROP_BUFFER_TIME,
+  PROP_LATENCY_TIME,
+  PROP_PERIOD_TIME
 };
 
-/* pad templates */
+#define DEFAULT_CHANNEL ("default")
 
+/* pad templates */
 static GstStaticPadTemplate gst_inter_audio_src_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("audio/x-raw, format = (string) " GST_AUDIO_NE (S16) ", "
-        "rate = (int) 48000, channels = (int) 2")
+    GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE (GST_AUDIO_FORMATS_ALL)
+        ", layout = (string) interleaved")
     );
 
 
 /* class initialization */
-
+#define parent_class gst_inter_audio_src_parent_class
 G_DEFINE_TYPE (GstInterAudioSrc, gst_inter_audio_src, GST_TYPE_BASE_SRC);
 
 static void
@@ -114,6 +118,7 @@ gst_inter_audio_src_class_init (GstInterAudioSrcClass * klass)
   gobject_class->set_property = gst_inter_audio_src_set_property;
   gobject_class->get_property = gst_inter_audio_src_get_property;
   gobject_class->finalize = gst_inter_audio_src_finalize;
+  base_src_class->get_caps = GST_DEBUG_FUNCPTR (gst_inter_audio_src_get_caps);
   base_src_class->set_caps = GST_DEBUG_FUNCPTR (gst_inter_audio_src_set_caps);
   base_src_class->start = GST_DEBUG_FUNCPTR (gst_inter_audio_src_start);
   base_src_class->stop = GST_DEBUG_FUNCPTR (gst_inter_audio_src_stop);
@@ -125,7 +130,24 @@ gst_inter_audio_src_class_init (GstInterAudioSrcClass * klass)
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
       g_param_spec_string ("channel", "Channel",
           "Channel name to match inter src and sink elements",
-          "default", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          DEFAULT_CHANNEL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_BUFFER_TIME,
+      g_param_spec_uint64 ("buffer-time", "Buffer Time",
+          "Size of audio buffer", 1, G_MAXUINT64, DEFAULT_AUDIO_BUFFER_TIME,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_LATENCY_TIME,
+      g_param_spec_uint64 ("latency-time", "Latency Time",
+          "Latency as reported by the source",
+          1, G_MAXUINT64, DEFAULT_AUDIO_LATENCY_TIME,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_PERIOD_TIME,
+      g_param_spec_uint64 ("period-time", "Period Time",
+          "The minimum amount of data to read in each iteration",
+          1, G_MAXUINT64, DEFAULT_AUDIO_PERIOD_TIME,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -135,7 +157,10 @@ gst_inter_audio_src_init (GstInterAudioSrc * interaudiosrc)
   gst_base_src_set_live (GST_BASE_SRC (interaudiosrc), TRUE);
   gst_base_src_set_blocksize (GST_BASE_SRC (interaudiosrc), -1);
 
-  interaudiosrc->channel = g_strdup ("default");
+  interaudiosrc->channel = g_strdup (DEFAULT_CHANNEL);
+  interaudiosrc->buffer_time = DEFAULT_AUDIO_BUFFER_TIME;
+  interaudiosrc->latency_time = DEFAULT_AUDIO_LATENCY_TIME;
+  interaudiosrc->period_time = DEFAULT_AUDIO_PERIOD_TIME;
 }
 
 void
@@ -148,6 +173,15 @@ gst_inter_audio_src_set_property (GObject * object, guint property_id,
     case PROP_CHANNEL:
       g_free (interaudiosrc->channel);
       interaudiosrc->channel = g_value_dup_string (value);
+      break;
+    case PROP_BUFFER_TIME:
+      interaudiosrc->buffer_time = g_value_get_uint64 (value);
+      break;
+    case PROP_LATENCY_TIME:
+      interaudiosrc->latency_time = g_value_get_uint64 (value);
+      break;
+    case PROP_PERIOD_TIME:
+      interaudiosrc->period_time = g_value_get_uint64 (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -164,6 +198,15 @@ gst_inter_audio_src_get_property (GObject * object, guint property_id,
   switch (property_id) {
     case PROP_CHANNEL:
       g_value_set_string (value, interaudiosrc->channel);
+      break;
+    case PROP_BUFFER_TIME:
+      g_value_set_uint64 (value, interaudiosrc->buffer_time);
+      break;
+    case PROP_LATENCY_TIME:
+      g_value_set_uint64 (value, interaudiosrc->latency_time);
+      break;
+    case PROP_PERIOD_TIME:
+      g_value_set_uint64 (value, interaudiosrc->period_time);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -182,38 +225,52 @@ gst_inter_audio_src_finalize (GObject * object)
   G_OBJECT_CLASS (gst_inter_audio_src_parent_class)->finalize (object);
 }
 
+static GstCaps *
+gst_inter_audio_src_get_caps (GstBaseSrc * src, GstCaps * filter)
+{
+  GstInterAudioSrc *interaudiosrc = GST_INTER_AUDIO_SRC (src);
+  GstCaps *caps;
+
+  GST_DEBUG_OBJECT (interaudiosrc, "get_caps");
+
+  if (!interaudiosrc->surface)
+    return GST_BASE_SRC_CLASS (parent_class)->get_caps (src, filter);
+
+  g_mutex_lock (&interaudiosrc->surface->mutex);
+  if (interaudiosrc->surface->audio_info.finfo) {
+    caps = gst_audio_info_to_caps (&interaudiosrc->surface->audio_info);
+    if (filter) {
+      GstCaps *tmp;
+
+      tmp = gst_caps_intersect_full (filter, caps, GST_CAPS_INTERSECT_FIRST);
+      gst_caps_unref (caps);
+      caps = tmp;
+    }
+  } else {
+    caps = NULL;
+  }
+  g_mutex_unlock (&interaudiosrc->surface->mutex);
+
+  if (caps)
+    return caps;
+  else
+    return GST_BASE_SRC_CLASS (parent_class)->get_caps (src, filter);
+}
+
 static gboolean
 gst_inter_audio_src_set_caps (GstBaseSrc * src, GstCaps * caps)
 {
   GstInterAudioSrc *interaudiosrc = GST_INTER_AUDIO_SRC (src);
-  const GstStructure *structure;
-  GstAudioInfo info;
-  gboolean ret;
-  int sample_rate;
 
   GST_DEBUG_OBJECT (interaudiosrc, "set_caps");
 
-  structure = gst_caps_get_structure (caps, 0);
-
-  if (!gst_structure_get_int (structure, "rate", &sample_rate)) {
-    GST_ERROR_OBJECT (src, "Audio caps without rate");
+  if (!gst_audio_info_from_caps (&interaudiosrc->info, caps)) {
+    GST_ERROR_OBJECT (src, "Failed to parse caps %" GST_PTR_FORMAT, caps);
     return FALSE;
   }
 
-  interaudiosrc->sample_rate = sample_rate;
-
-  if (!gst_audio_info_from_caps (&info, caps)) {
-    GST_ERROR_OBJECT (src, "Can't parse audio caps");
-    return FALSE;
-  }
-
-  interaudiosrc->finfo = info.finfo;
-
-  ret = gst_pad_set_caps (src->srcpad, caps);
-
-  return ret;
+  return TRUE;
 }
-
 
 static gboolean
 gst_inter_audio_src_start (GstBaseSrc * src)
@@ -223,6 +280,14 @@ gst_inter_audio_src_start (GstBaseSrc * src)
   GST_DEBUG_OBJECT (interaudiosrc, "start");
 
   interaudiosrc->surface = gst_inter_surface_get (interaudiosrc->channel);
+  interaudiosrc->timestamp_offset = 0;
+  interaudiosrc->n_samples = 0;
+
+  g_mutex_lock (&interaudiosrc->surface->mutex);
+  interaudiosrc->surface->audio_buffer_time = interaudiosrc->buffer_time;
+  interaudiosrc->surface->audio_latency_time = interaudiosrc->latency_time;
+  interaudiosrc->surface->audio_period_time = interaudiosrc->period_time;
+  g_mutex_unlock (&interaudiosrc->surface->mutex);
 
   return TRUE;
 }
@@ -236,7 +301,6 @@ gst_inter_audio_src_stop (GstBaseSrc * src)
 
   gst_inter_surface_unref (interaudiosrc->surface);
   interaudiosrc->surface = NULL;
-  interaudiosrc->finfo = NULL;
 
   return TRUE;
 }
@@ -245,86 +309,117 @@ static void
 gst_inter_audio_src_get_times (GstBaseSrc * src, GstBuffer * buffer,
     GstClockTime * start, GstClockTime * end)
 {
+  GstInterAudioSrc *interaudiosrc = GST_INTER_AUDIO_SRC (src);
+
   GST_DEBUG_OBJECT (src, "get_times");
 
   /* for live sources, sync on the timestamp of the buffer */
   if (gst_base_src_is_live (src)) {
-    GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buffer);
-
-    if (GST_CLOCK_TIME_IS_VALID (timestamp)) {
-      /* get duration to calculate end time */
-      GstClockTime duration = GST_BUFFER_DURATION (buffer);
-
-      if (GST_CLOCK_TIME_IS_VALID (duration)) {
-        *end = timestamp + duration;
+    if (GST_BUFFER_TIMESTAMP_IS_VALID (buffer)) {
+      *start = GST_BUFFER_TIMESTAMP (buffer);
+      if (GST_BUFFER_DURATION_IS_VALID (buffer)) {
+        *end = *start + GST_BUFFER_DURATION (buffer);
+      } else {
+        if (interaudiosrc->info.rate > 0) {
+          *end = *start +
+              gst_util_uint64_scale_int (gst_buffer_get_size (buffer),
+              GST_SECOND, interaudiosrc->info.rate * interaudiosrc->info.bpf);
+        }
       }
-      *start = timestamp;
     }
-  } else {
-    *start = -1;
-    *end = -1;
   }
 }
-
-
-#define SIZE 1600
 
 static GstFlowReturn
 gst_inter_audio_src_create (GstBaseSrc * src, guint64 offset, guint size,
     GstBuffer ** buf)
 {
   GstInterAudioSrc *interaudiosrc = GST_INTER_AUDIO_SRC (src);
+  GstCaps *caps;
   GstBuffer *buffer;
-  int n;
+  guint n, bpf;
+  guint64 period_time;
+  guint64 period_samples;
 
   GST_DEBUG_OBJECT (interaudiosrc, "create");
 
   buffer = NULL;
+  caps = NULL;
 
   g_mutex_lock (&interaudiosrc->surface->mutex);
-  n = gst_adapter_available (interaudiosrc->surface->audio_adapter) / 4;
-  if (n > SIZE * 3) {
-    GST_WARNING ("flushing %d samples", SIZE / 2);
-    gst_adapter_flush (interaudiosrc->surface->audio_adapter, (SIZE / 2) * 4);
-    n -= (SIZE / 2);
+  if (interaudiosrc->surface->audio_info.finfo) {
+    if (!gst_audio_info_is_equal (&interaudiosrc->surface->audio_info,
+            &interaudiosrc->info)) {
+      caps = gst_audio_info_to_caps (&interaudiosrc->surface->audio_info);
+      interaudiosrc->timestamp_offset +=
+          gst_util_uint64_scale (interaudiosrc->n_samples, GST_SECOND,
+          interaudiosrc->info.rate);
+      interaudiosrc->n_samples = 0;
+    }
   }
-  if (n > SIZE)
-    n = SIZE;
+
+  bpf = interaudiosrc->surface->audio_info.bpf;
+  period_time = interaudiosrc->surface->audio_period_time;
+  period_samples =
+      gst_util_uint64_scale (period_time, interaudiosrc->info.rate, GST_SECOND);
+
+  if (bpf > 0)
+    n = gst_adapter_available (interaudiosrc->surface->audio_adapter) / bpf;
+  else
+    n = 0;
+
+  if (n > period_samples)
+    n = period_samples;
   if (n > 0) {
     buffer = gst_adapter_take_buffer (interaudiosrc->surface->audio_adapter,
-        n * 4);
+        n * bpf);
   } else {
     buffer = gst_buffer_new ();
+    GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_GAP);
   }
   g_mutex_unlock (&interaudiosrc->surface->mutex);
 
-  if (n < SIZE) {
+  if (caps) {
+    gboolean ret = gst_base_src_set_caps (src, caps);
+    gst_caps_unref (caps);
+    if (!ret) {
+      GST_ERROR_OBJECT (src, "Failed to set caps %" GST_PTR_FORMAT, caps);
+      if (buffer)
+        gst_buffer_unref (buffer);
+      return GST_FLOW_NOT_NEGOTIATED;
+    }
+  }
+
+  buffer = gst_buffer_make_writable (buffer);
+
+  bpf = interaudiosrc->info.bpf;
+  if (n < period_samples) {
     GstMapInfo map;
     GstMemory *mem;
 
-    GST_WARNING ("creating %d samples of silence", SIZE - n);
-    mem = gst_allocator_alloc (NULL, (SIZE - n) * 4, NULL);
+    GST_DEBUG_OBJECT (interaudiosrc,
+        "creating %" G_GUINT64_FORMAT " samples of silence",
+        period_samples - n);
+    mem = gst_allocator_alloc (NULL, (period_samples - n) * bpf, NULL);
     if (gst_memory_map (mem, &map, GST_MAP_WRITE)) {
-      gst_audio_format_fill_silence (interaudiosrc->finfo, map.data, map.size);
+      gst_audio_format_fill_silence (interaudiosrc->info.finfo, map.data,
+          map.size);
       gst_memory_unmap (mem, &map);
     }
-    buffer = gst_buffer_make_writable (buffer);
     gst_buffer_prepend_memory (buffer, mem);
   }
-  n = SIZE;
+  n = period_samples;
 
   GST_BUFFER_OFFSET (buffer) = interaudiosrc->n_samples;
   GST_BUFFER_OFFSET_END (buffer) = interaudiosrc->n_samples + n;
-  GST_BUFFER_TIMESTAMP (buffer) =
-      gst_util_uint64_scale_int (interaudiosrc->n_samples, GST_SECOND,
-      interaudiosrc->sample_rate);
+  GST_BUFFER_TIMESTAMP (buffer) = interaudiosrc->timestamp_offset +
+      gst_util_uint64_scale (interaudiosrc->n_samples, GST_SECOND,
+      interaudiosrc->info.rate);
   GST_DEBUG_OBJECT (interaudiosrc, "create ts %" GST_TIME_FORMAT,
       GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer)));
-  GST_BUFFER_DURATION (buffer) =
-      gst_util_uint64_scale_int (interaudiosrc->n_samples + n, GST_SECOND,
-      interaudiosrc->sample_rate) - GST_BUFFER_TIMESTAMP (buffer);
-  GST_BUFFER_OFFSET (buffer) = interaudiosrc->n_samples;
-  GST_BUFFER_OFFSET_END (buffer) = -1;
+  GST_BUFFER_DURATION (buffer) = interaudiosrc->timestamp_offset +
+      gst_util_uint64_scale (interaudiosrc->n_samples + n, GST_SECOND,
+      interaudiosrc->info.rate) - GST_BUFFER_TIMESTAMP (buffer);
   GST_BUFFER_FLAG_UNSET (buffer, GST_BUFFER_FLAG_DISCONT);
   if (interaudiosrc->n_samples == 0) {
     GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_DISCONT);
@@ -336,10 +431,10 @@ gst_inter_audio_src_create (GstBaseSrc * src, guint64 offset, guint size,
   return GST_FLOW_OK;
 }
 
-
 static gboolean
 gst_inter_audio_src_query (GstBaseSrc * src, GstQuery * query)
 {
+  GstInterAudioSrc *interaudiosrc = GST_INTER_AUDIO_SRC (src);
   gboolean ret;
 
   GST_DEBUG_OBJECT (src, "query");
@@ -348,11 +443,10 @@ gst_inter_audio_src_query (GstBaseSrc * src, GstQuery * query)
     case GST_QUERY_LATENCY:{
       GstClockTime min_latency, max_latency;
 
-      min_latency = 30 * gst_util_uint64_scale_int (GST_SECOND, SIZE, 48000);
+      min_latency = interaudiosrc->latency_time;
+      max_latency = interaudiosrc->buffer_time;
 
-      max_latency = min_latency;
-
-      GST_ERROR_OBJECT (src,
+      GST_DEBUG_OBJECT (src,
           "report latency min %" GST_TIME_FORMAT " max %" GST_TIME_FORMAT,
           GST_TIME_ARGS (min_latency), GST_TIME_ARGS (max_latency));
 
@@ -379,11 +473,14 @@ gst_inter_audio_src_fixate (GstBaseSrc * src, GstCaps * caps)
   GST_DEBUG_OBJECT (src, "fixate");
 
   caps = gst_caps_make_writable (caps);
+  caps = gst_caps_truncate (caps);
 
   structure = gst_caps_get_structure (caps, 0);
 
+  gst_structure_fixate_field_string (structure, "format", GST_AUDIO_NE (S16));
   gst_structure_fixate_field_nearest_int (structure, "channels", 2);
   gst_structure_fixate_field_nearest_int (structure, "rate", 48000);
+  gst_structure_fixate_field_string (structure, "layout", "interleaved");
 
   return caps;
 }
