@@ -558,7 +558,8 @@ gst_live_adder_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       reset_pad_private (pad);
       GST_OBJECT_UNLOCK (adder);
       ret = gst_pad_push_event (adder->srcpad, event);
-      ret = gst_live_adder_src_activate_mode (adder->srcpad, GST_OBJECT (adder),
+      ret &=
+          gst_live_adder_src_activate_mode (adder->srcpad, GST_OBJECT (adder),
           GST_PAD_MODE_PUSH, TRUE);
       break;
     case GST_EVENT_EOS:
@@ -604,19 +605,15 @@ static gboolean
 gst_live_adder_query_pos_dur (GstLiveAdder * adder, GstFormat format,
     gboolean position, gint64 * outvalue)
 {
+  GValue item = { 0 };
   gint64 max = G_MININT64;
   gboolean res = TRUE;
   GstIterator *it;
   gboolean done = FALSE;
 
-
   it = gst_element_iterate_sink_pads (GST_ELEMENT_CAST (adder));
   while (!done) {
-    GstIteratorResult ires;
-    GValue item = { 0 };
-
-    ires = gst_iterator_next (it, &item);
-    switch (ires) {
+    switch (gst_iterator_next (it, &item)) {
       case GST_ITERATOR_DONE:
         done = TRUE;
         break;
@@ -647,6 +644,7 @@ gst_live_adder_query_pos_dur (GstLiveAdder * adder, GstFormat format,
             max = value;
           }
         }
+        g_value_reset (&item);
         break;
       }
       case GST_ITERATOR_RESYNC:
@@ -659,6 +657,8 @@ gst_live_adder_query_pos_dur (GstLiveAdder * adder, GstFormat format,
         break;
     }
   }
+
+  g_value_unset (&item);
   gst_iterator_free (it);
 
   if (res)
@@ -728,57 +728,15 @@ gst_live_adder_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
     {
       /* We need to send the query upstream and add the returned latency to our
        * own */
-      GstClockTime min_latency = 0, max_latency = G_MAXUINT64;
-      GValue item = { 0 };
-      GstIterator *iter = NULL;
-      gboolean done = FALSE;
-
-      iter = gst_element_iterate_sink_pads (GST_ELEMENT (adder));
-
-      while (!done) {
-        switch (gst_iterator_next (iter, &item)) {
-          case GST_ITERATOR_OK:
-          {
-            GstPad *sinkpad = GST_PAD (g_value_get_object (&item));
-            GstClockTime pad_min_latency, pad_max_latency;
-            gboolean pad_us_live;
-
-            if (gst_pad_peer_query (sinkpad, query)) {
-              gst_query_parse_latency (query, &pad_us_live, &pad_min_latency,
-                  &pad_max_latency);
-
-              res = TRUE;
-
-              GST_DEBUG_OBJECT (adder, "Peer latency for pad %s: min %"
-                  GST_TIME_FORMAT " max %" GST_TIME_FORMAT,
-                  GST_PAD_NAME (sinkpad),
-                  GST_TIME_ARGS (pad_min_latency),
-                  GST_TIME_ARGS (pad_max_latency));
-
-              min_latency = MAX (pad_min_latency, min_latency);
-              max_latency = MIN (pad_max_latency, max_latency);
-            }
-          }
-            break;
-          case GST_ITERATOR_RESYNC:
-            min_latency = 0;
-            max_latency = G_MAXUINT64;
-
-            gst_iterator_resync (iter);
-            break;
-          case GST_ITERATOR_ERROR:
-            GST_ERROR_OBJECT (adder, "Error looping sink pads");
-            done = TRUE;
-            break;
-          case GST_ITERATOR_DONE:
-            done = TRUE;
-            break;
-        }
-      }
-      gst_iterator_free (iter);
+      res = gst_pad_query_default (pad, parent, query);
 
       if (res) {
         GstClockTime my_latency = adder->latency_ms * GST_MSECOND;
+        GstClockTime min_latency, max_latency;
+        gboolean live;
+
+        gst_query_parse_latency (query, &live, &min_latency, &max_latency);
+
         GST_OBJECT_LOCK (adder);
         adder->peer_latency = min_latency;
         min_latency += my_latency;
@@ -865,14 +823,11 @@ forward_event_func (const GValue * item, GValue * ret, gpointer user_data)
 static gboolean
 forward_event (GstLiveAdder * adder, GstEvent * event)
 {
-  gboolean ret;
   GstIterator *it;
   GValue vret = { 0 };
 
   GST_LOG_OBJECT (adder, "Forwarding event %p (%s)", event,
       GST_EVENT_TYPE_NAME (event));
-
-  ret = TRUE;
 
   g_value_init (&vret, G_TYPE_BOOLEAN);
   g_value_set_boolean (&vret, TRUE);
@@ -880,9 +835,7 @@ forward_event (GstLiveAdder * adder, GstEvent * event)
   gst_iterator_fold (it, forward_event_func, &vret, event);
   gst_iterator_free (it);
 
-  ret = g_value_get_boolean (&vret);
-
-  return ret;
+  return g_value_get_boolean (&vret);
 }
 
 
@@ -923,8 +876,16 @@ gst_live_adder_length_from_duration (GstLiveAdder * adder,
   return (guint) ret;
 }
 
+static GstClockTime
+gst_live_adder_length_to_duration (GstLiveAdder * adder, guint size)
+{
+  return GST_FRAMES_TO_CLOCK_TIME ((size /
+          GST_AUDIO_INFO_BPF (&adder->info)),
+      GST_AUDIO_INFO_RATE (&adder->info));
+}
+
 static GstFlowReturn
-gst_live_live_adder_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
+gst_live_adder_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
 {
   GstLiveAdder *adder = GST_LIVE_ADDER (parent);
   GstLiveAdderPadPrivate *padprivate = NULL;
@@ -932,6 +893,9 @@ gst_live_live_adder_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
   GList *item = NULL;
   GstClockTime skip = 0;
   gint64 drift = 0;             /* Positive if new buffer after old buffer */
+  gsize buffer_size = 0;
+  gsize subbuffer_size = 0;
+  gsize offset = 0;
 
   GST_OBJECT_LOCK (adder);
 
@@ -1084,9 +1048,19 @@ gst_live_live_adder_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
       GstClockTime subbuffer_duration = GST_BUFFER_TIMESTAMP (oldbuffer) -
           (GST_BUFFER_TIMESTAMP (buffer) + skip);
 
+      buffer_size = gst_buffer_get_size (buffer);
+      offset = gst_live_adder_length_from_duration (adder, skip);
+      subbuffer_size = gst_live_adder_length_from_duration (adder,
+          subbuffer_duration);
+
+      if (offset + subbuffer_size > buffer_size) {
+        subbuffer_size = buffer_size - offset;
+        subbuffer_duration = gst_live_adder_length_to_duration (adder,
+            subbuffer_size);
+      }
+
       subbuffer = gst_buffer_copy_region (buffer, GST_BUFFER_COPY_ALL,
-          gst_live_adder_length_from_duration (adder, skip),
-          gst_live_adder_length_from_duration (adder, subbuffer_duration));
+          offset, subbuffer_size);
 
       GST_BUFFER_TIMESTAMP (subbuffer) = GST_BUFFER_TIMESTAMP (buffer) + skip;
       GST_BUFFER_DURATION (subbuffer) = subbuffer_duration;
@@ -1137,10 +1111,22 @@ gst_live_live_adder_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
     if (skip) {
       GstClockTime subbuffer_duration = GST_BUFFER_DURATION (buffer) - skip;
       GstClockTime subbuffer_ts = GST_BUFFER_TIMESTAMP (buffer) + skip;
-      GstBuffer *new_buffer = gst_buffer_copy_region (buffer,
-          GST_BUFFER_COPY_ALL,
-          gst_live_adder_length_from_duration (adder, skip),
-          gst_live_adder_length_from_duration (adder, subbuffer_duration));
+      GstBuffer *new_buffer;
+
+      buffer_size = gst_buffer_get_size (buffer);
+      offset = gst_live_adder_length_from_duration (adder, skip);
+      subbuffer_size = gst_live_adder_length_from_duration (adder,
+          subbuffer_duration);
+
+      if (offset + subbuffer_size > buffer_size) {
+        subbuffer_size = buffer_size - offset;
+        subbuffer_duration = gst_live_adder_length_to_duration (adder,
+            subbuffer_size);
+      }
+
+      new_buffer = gst_buffer_copy_region (buffer,
+          GST_BUFFER_COPY_ALL, offset, subbuffer_size);
+
       gst_buffer_unref (buffer);
       buffer = new_buffer;
       GST_BUFFER_PTS (buffer) = subbuffer_ts;
@@ -1396,11 +1382,7 @@ gst_live_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
   adder = GST_LIVE_ADDER (element);
 
   /* increment pad counter */
-#if GLIB_CHECK_VERSION(2,29,5)
   padcount = g_atomic_int_add (&adder->padcount, 1);
-#else
-  padcount = g_atomic_int_exchange_and_add (&adder->padcount, 1);
-#endif
 
   name = g_strdup_printf ("sink_%u", padcount);
   newpad = gst_pad_new_from_template (templ, name);
@@ -1420,7 +1402,7 @@ gst_live_adder_request_new_pad (GstElement * element, GstPadTemplate * templ,
 
   gst_pad_set_element_private (newpad, padprivate);
 
-  gst_pad_set_chain_function (newpad, gst_live_live_adder_chain);
+  gst_pad_set_chain_function (newpad, gst_live_adder_chain);
 
 
   if (!gst_pad_set_active (newpad, TRUE))

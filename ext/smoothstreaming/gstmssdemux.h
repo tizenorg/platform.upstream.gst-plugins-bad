@@ -24,6 +24,7 @@
 #define __GST_MSSDEMUX_H__
 
 #include <gst/gst.h>
+#include <gst/adaptivedemux/gstadaptivedemux.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstdataqueue.h>
 #include "gstmssmanifest.h"
@@ -52,75 +53,29 @@ typedef struct _GstMssDemux GstMssDemux;
 typedef struct _GstMssDemuxClass GstMssDemuxClass;
 
 struct _GstMssDemuxStream {
-  GstPad *pad;
-
-  GstCaps *caps;
-
-  GstMssDemux *parent;
+  GstAdaptiveDemuxStream parent;
 
   GstMssStream *manifest_stream;
-
-#if 0
-  GstUriDownloader *downloader;
-#endif
-
-  GstEvent *pending_segment;
-
-  GstSegment segment;
-
-  /* Downloading task */
-  GstTask *download_task;
-  GRecMutex download_lock;
-
-  GstFlowReturn last_ret;
-  gboolean eos;
-  gboolean have_data;
-  gboolean cancelled;
-  gboolean restart_download;
-
-  guint download_error_count;
-
-  /* download tooling */
-  GstElement *src;
-  GstPad *src_srcpad;
-  GMutex fragment_download_lock;
-  GCond fragment_download_cond;
-  gboolean starting_fragment;
-  gint64 download_start_time;
-  gint64 download_total_time;
-  gint64 download_total_bytes;
-  gint current_download_rate;
 };
 
 struct _GstMssDemux {
-  GstBin bin;
+  GstAdaptiveDemux bin;
 
   /* pads */
   GstPad *sinkpad;
 
-  gboolean have_group_id;
-  guint group_id;
-
-  GstBuffer *manifest_buffer;
-
   GstMssManifest *manifest;
   gchar *base_url;
-  gchar *manifest_uri;
 
-  GSList *streams;
   guint n_videos;
   guint n_audios;
 
-  gboolean update_bitrates;
-
   /* properties */
-  guint64 connection_speed; /* in bps */
   guint data_queue_max_size;
-  gfloat bitrate_limit;
 };
 
 struct _GstMssDemuxClass {
-  GstBinClass parent_class;
+  GstAdaptiveDemuxClass parent_class;
 };
 
 GType gst_mss_demux_get_type (void);

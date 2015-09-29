@@ -31,10 +31,6 @@
  * </refsect2>
  */
 
-/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
- * with newer GLib versions (>= 2.31.0) */
-#define GLIB_DISABLE_DEPRECATION_WARNINGS
-
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -119,11 +115,14 @@ static GstStateChangeReturn gst_ass_render_change_state (GstElement * element,
 G_DEFINE_TYPE (GstAssRender, gst_ass_render, GST_TYPE_ELEMENT);
 
 static GstCaps *gst_ass_render_get_videosink_caps (GstPad * pad,
-    GstCaps * filter);
-static GstCaps *gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter);
+    GstAssRender * render, GstCaps * filter);
+static GstCaps *gst_ass_render_get_src_caps (GstPad * pad,
+    GstAssRender * render, GstCaps * filter);
 
-static gboolean gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps);
-static gboolean gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps);
+static gboolean gst_ass_render_setcaps_video (GstPad * pad,
+    GstAssRender * render, GstCaps * caps);
+static gboolean gst_ass_render_setcaps_text (GstPad * pad,
+    GstAssRender * render, GstCaps * caps);
 
 static GstFlowReturn gst_ass_render_chain_video (GstPad * pad,
     GstObject * parent, GstBuffer * buf);
@@ -429,7 +428,7 @@ gst_ass_render_query_src (GstPad * pad, GstObject * parent, GstQuery * query)
       GstCaps *filter, *caps;
 
       gst_query_parse_caps (query, &filter);
-      caps = gst_ass_render_get_src_caps (pad, filter);
+      caps = gst_ass_render_get_src_caps (pad, (GstAssRender *) parent, filter);
       gst_query_set_caps_result (query, caps);
       gst_caps_unref (caps);
       res = TRUE;
@@ -581,9 +580,9 @@ gst_ass_render_intersect_by_feature (GstCaps * caps,
 }
 
 static GstCaps *
-gst_ass_render_get_videosink_caps (GstPad * pad, GstCaps * filter)
+gst_ass_render_get_videosink_caps (GstPad * pad, GstAssRender * render,
+    GstCaps * filter)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstPad *srcpad = render->srcpad;
   GstCaps *peer_caps = NULL, *caps = NULL, *assrender_filter = NULL;
 
@@ -638,15 +637,13 @@ gst_ass_render_get_videosink_caps (GstPad * pad, GstCaps * filter)
 
   GST_DEBUG_OBJECT (render, "returning  %" GST_PTR_FORMAT, caps);
 
-  gst_object_unref (render);
-
   return caps;
 }
 
 static GstCaps *
-gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter)
+gst_ass_render_get_src_caps (GstPad * pad, GstAssRender * render,
+    GstCaps * filter)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstPad *sinkpad = render->video_sinkpad;
   GstCaps *peer_caps = NULL, *caps = NULL, *assrender_filter = NULL;
 
@@ -702,8 +699,6 @@ gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter)
   }
 
   GST_DEBUG_OBJECT (render, "returning  %" GST_PTR_FORMAT, caps);
-
-  gst_object_unref (render);
 
   return caps;
 }
@@ -784,9 +779,9 @@ gst_ass_render_can_handle_caps (GstCaps * incaps)
 }
 
 static gboolean
-gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
+gst_ass_render_setcaps_video (GstPad * pad, GstAssRender * render,
+    GstCaps * caps)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstQuery *query;
   gboolean ret = FALSE;
   gint par_n = 1, par_d = 1;
@@ -819,13 +814,8 @@ gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
     overlay_caps = gst_caps_copy (caps);
 
     f = gst_caps_get_features (overlay_caps, 0);
-    if (f == NULL) {
-      f = gst_caps_features_new
-          (GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION, NULL);
-    } else {
-      gst_caps_features_add (f,
-          GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
-    }
+    gst_caps_features_add (f,
+        GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
 
     ret = gst_pad_peer_query_accept_caps (render->srcpad, overlay_caps);
     GST_DEBUG_OBJECT (render, "Downstream accepts the overlay meta: %d", ret);
@@ -904,7 +894,6 @@ gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
   GST_DEBUG_OBJECT (render, "ass renderer setup complete");
 
 out:
-  gst_object_unref (render);
 
   return ret;
 
@@ -924,9 +913,9 @@ unsupported_caps:
 }
 
 static gboolean
-gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps)
+gst_ass_render_setcaps_text (GstPad * pad, GstAssRender * render,
+    GstCaps * caps)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstStructure *structure;
   const GValue *value;
   GstBuffer *priv;
@@ -967,8 +956,6 @@ gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps)
     ret = TRUE;
   }
   g_mutex_unlock (&render->ass_mutex);
-
-  gst_object_unref (render);
 
   return ret;
 }
@@ -1511,7 +1498,7 @@ gst_ass_render_event_video (GstPad * pad, GstObject * parent, GstEvent * event)
       GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
-      ret = gst_ass_render_setcaps_video (pad, caps);
+      ret = gst_ass_render_setcaps_video (pad, render, caps);
       gst_event_unref (event);
       break;
     }
@@ -1595,7 +1582,9 @@ gst_ass_render_query_video (GstPad * pad, GstObject * parent, GstQuery * query)
       GstCaps *filter, *caps;
 
       gst_query_parse_caps (query, &filter);
-      caps = gst_ass_render_get_videosink_caps (pad, filter);
+      caps =
+          gst_ass_render_get_videosink_caps (pad, (GstAssRender *) parent,
+          filter);
       gst_query_set_caps_result (query, caps);
       gst_caps_unref (caps);
       res = TRUE;
@@ -1624,7 +1613,7 @@ gst_ass_render_event_text (GstPad * pad, GstObject * parent, GstEvent * event)
       GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
-      ret = gst_ass_render_setcaps_text (pad, caps);
+      ret = gst_ass_render_setcaps_text (pad, render, caps);
       gst_event_unref (event);
       break;
     }

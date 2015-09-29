@@ -51,7 +51,7 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
 enum
 {
-  ARG_0,
+  PROP_0,
 };
 
 enum
@@ -105,6 +105,9 @@ gst_vmnc_dec_class_init (GstVMncDecClass * klass)
 static void
 gst_vmnc_dec_init (GstVMncDec * dec)
 {
+  gst_video_decoder_set_use_default_pad_acceptcaps (GST_VIDEO_DECODER_CAST
+      (dec), TRUE);
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_DECODER_SINK_PAD (dec));
 }
 
 static gboolean
@@ -848,9 +851,10 @@ gst_vmnc_dec_set_format (GstVideoDecoder * decoder, GstVideoCodecState * state)
   /* We require a format descriptor in-stream, so we ignore the info from the
    * container here. We just use the framerate */
 
-  /* Declare it packetized if a valid framerate was parsed, not ideal */
-  gst_video_decoder_set_packetized (decoder,
-      state->info.fps_n && state->info.fps_d);
+  if (decoder->input_segment.format == GST_FORMAT_TIME)
+    gst_video_decoder_set_packetized (decoder, TRUE);
+  else
+    gst_video_decoder_set_packetized (decoder, FALSE);
 
   if (dec->input_state)
     gst_video_codec_state_unref (dec->input_state);

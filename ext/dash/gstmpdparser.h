@@ -56,6 +56,7 @@ typedef struct _GstSubsetNode             GstSubsetNode;
 typedef struct _GstProgramInformationNode GstProgramInformationNode;
 typedef struct _GstMetricsRangeNode       GstMetricsRangeNode;
 typedef struct _GstMetricsNode            GstMetricsNode;
+typedef struct _GstUTCTimingNode          GstUTCTimingNode;
 typedef struct _GstSNode                  GstSNode;
 typedef struct _GstSegmentTimelineNode    GstSegmentTimelineNode;
 typedef struct _GstSegmentBaseType        GstSegmentBaseType;
@@ -89,6 +90,18 @@ typedef enum
   GST_SAP_TYPE_5,
   GST_SAP_TYPE_6
 } GstSAPType;
+
+typedef enum
+{
+  GST_MPD_UTCTIMING_TYPE_UNKNOWN     = 0x00,
+  GST_MPD_UTCTIMING_TYPE_NTP         = 0x01,
+  GST_MPD_UTCTIMING_TYPE_SNTP        = 0x02,
+  GST_MPD_UTCTIMING_TYPE_HTTP_HEAD   = 0x04,
+  GST_MPD_UTCTIMING_TYPE_HTTP_XSDATE = 0x08,
+  GST_MPD_UTCTIMING_TYPE_HTTP_ISO    = 0x10,
+  GST_MPD_UTCTIMING_TYPE_HTTP_NTP    = 0x20,
+  GST_MPD_UTCTIMING_TYPE_DIRECT      = 0x40
+} GstMPDUTCTimingType;
 
 struct _GstBaseURL
 {
@@ -143,7 +156,7 @@ struct _GstURLType
 struct _GstSegmentBaseType
 {
   guint timescale;
-  guint presentationTimeOffset;
+  guint64 presentationTimeOffset;
   GstRange *indexRange;
   gboolean indexRangeExact;
   /* Initialization node */
@@ -362,6 +375,12 @@ struct _GstMetricsNode
   GList *Reportings;
 };
 
+struct _GstUTCTimingNode {
+  GstMPDUTCTimingType method;
+  /* NULL terminated array of strings */
+  gchar **urls;
+};
+
 struct _GstMPDNode
 {
   gchar *default_namespace;
@@ -390,6 +409,8 @@ struct _GstMPDNode
   GList *Periods;
   /* list of Metrics nodes */
   GList *Metrics;
+  /* list of GstUTCTimingNode nodes */
+  GList *UTCTiming;
 };
 
 /**
@@ -414,8 +435,10 @@ struct _GstMediaSegment
 {
   GstSegmentURLNode *SegmentURL;              /* this is NULL when using a SegmentTemplate */
   guint number;                               /* segment number */
-  guint64 start;                                /* segment start time in timescale units */
-  GstClockTime start_time;                    /* segment start time */
+  gint repeat;                                /* number of extra repetitions (0 = played only once) */
+  gint64 scale_start;                         /* start time in timescale units */
+  gint64 scale_duration;                      /* duration in timescale units */
+  GstClockTime start;                         /* segment start time */
   GstClockTime duration;                      /* segment duration */
 };
 
@@ -445,7 +468,7 @@ struct _GstActiveStream
 
   guint baseURL_idx;                          /* index of the baseURL used for last request */
   gchar *baseURL;                             /* active baseURL used for last request */
-  gchar *queryURL;                            /* active baseURL used for last request */
+  gchar *queryURL;                            /* active queryURL used for last request */
   guint max_bandwidth;                        /* max bandwidth allowed for this mimeType */
 
   GstAdaptationSetNode *cur_adapt_set;        /* active adaptation set */
@@ -454,8 +477,10 @@ struct _GstActiveStream
   GstSegmentBaseType *cur_segment_base;       /* active segment base */
   GstSegmentListNode *cur_segment_list;       /* active segment list */
   GstSegmentTemplateNode *cur_seg_template;   /* active segment template */
-  guint segment_idx;                          /* index of next sequence chunk */
+  gint segment_index;                         /* index of next sequence chunk */
+  guint segment_repeat_index;                 /* index of the repeat count of a segment */
   GPtrArray *segments;                        /* array of GstMediaSegment */
+  GstClockTime presentationTimeOffset;        /* presentation time offset of the current segment */
 };
 
 struct _GstMpdClient
@@ -471,7 +496,9 @@ struct _GstMpdClient
   gchar *mpd_uri;                             /* manifest file URI */
   gchar *mpd_base_uri;                        /* base URI for resolving relative URIs.
                                                * this will be different for redirects */
-  GMutex lock;
+
+  /* profiles */
+  gboolean profile_isoff_ondemand;
 };
 
 /* Basic initialization/deinitialization functions */
@@ -487,28 +514,28 @@ gboolean gst_mpd_parse (GstMpdClient *client, const gchar *data, gint size);
 gboolean gst_mpd_client_setup_media_presentation (GstMpdClient *client);
 gboolean gst_mpd_client_setup_streaming (GstMpdClient * client, GstAdaptationSetNode * adapt_set);
 gboolean gst_mpd_client_setup_representation (GstMpdClient *client, GstActiveStream *stream, GstRepresentationNode *representation);
-GList * gst_mpd_client_get_adaptation_sets (GstMpdClient * client);
 GstClockTime gst_mpd_client_get_next_fragment_duration (GstMpdClient * client, GstActiveStream * stream);
 GstClockTime gst_mpd_client_get_media_presentation_duration (GstMpdClient *client);
-gboolean gst_mpd_client_get_last_fragment_timestamp (GstMpdClient * client, guint stream_idx, GstClockTime * ts);
+gboolean gst_mpd_client_get_last_fragment_timestamp_end (GstMpdClient * client, guint stream_idx, GstClockTime * ts);
 gboolean gst_mpd_client_get_next_fragment_timestamp (GstMpdClient * client, guint stream_idx, GstClockTime * ts);
-gboolean gst_mpd_client_get_next_fragment (GstMpdClient *client, guint indexStream, GstMediaFragmentInfo * fragment, gboolean forward);
+gboolean gst_mpd_client_get_next_fragment (GstMpdClient *client, guint indexStream, GstMediaFragmentInfo * fragment);
 gboolean gst_mpd_client_get_next_header (GstMpdClient *client, gchar **uri, guint stream_idx, gint64 * range_start, gint64 * range_end);
 gboolean gst_mpd_client_get_next_header_index (GstMpdClient *client, gchar **uri, guint stream_idx, gint64 * range_start, gint64 * range_end);
 gboolean gst_mpd_client_is_live (GstMpdClient * client);
 gboolean gst_mpd_client_stream_seek (GstMpdClient * client, GstActiveStream * stream, GstClockTime ts);
 gboolean gst_mpd_client_seek_to_time (GstMpdClient * client, GDateTime * time);
-GstDateTime *gst_mpd_client_add_time_difference (GstDateTime * t1, gint64 usecs);
-gint gst_mpd_client_get_segment_index_at_time (GstMpdClient *client, GstActiveStream * stream, const GstDateTime *time);
 gint gst_mpd_client_check_time_position (GstMpdClient * client, GstActiveStream * stream, GstClockTime ts, gint64 * diff);
+GstClockTime gst_mpd_parser_get_stream_presentation_offset (GstMpdClient *client, guint stream_idx);
+gchar** gst_mpd_client_get_utc_timing_sources (GstMpdClient *client, guint methods, GstMPDUTCTimingType *selected_method);
 
 /* Period selection */
+guint gst_mpd_client_get_period_index_at_time (GstMpdClient * client, GstDateTime * time);
 gboolean gst_mpd_client_set_period_index (GstMpdClient *client, guint period_idx);
 gboolean gst_mpd_client_set_period_id (GstMpdClient *client, const gchar * period_id);
 guint gst_mpd_client_get_period_index (GstMpdClient *client);
 const gchar *gst_mpd_client_get_period_id (GstMpdClient *client);
 gboolean gst_mpd_client_has_next_period (GstMpdClient *client);
-GstDateTime *gst_mpd_client_get_next_segment_availability_end_time (GstMpdClient * client, GstActiveStream * stream);
+gboolean gst_mpd_client_has_previous_period (GstMpdClient * client);
 
 /* Representation selection */
 gint gst_mpdparser_get_rep_idx_with_max_bandwidth (GList *Representations, gint max_bandwidth);
@@ -524,11 +551,13 @@ GstActiveStream *gst_mpdparser_get_active_stream_by_index (GstMpdClient *client,
 
 /* AdaptationSet */
 guint gst_mpdparser_get_nb_adaptationSet (GstMpdClient *client);
+GList * gst_mpd_client_get_adaptation_sets (GstMpdClient * client);
 
 /* Segment */
-void gst_mpd_client_set_segment_index_for_all_streams (GstMpdClient * client, guint segment_idx);
-guint gst_mpd_client_get_segment_index (GstActiveStream * stream);
-void gst_mpd_client_set_segment_index (GstActiveStream * stream, guint segment_idx);
+gboolean gst_mpd_client_has_next_segment (GstMpdClient * client, GstActiveStream * stream, gboolean forward);
+GstFlowReturn gst_mpd_client_advance_segment (GstMpdClient * client, GstActiveStream * stream, gboolean forward);
+void gst_mpd_client_seek_to_first_segment (GstMpdClient * client);
+GstDateTime *gst_mpd_client_get_next_segment_availability_end_time (GstMpdClient * client, GstActiveStream * stream);
 
 /* Get audio/video stream parameters (mimeType, width, height, rate, number of channels) */
 const gchar *gst_mpd_client_get_stream_mimeType (GstActiveStream * stream);
@@ -542,6 +571,10 @@ guint gst_mpd_client_get_audio_stream_num_channels (GstActiveStream * stream);
 guint gst_mpdparser_get_list_and_nb_of_audio_language (GstMpdClient *client, GList **lang);
 
 gint64 gst_mpd_client_calculate_time_difference (const GstDateTime * t1, const GstDateTime * t2);
+GstDateTime *gst_mpd_client_add_time_difference (GstDateTime * t1, gint64 usecs);
+
+/* profiles */
+gboolean gst_mpd_client_has_isoff_ondemand_profile (GstMpdClient *client);
 
 G_END_DECLS
 

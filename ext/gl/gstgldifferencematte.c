@@ -61,9 +61,6 @@ static void gst_gl_differencematte_set_property (GObject * object,
 static void gst_gl_differencematte_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec);
 
-static void gst_gl_differencematte_init_resources (GstGLFilter * filter);
-static void gst_gl_differencematte_reset_resources (GstGLFilter * filter);
-
 static gboolean gst_gl_differencematte_filter_texture (GstGLFilter * filter,
     guint in_tex, guint out_tex);
 
@@ -81,7 +78,7 @@ static void
 gst_gl_differencematte_init_gl_resources (GstGLFilter * filter)
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (filter);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
   gint i;
 
   for (i = 0; i < 4; i++) {
@@ -95,42 +92,47 @@ gst_gl_differencematte_init_gl_resources (GstGLFilter * filter)
     gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    differencematte->shader[i] = gst_gl_shader_new (filter->context);
+    differencematte->shader[i] =
+        gst_gl_shader_new (GST_GL_BASE_FILTER (filter)->context);
   }
 
-  if (!gst_gl_shader_compile_and_check (differencematte->shader[0],
-          difference_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
-    gst_gl_context_set_error (GST_GL_FILTER (differencematte)->context,
+  if (!gst_gl_shader_compile_with_default_v_and_check (differencematte->shader
+          [0], difference_fragment_source, &filter->draw_attr_position_loc,
+          &filter->draw_attr_texture_loc)) {
+    gst_gl_context_set_error (GST_GL_BASE_FILTER (differencematte)->context,
         "Failed to initialize difference shader");
-    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND,
-        ("%s", gst_gl_context_get_error ()), (NULL));
+    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND, ("%s",
+            gst_gl_context_get_error ()), (NULL));
     return;
   }
 
-  if (!gst_gl_shader_compile_and_check (differencematte->shader[1],
-          hconv7_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
-    gst_gl_context_set_error (GST_GL_FILTER (differencematte)->context,
+  if (!gst_gl_shader_compile_with_default_v_and_check (differencematte->shader
+          [1], hconv7_fragment_source_gles2, &filter->draw_attr_position_loc,
+          &filter->draw_attr_texture_loc)) {
+    gst_gl_context_set_error (GST_GL_BASE_FILTER (differencematte)->context,
         "Failed to initialize hconv7 shader");
-    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND,
-        ("%s", gst_gl_context_get_error ()), (NULL));
+    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND, ("%s",
+            gst_gl_context_get_error ()), (NULL));
     return;
   }
 
-  if (!gst_gl_shader_compile_and_check (differencematte->shader[2],
-          vconv7_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
-    gst_gl_context_set_error (GST_GL_FILTER (differencematte)->context,
+  if (!gst_gl_shader_compile_with_default_v_and_check (differencematte->shader
+          [2], vconv7_fragment_source_gles2, &filter->draw_attr_position_loc,
+          &filter->draw_attr_texture_loc)) {
+    gst_gl_context_set_error (GST_GL_BASE_FILTER (differencematte)->context,
         "Failed to initialize vconv7 shader");
-    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND,
-        ("%s", gst_gl_context_get_error ()), (NULL));
+    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND, ("%s",
+            gst_gl_context_get_error ()), (NULL));
     return;
   }
 
-  if (!gst_gl_shader_compile_and_check (differencematte->shader[3],
-          texture_interp_fragment_source, GST_GL_SHADER_FRAGMENT_SOURCE)) {
-    gst_gl_context_set_error (GST_GL_FILTER (differencematte)->context,
+  if (!gst_gl_shader_compile_with_default_v_and_check (differencematte->shader
+          [3], texture_interp_fragment_source, &filter->draw_attr_position_loc,
+          &filter->draw_attr_texture_loc)) {
+    gst_gl_context_set_error (GST_GL_BASE_FILTER (differencematte)->context,
         "Failed to initialize interp shader");
-    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND,
-        ("%s", gst_gl_context_get_error ()), (NULL));
+    GST_ELEMENT_ERROR (differencematte, RESOURCE, NOT_FOUND, ("%s",
+            gst_gl_context_get_error ()), (NULL));
     return;
   }
 }
@@ -140,7 +142,7 @@ static void
 gst_gl_differencematte_reset_gl_resources (GstGLFilter * filter)
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (filter);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
   gint i;
 
   gl->DeleteTextures (1, &differencematte->savedbgtexture);
@@ -179,8 +181,6 @@ gst_gl_differencematte_class_init (GstGLDifferenceMatteClass * klass)
       gst_gl_differencematte_init_gl_resources;
   GST_GL_FILTER_CLASS (klass)->display_reset_cb =
       gst_gl_differencematte_reset_gl_resources;
-  GST_GL_FILTER_CLASS (klass)->onStart = gst_gl_differencematte_init_resources;
-  GST_GL_FILTER_CLASS (klass)->onStop = gst_gl_differencematte_reset_resources;
 
   g_object_class_install_property (gobject_class,
       PROP_LOCATION,
@@ -193,6 +193,9 @@ gst_gl_differencematte_class_init (GstGLDifferenceMatteClass * klass)
       "Gstreamer OpenGL DifferenceMatte", "Filter/Effect/Video",
       "Saves a background frame and replace it with a pixbuf",
       "Filippo Argiolas <filippo.argiolas@gmail.com>");
+
+  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api =
+      GST_GL_API_OPENGL | GST_GL_API_OPENGL3 | GST_GL_API_GLES2;
 }
 
 static void
@@ -209,12 +212,6 @@ gst_gl_differencematte_init (GstGLDifferenceMatte * differencematte)
   differencematte->bg_has_changed = FALSE;
 
   fill_gaussian_kernel (differencematte->kernel, 7, 30.0);
-}
-
-static void
-gst_gl_differencematte_reset_resources (GstGLFilter * filter)
-{
-//  GstGLDifferenceMatte* differencematte = GST_GL_DIFFERENCEMATTE(filter);
 }
 
 static void
@@ -253,17 +250,11 @@ gst_gl_differencematte_get_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_gl_differencematte_init_resources (GstGLFilter * filter)
-{
-//  GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (filter);
-}
-
-static void
 gst_gl_differencematte_save_texture (gint width, gint height, guint texture,
     gpointer stuff)
 {
   GstGLFilter *filter = GST_GL_FILTER (stuff);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   gl->LoadIdentity ();
@@ -276,7 +267,7 @@ init_pixbuf_texture (GstGLContext * context, gpointer data)
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (data);
   GstGLFilter *filter = GST_GL_FILTER (data);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->DeleteTextures (1, &differencematte->newbgtexture);
   gl->GenTextures (1, &differencematte->newbgtexture);
@@ -309,7 +300,7 @@ gst_gl_differencematte_diff (gint width, gint height, guint texture,
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (stuff);
   GstGLFilter *filter = GST_GL_FILTER (stuff);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   gl->LoadIdentity ();
@@ -317,16 +308,12 @@ gst_gl_differencematte_diff (gint width, gint height, guint texture,
   gst_gl_shader_use (differencematte->shader[0]);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[0], "current", 0);
 
   gl->ActiveTexture (GL_TEXTURE1);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, differencematte->savedbgtexture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[0], "saved", 1);
 
@@ -339,7 +326,7 @@ gst_gl_differencematte_hblur (gint width, gint height, guint texture,
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (stuff);
   GstGLFilter *filter = GST_GL_FILTER (stuff);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   gl->LoadIdentity ();
@@ -347,9 +334,7 @@ gst_gl_differencematte_hblur (gint width, gint height, guint texture,
   gst_gl_shader_use (differencematte->shader[1]);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[1], "tex", 0);
 
@@ -366,7 +351,7 @@ gst_gl_differencematte_vblur (gint width, gint height, guint texture,
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (stuff);
   GstGLFilter *filter = GST_GL_FILTER (stuff);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   gl->LoadIdentity ();
@@ -374,9 +359,7 @@ gst_gl_differencematte_vblur (gint width, gint height, guint texture,
   gst_gl_shader_use (differencematte->shader[2]);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[2], "tex", 0);
 
@@ -393,7 +376,7 @@ gst_gl_differencematte_interp (gint width, gint height, guint texture,
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (stuff);
   GstGLFilter *filter = GST_GL_FILTER (stuff);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   glLoadIdentity ();
@@ -401,23 +384,17 @@ gst_gl_differencematte_interp (gint width, gint height, guint texture,
   gst_gl_shader_use (differencematte->shader[3]);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[3], "blend", 0);
 
   gl->ActiveTexture (GL_TEXTURE1);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, differencematte->newbgtexture);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[3], "base", 1);
 
   gl->ActiveTexture (GL_TEXTURE2);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, differencematte->midtexture[2]);
-  gl->Disable (GL_TEXTURE_2D);
 
   gst_gl_shader_set_uniform_1i (differencematte->shader[3], "alpha", 2);
 
@@ -430,7 +407,7 @@ gst_gl_differencematte_identity (gint width, gint height, guint texture,
 {
   GstGLDifferenceMatte *differencematte = GST_GL_DIFFERENCEMATTE (stuff);
   GstGLFilter *filter = GST_GL_FILTER (differencematte);
-  GstGLFuncs *gl = filter->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gl->MatrixMode (GL_PROJECTION);
   gl->LoadIdentity ();
@@ -452,8 +429,8 @@ gst_gl_differencematte_filter_texture (GstGLFilter * filter, guint in_tex,
       differencematte->pixbuf = NULL;
 
     /* if loader failed then context is turned off */
-    gst_gl_context_thread_add (filter->context, init_pixbuf_texture,
-        differencematte);
+    gst_gl_context_thread_add (GST_GL_BASE_FILTER (filter)->context,
+        init_pixbuf_texture, differencematte);
 
     /* save current frame, needed to calculate difference between
      * this frame and next ones */
@@ -515,7 +492,7 @@ gst_gl_differencematte_loader (GstGLFilter * filter)
   guchar **rows = NULL;
   gint filler;
 
-  if (!filter->context)
+  if (!GST_GL_BASE_FILTER (filter)->context)
     return TRUE;
 
   if ((fp = fopen (differencematte->location, "rb")) == NULL)

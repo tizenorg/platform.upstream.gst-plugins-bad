@@ -24,6 +24,9 @@
 
 #include "gl.h"
 #include "gstglbufferpool.h"
+#include "gstglutils.h"
+
+#define GST_GL_HAVE_PLATFORM_EGL 1
 
 #if GST_GL_HAVE_PLATFORM_EGL
 #include <gst/gl/egl/gsteglimagememory.h>
@@ -50,7 +53,10 @@ struct _GstGLBufferPoolPrivate
   GstCaps *caps;
   gint im_format;
   GstVideoInfo info;
+  GstVideoAlignment valign;
   gboolean add_videometa;
+  gboolean add_uploadmeta;
+  gboolean add_glsyncmeta;
   gboolean want_eglimage;
   GstBuffer *last_buffer;
 };
@@ -71,7 +77,11 @@ G_DEFINE_TYPE_WITH_CODE (GstGLBufferPool, gst_gl_buffer_pool,
 static const gchar **
 gst_gl_buffer_pool_get_options (GstBufferPool * pool)
 {
-  static const gchar *options[] = { GST_BUFFER_POOL_OPTION_VIDEO_META, NULL
+  static const gchar *options[] = { GST_BUFFER_POOL_OPTION_VIDEO_META,
+    GST_BUFFER_POOL_OPTION_VIDEO_GL_TEXTURE_UPLOAD_META,
+    GST_BUFFER_POOL_OPTION_GL_SYNC_META,
+    GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT,
+    NULL
   };
 
   return options;
@@ -83,12 +93,15 @@ gst_gl_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   GstGLBufferPool *glpool = GST_GL_BUFFER_POOL_CAST (pool);
   GstGLBufferPoolPrivate *priv = glpool->priv;
   GstVideoInfo info;
-  GstCaps *caps;
-  GstAllocator *allocator;
+  GstCaps *caps = NULL;
+  guint min_buffers, max_buffers;
+  GstAllocator *allocator = NULL;
   GstAllocationParams alloc_params;
   gboolean reset = TRUE;
+  gint p;
 
-  if (!gst_buffer_pool_config_get_params (config, &caps, NULL, NULL, NULL))
+  if (!gst_buffer_pool_config_get_params (config, &caps, NULL, &min_buffers,
+          &max_buffers))
     goto wrong_config;
 
   if (caps == NULL)
@@ -104,11 +117,16 @@ gst_gl_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
   if (!gst_buffer_pool_config_get_allocator (config, &allocator, &alloc_params))
     goto wrong_config;
 
+  if (priv->allocator)
+    gst_object_unref (priv->allocator);
+
   if (!allocator) {
     gst_gl_memory_init ();
-    allocator = gst_allocator_find (GST_GL_MEMORY_ALLOCATOR);
+    priv->allocator = gst_allocator_find (GST_GL_MEMORY_ALLOCATOR);
+  } else {
+    priv->allocator = gst_object_ref (allocator);
   }
-  priv->allocator = allocator;
+
   priv->params = alloc_params;
 
   priv->im_format = GST_VIDEO_INFO_FORMAT (&info);
@@ -123,13 +141,31 @@ gst_gl_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 
   priv->add_videometa = gst_buffer_pool_config_has_option (config,
       GST_BUFFER_POOL_OPTION_VIDEO_META);
+  priv->add_uploadmeta = gst_buffer_pool_config_has_option (config,
+      GST_BUFFER_POOL_OPTION_VIDEO_GL_TEXTURE_UPLOAD_META);
+  priv->add_glsyncmeta = gst_buffer_pool_config_has_option (config,
+      GST_BUFFER_POOL_OPTION_GL_SYNC_META);
 
 #if GST_GL_HAVE_PLATFORM_EGL
-  priv->want_eglimage = (priv->allocator
-      && g_strcmp0 (priv->allocator->mem_type, GST_EGL_IMAGE_MEMORY_TYPE) == 0);
+  g_assert (priv->allocator != NULL);
+  priv->want_eglimage =
+      (g_strcmp0 (priv->allocator->mem_type, GST_EGL_IMAGE_MEMORY_TYPE) == 0);
 #else
   priv->want_eglimage = FALSE;
 #endif
+
+  if (gst_buffer_pool_config_has_option (config,
+          GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT)) {
+
+    priv->add_videometa = TRUE;
+
+    gst_buffer_pool_config_get_video_alignment (config, &priv->valign);
+    gst_video_info_align (&priv->info, &priv->valign);
+
+    gst_buffer_pool_config_set_video_alignment (config, &priv->valign);
+  } else {
+    gst_video_alignment_reset (&priv->valign);
+  }
 
   if (reset) {
     if (glpool->upload)
@@ -137,6 +173,17 @@ gst_gl_buffer_pool_set_config (GstBufferPool * pool, GstStructure * config)
 
     glpool->upload = gst_gl_upload_meta_new (glpool->context);
   }
+
+  /* Recalulate the size and offset as we don't add padding between planes. */
+  priv->info.size = 0;
+  for (p = 0; p < GST_VIDEO_INFO_N_PLANES (&priv->info); p++) {
+    priv->info.offset[p] = priv->info.size;
+    priv->info.size +=
+        gst_gl_get_plane_data_size (&priv->info, &priv->valign, p);
+  }
+
+  gst_buffer_pool_config_set_params (config, caps, priv->info.size,
+      min_buffers, max_buffers);
 
   return GST_BUFFER_POOL_CLASS (parent_class)->set_config (pool, config);
 
@@ -188,9 +235,11 @@ gst_gl_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
   GstGLBufferPool *glpool = GST_GL_BUFFER_POOL_CAST (pool);
   GstGLBufferPoolPrivate *priv = glpool->priv;
   GstVideoInfo *info;
+  GstVideoAlignment *valign;
   GstBuffer *buf;
 
   info = &priv->info;
+  valign = &priv->valign;
 
   if (!(buf = gst_buffer_new ())) {
     goto no_buffer;
@@ -208,10 +257,15 @@ gst_gl_buffer_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
   }
 #endif
 
-  if (!gst_gl_memory_setup_buffer (glpool->context, info, buf))
+  if (!gst_gl_memory_setup_buffer (glpool->context, &priv->params, info,
+          valign, buf))
     goto mem_create_failed;
 
-  gst_gl_upload_meta_add_to_buffer (glpool->upload, buf);
+  if (priv->add_uploadmeta)
+    gst_gl_upload_meta_add_to_buffer (glpool->upload, buf);
+
+  if (priv->add_glsyncmeta)
+    gst_buffer_add_gl_sync_meta (glpool->context, buf);
 
   *buffer = buf;
 
@@ -274,7 +328,7 @@ gst_gl_buffer_pool_acquire_buffer (GstBufferPool * bpool,
 
 /**
  * gst_gl_buffer_pool_new:
- * @display: the #GstGLDisplay to use
+ * @context: the #GstGLContext to use
  *
  * Returns: a #GstBufferPool that allocates buffers with #GstGLMemory
  */
@@ -286,7 +340,8 @@ gst_gl_buffer_pool_new (GstGLContext * context)
   pool = g_object_new (GST_TYPE_GL_BUFFER_POOL, NULL);
   pool->context = gst_object_ref (context);
 
-  GST_LOG_OBJECT (pool, "new GL buffer pool %p", pool);
+  GST_LOG_OBJECT (pool, "new GL buffer pool for context %" GST_PTR_FORMAT,
+      context);
 
   return GST_BUFFER_POOL_CAST (pool);
 }
@@ -338,6 +393,7 @@ gst_gl_buffer_pool_init (GstGLBufferPool * pool)
   priv->caps = NULL;
   priv->im_format = GST_VIDEO_FORMAT_UNKNOWN;
   priv->add_videometa = TRUE;
+  priv->add_glsyncmeta = FALSE;
   priv->want_eglimage = FALSE;
   priv->last_buffer = FALSE;
 
@@ -367,5 +423,10 @@ gst_gl_buffer_pool_finalize (GObject * object)
   if (pool->context) {
     gst_object_unref (pool->context);
     pool->context = NULL;
+  }
+
+  if (priv->allocator) {
+    gst_object_unref (priv->allocator);
+    priv->allocator = NULL;
   }
 }

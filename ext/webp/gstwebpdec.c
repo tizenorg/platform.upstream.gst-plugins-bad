@@ -139,6 +139,9 @@ gst_webp_dec_init (GstWebPDec * dec)
   dec->bypass_filtering = FALSE;
   dec->no_fancy_upsampling = FALSE;
   dec->use_threads = FALSE;
+  gst_video_decoder_set_use_default_pad_acceptcaps (GST_VIDEO_DECODER_CAST
+      (dec), TRUE);
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_VIDEO_DECODER_SINK_PAD (dec));
 }
 
 static gboolean
@@ -236,13 +239,12 @@ static gboolean
 gst_webp_dec_set_format (GstVideoDecoder * decoder, GstVideoCodecState * state)
 {
   GstWebPDec *webpdec = (GstWebPDec *) decoder;
-  GstVideoInfo *info = &state->info;
 
   if (webpdec->input_state)
     gst_video_codec_state_unref (webpdec->input_state);
   webpdec->input_state = gst_video_codec_state_ref (state);
 
-  if (GST_VIDEO_INFO_FPS_N (info) != 1 && GST_VIDEO_INFO_FPS_D (info) != 1)
+  if (decoder->input_segment.format == GST_FORMAT_TIME)
     gst_video_decoder_set_packetized (decoder, TRUE);
   else
     gst_video_decoder_set_packetized (decoder, FALSE);

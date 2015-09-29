@@ -114,6 +114,7 @@ _opensles_recorder_acquire (GstAudioRingBuffer * rb,
   GstOpenSLESRingBuffer *thiz = GST_OPENSLES_RING_BUFFER_CAST (rb);
   SLresult result;
   SLDataFormat_PCM format;
+  SLAndroidConfigurationItf config;
 
   /* Configure audio source */
   SLDataLocator_IODevice loc_dev = {
@@ -129,19 +130,42 @@ _opensles_recorder_acquire (GstAudioRingBuffer * rb,
   SLDataSink audioSink = { &loc_bq, &format };
 
   /* Required optional interfaces */
-  const SLInterfaceID id[1] = { SL_IID_ANDROIDSIMPLEBUFFERQUEUE };
-  const SLboolean req[1] = { SL_BOOLEAN_TRUE };
+  const SLInterfaceID ids[2] = { SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
+    SL_IID_ANDROIDCONFIGURATION
+  };
+  const SLboolean req[2] = { SL_BOOLEAN_TRUE, SL_BOOLEAN_FALSE };
 
   /* Define the audio format in OpenSL ES terminology */
   _opensles_format (spec, &format);
 
   /* Create the audio recorder object (requires the RECORD_AUDIO permission) */
   result = (*thiz->engineEngine)->CreateAudioRecorder (thiz->engineEngine,
-      &thiz->recorderObject, &audioSrc, &audioSink, 1, id, req);
+      &thiz->recorderObject, &audioSrc, &audioSink, 2, ids, req);
   if (result != SL_RESULT_SUCCESS) {
     GST_ERROR_OBJECT (thiz, "engine.CreateAudioRecorder failed(0x%08x)",
         (guint32) result);
     goto failed;
+  }
+
+  /* Set the recording preset if we have one */
+  if (thiz->preset != GST_OPENSLES_RECORDING_PRESET_NONE) {
+    SLint32 preset = gst_to_opensles_recording_preset (thiz->preset);
+
+    result = (*thiz->recorderObject)->GetInterface (thiz->recorderObject,
+        SL_IID_ANDROIDCONFIGURATION, &config);
+
+    if (result == SL_RESULT_SUCCESS) {
+      result = (*config)->SetConfiguration (config,
+          SL_ANDROID_KEY_RECORDING_PRESET, &preset, sizeof (preset));
+
+      if (result != SL_RESULT_SUCCESS) {
+        GST_WARNING_OBJECT (thiz, "Failed to set playback stream type (0x%08x)",
+            (guint32) result);
+      }
+    } else {
+      GST_WARNING_OBJECT (thiz,
+          "Could not get configuration interface 0x%08x", (guint32) result);
+    }
   }
 
   /* Realize the audio recorder object */
@@ -354,11 +378,18 @@ _opensles_player_acquire (GstAudioRingBuffer * rb,
   GstOpenSLESRingBuffer *thiz = GST_OPENSLES_RING_BUFFER_CAST (rb);
   SLresult result;
   SLDataFormat_PCM format;
+  SLAndroidConfigurationItf config;
 
-  /* Configure audio source */
+  /* Configure audio source
+   * 4 buffers is the "typical" size as optimized inside Android's
+   * OpenSL ES, see frameworks/wilhelm/src/itfstruct.h BUFFER_HEADER_TYPICAL
+   *
+   * Also only use half of our segment size to make sure that there's always
+   * some more queued up in our ringbuffer and we don't start to read silence.
+   */
   SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {
-    SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
-    MIN (32, (spec->segtotal >> 1))
+    SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, MIN (4, MAX (spec->segtotal >> 1,
+            1))
   };
   SLDataSource audioSrc = { &loc_bufq, &format };
 
@@ -369,19 +400,44 @@ _opensles_player_acquire (GstAudioRingBuffer * rb,
   SLDataSink audioSink = { &loc_outmix, NULL };
 
   /* Define the required interfaces */
-  const SLInterfaceID ids[2] = { SL_IID_BUFFERQUEUE, SL_IID_VOLUME };
-  const SLboolean req[2] = { SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE };
+  const SLInterfaceID ids[3] = { SL_IID_BUFFERQUEUE, SL_IID_VOLUME,
+    SL_IID_ANDROIDCONFIGURATION
+  };
+  const SLboolean req[3] = { SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE,
+    SL_BOOLEAN_FALSE
+  };
 
   /* Define the format in OpenSL ES terminology */
   _opensles_format (spec, &format);
 
   /* Create the player object */
   result = (*thiz->engineEngine)->CreateAudioPlayer (thiz->engineEngine,
-      &thiz->playerObject, &audioSrc, &audioSink, 2, ids, req);
+      &thiz->playerObject, &audioSrc, &audioSink, 3, ids, req);
   if (result != SL_RESULT_SUCCESS) {
     GST_ERROR_OBJECT (thiz, "engine.CreateAudioPlayer failed(0x%08x)",
         (guint32) result);
     goto failed;
+  }
+
+  /* Set the stream type if we have one */
+  if (thiz->stream_type != GST_OPENSLES_STREAM_TYPE_NONE) {
+    SLint32 stream_type = gst_to_opensles_stream_type (thiz->stream_type);
+
+    result = (*thiz->playerObject)->GetInterface (thiz->playerObject,
+        SL_IID_ANDROIDCONFIGURATION, &config);
+
+    if (result == SL_RESULT_SUCCESS) {
+      result = (*config)->SetConfiguration (config,
+          SL_ANDROID_KEY_STREAM_TYPE, &stream_type, sizeof (stream_type));
+
+      if (result != SL_RESULT_SUCCESS) {
+        GST_WARNING_OBJECT (thiz, "Failed to set playback stream type (0x%08x)",
+            (guint32) result);
+      }
+    } else {
+      GST_WARNING_OBJECT (thiz,
+          "Could not get configuration interface 0x%08x", (guint32) result);
+    }
   }
 
   /* Realize the player object */
@@ -518,7 +574,6 @@ _opensles_player_start (GstAudioRingBuffer * rb)
 {
   GstOpenSLESRingBuffer *thiz = GST_OPENSLES_RING_BUFFER_CAST (rb);
   SLresult result;
-  gint i;
 
   /* Register callback on the buffer queue */
   if (!thiz->is_queue_callback_registered) {
@@ -532,11 +587,9 @@ _opensles_player_start (GstAudioRingBuffer * rb)
     thiz->is_queue_callback_registered = TRUE;
   }
 
-  /* Fill the queue by enqueing buffers */
+  /* Fill the queue by enqueing a buffer */
   if (!g_atomic_int_get (&thiz->is_prerolled)) {
-    for (i = 0; i < thiz->data_segtotal; i++) {
-      _opensles_player_cb (NULL, rb);
-    }
+    _opensles_player_cb (NULL, rb);
     g_atomic_int_set (&thiz->is_prerolled, 1);
   }
 

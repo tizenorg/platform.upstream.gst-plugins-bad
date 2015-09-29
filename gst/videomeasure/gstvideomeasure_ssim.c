@@ -39,8 +39,8 @@
  * <title>Example launch line</title>
  * |[
  * gst-launch ssim name=ssim ssim.src0 ! videoconvert ! glimagesink filesrc
- * location=orig.avi ! decodebin2 ! ssim.original filesrc location=compr.avi !
- * decodebin2 ! ssim.modified0
+ * location=orig.avi ! decodebin ! ssim.original filesrc location=compr.avi !
+ * decodebin ! ssim.modified0
  * ]| This pipeline produces a video stream that consists of SSIM frames.
  * </refsect2>
  */
@@ -664,15 +664,17 @@ gst_ssim_query_latency (GstSSim * ssim, GstQuery * query)
         if (res) {
           gst_query_parse_latency (peerquery, &live_cur, &min_cur, &max_cur);
 
-          if (min_cur > min)
-            min = min_cur;
+          if (live_cur) {
+            if (min_cur > min)
+              min = min_cur;
 
-          if (max_cur != GST_CLOCK_TIME_NONE &&
-              ((max != GST_CLOCK_TIME_NONE && max_cur > max) ||
-                  (max == GST_CLOCK_TIME_NONE)))
-            max = max_cur;
+            if (max == GST_CLOCK_TIME_NONE)
+              max = max_cur;
+            else if (max_cur < max)
+              max = max_cur;
 
-          live = live || live_cur;
+            live = TRUE;
+          }
         }
 
         gst_query_unref (peerquery);
@@ -1473,7 +1475,7 @@ gst_ssim_collected (GstCollectPads * pads, gpointer user_data)
       collect_data = (GstCollectData *) collected->data;
 
       if (collect_data->pad == ssim->orig) {
-        orgbuf = gst_collect_pads_pop (pads, collect_data);;
+        orgbuf = gst_collect_pads_pop (pads, collect_data);
 
         GST_DEBUG_OBJECT (ssim, "Original stream - flags(0x%x), timestamp(%"
             GST_TIME_FORMAT "), duration(%" GST_TIME_FORMAT ")",

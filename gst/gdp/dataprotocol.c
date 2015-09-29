@@ -1,6 +1,7 @@
 /* GStreamer
  * Copyright (C) <1999> Erik Walthinsen <omega@cse.ogi.edu>
  * Copyright (C) 2004,2006 Thomas Vander Stichele <thomas at apestaart dot org>
+ * Copyright (C) 2014 Tim-Philipp Müller <tim centricular com>
  *
  * dataprotocol.c: Functions implementing the GStreamer Data Protocol
  *
@@ -56,10 +57,8 @@
  * the event as the payload.  In addition, GDP streams can now start with
  * events as well, as required by the new data stream model in GStreamer 0.10.
  *
- * Converting buffers, caps and events to GDP buffers is done using a
- * #GstDPPacketizer object and invoking its packetizer functions.
- * For backwards-compatibility reasons, the old 0.2 methods are still
- * available but deprecated.
+ * Converting buffers, caps and events to GDP buffers is done using the
+ * appropriate functions.
  *
  * For reference, this image shows the byte layout of the GDP header:
  *
@@ -81,6 +80,13 @@ GST_DEBUG_CATEGORY_STATIC (data_protocol_debug);
 #ifndef GST_CAT_DEFAULT
 #define GST_CAT_DEFAULT data_protocol_debug
 #endif
+
+/* The version of the GDP protocol being used */
+typedef enum
+{
+  GST_DP_VERSION_0_2 = 1,
+  GST_DP_VERSION_1_0,
+} GstDPVersion;
 
 /* helper macros */
 
@@ -125,30 +131,59 @@ G_STMT_START {							\
 #define POLY       0x1021
 #define CRC_INIT   0xFFFF
 
-/*** HELPER FUNCTIONS ***/
+static guint16 gst_dp_crc (const guint8 * buffer, guint length);
+static guint16 gst_dp_crc_from_memory_maps (const GstMapInfo * maps,
+    guint n_maps);
 
-static gboolean
-gst_dp_header_from_buffer_any (const GstBuffer * buffer, GstDPHeaderFlag flags,
-    guint * length, guint8 ** header, GstDPVersion version)
+/* payloading functions */
+
+GstBuffer *
+gst_dp_payload_buffer (GstBuffer * buffer, GstDPHeaderFlag flags)
 {
+  GstBuffer *ret_buf;
+  GstMapInfo map;
+  GstMemory *mem;
   guint8 *h;
   guint16 flags_mask;
-  GstMapInfo map;
+  guint16 header_crc = 0, crc = 0;
+  gsize buffer_size;
 
-  g_return_val_if_fail (GST_IS_BUFFER (buffer), FALSE);
-  g_return_val_if_fail (length, FALSE);
-  g_return_val_if_fail (header, FALSE);
-
-  *length = GST_DP_HEADER_LENGTH;
-  h = g_malloc0 (GST_DP_HEADER_LENGTH);
+  mem = gst_allocator_alloc (NULL, GST_DP_HEADER_LENGTH, NULL);
+  gst_memory_map (mem, &map, GST_MAP_READWRITE);
+  h = memset (map.data, 0, map.size);
 
   /* version, flags, type */
-  GST_DP_INIT_HEADER (h, version, flags, GST_DP_PAYLOAD_BUFFER);
+  GST_DP_INIT_HEADER (h, GST_DP_VERSION_1_0, flags, GST_DP_PAYLOAD_BUFFER);
 
-  gst_buffer_map ((GstBuffer *) buffer, &map, GST_MAP_READ);
+  if ((flags & GST_DP_HEADER_FLAG_CRC_PAYLOAD)) {
+    GstMapInfo *maps;
+    guint n_maps, i;
+
+    buffer_size = 0;
+
+    n_maps = gst_buffer_n_memory (buffer);
+    if (n_maps > 0) {
+      maps = g_newa (GstMapInfo, n_maps);
+
+      for (i = 0; i < n_maps; ++i) {
+        GstMemory *mem;
+
+        mem = gst_buffer_peek_memory (buffer, i);
+        gst_memory_map (mem, &maps[i], GST_MAP_READ);
+        buffer_size += maps[i].size;
+      }
+
+      crc = gst_dp_crc_from_memory_maps (maps, n_maps);
+
+      for (i = 0; i < n_maps; ++i)
+        gst_memory_unmap (maps[i].memory, &maps[i]);
+    }
+  } else {
+    buffer_size = gst_buffer_get_size (buffer);
+  }
 
   /* buffer properties */
-  GST_WRITE_UINT32_BE (h + 6, map.size);
+  GST_WRITE_UINT32_BE (h + 6, buffer_size);
   GST_WRITE_UINT64_BE (h + 10, GST_BUFFER_TIMESTAMP (buffer));
   GST_WRITE_UINT64_BE (h + 18, GST_BUFFER_DURATION (buffer));
   GST_WRITE_UINT64_BE (h + 26, GST_BUFFER_OFFSET (buffer));
@@ -164,36 +199,53 @@ gst_dp_header_from_buffer_any (const GstBuffer * buffer, GstDPHeaderFlag flags,
   /* from gstreamer 1.x, buffers also have the DTS */
   GST_WRITE_UINT64_BE (h + 44, GST_BUFFER_DTS (buffer));
 
-  GST_DP_SET_CRC (h, flags, map.data, map.size);
+  /* header CRC */
+  if ((flags & GST_DP_HEADER_FLAG_CRC_HEADER))
+    /* we don't crc the last four bytes since they are crc's */
+    header_crc = gst_dp_crc (h, 58);
+  else
+    header_crc = 0;
 
-  gst_buffer_unmap ((GstBuffer *) buffer, &map);
+  GST_WRITE_UINT16_BE (h + 58, header_crc);
 
-  GST_MEMDUMP ("created header from buffer", h, GST_DP_HEADER_LENGTH);
-  *header = h;
-  return TRUE;
+  /* payload CRC */
+  GST_WRITE_UINT16_BE (h + 60, crc);
+
+  GST_MEMDUMP ("payload header for buffer", h, GST_DP_HEADER_LENGTH);
+  gst_memory_unmap (mem, &map);
+
+  ret_buf = gst_buffer_new ();
+
+  /* header */
+  gst_buffer_append_memory (ret_buf, mem);
+
+  /* buffer data */
+  return gst_buffer_append (ret_buf, gst_buffer_ref (buffer));
 }
 
-static gboolean
-gst_dp_packet_from_caps_any (const GstCaps * caps, GstDPHeaderFlag flags,
-    guint * length, guint8 ** header, guint8 ** payload, GstDPVersion version)
+GstBuffer *
+gst_dp_payload_caps (const GstCaps * caps, GstDPHeaderFlag flags)
 {
+  GstBuffer *buf;
+  GstMapInfo map;
+  GstMemory *mem;
   guint8 *h;
   guchar *string;
   guint payload_length;
 
-  g_return_val_if_fail (GST_IS_CAPS (caps), FALSE);
-  g_return_val_if_fail (length, FALSE);
-  g_return_val_if_fail (header, FALSE);
-  g_return_val_if_fail (payload, FALSE);
+  g_assert (GST_IS_CAPS (caps));
 
-  *length = GST_DP_HEADER_LENGTH;
-  h = g_malloc0 (GST_DP_HEADER_LENGTH);
+  buf = gst_buffer_new ();
+
+  mem = gst_allocator_alloc (NULL, GST_DP_HEADER_LENGTH, NULL);
+  gst_memory_map (mem, &map, GST_MAP_READWRITE);
+  h = memset (map.data, 0, map.size);
 
   string = (guchar *) gst_caps_to_string (caps);
   payload_length = strlen ((gchar *) string) + 1;       /* include trailing 0 */
 
   /* version, flags, type */
-  GST_DP_INIT_HEADER (h, version, flags, GST_DP_PAYLOAD_CAPS);
+  GST_DP_INIT_HEADER (h, GST_DP_VERSION_1_0, flags, GST_DP_PAYLOAD_CAPS);
 
   /* buffer properties */
   GST_WRITE_UINT32_BE (h + 6, payload_length);
@@ -204,12 +256,75 @@ gst_dp_packet_from_caps_any (const GstCaps * caps, GstDPHeaderFlag flags,
 
   GST_DP_SET_CRC (h, flags, string, payload_length);
 
-  GST_MEMDUMP ("created header from caps", h, GST_DP_HEADER_LENGTH);
-  *header = h;
-  *payload = string;
-  return TRUE;
+  GST_MEMDUMP ("payload header for caps", h, GST_DP_HEADER_LENGTH);
+  gst_memory_unmap (mem, &map);
+
+  /* header */
+  gst_buffer_append_memory (buf, mem);
+
+  /* caps string */
+  gst_buffer_append_memory (buf,
+      gst_memory_new_wrapped (0, string, payload_length, 0, payload_length,
+          string, g_free));
+
+  return buf;
 }
 
+GstBuffer *
+gst_dp_payload_event (const GstEvent * event, GstDPHeaderFlag flags)
+{
+  GstBuffer *buf;
+  GstMapInfo map;
+  GstMemory *mem;
+  guint8 *h;
+  guint32 pl_length;            /* length of payload */
+  guchar *string = NULL;
+  const GstStructure *structure;
+
+  g_assert (GST_IS_EVENT (event));
+
+  buf = gst_buffer_new ();
+
+  mem = gst_allocator_alloc (NULL, GST_DP_HEADER_LENGTH, NULL);
+  gst_memory_map (mem, &map, GST_MAP_READWRITE);
+  h = memset (map.data, 0, map.size);
+
+  structure = gst_event_get_structure ((GstEvent *) event);
+  if (structure) {
+    string = (guchar *) gst_structure_to_string (structure);
+    GST_LOG ("event %p has structure, string %s", event, string);
+    pl_length = strlen ((gchar *) string) + 1;  /* include trailing 0 */
+  } else {
+    GST_LOG ("event %p has no structure", event);
+    pl_length = 0;
+  }
+
+  /* version, flags, type */
+  GST_DP_INIT_HEADER (h, GST_DP_VERSION_1_0, flags,
+      GST_DP_PAYLOAD_EVENT_NONE + GST_EVENT_TYPE (event));
+
+  /* length */
+  GST_WRITE_UINT32_BE (h + 6, pl_length);
+  /* timestamp */
+  GST_WRITE_UINT64_BE (h + 10, GST_EVENT_TIMESTAMP (event));
+
+  GST_DP_SET_CRC (h, flags, string, pl_length);
+
+  GST_MEMDUMP ("payload header for event", h, GST_DP_HEADER_LENGTH);
+  gst_memory_unmap (mem, &map);
+
+  /* header */
+  gst_buffer_append_memory (buf, mem);
+
+  /* event string */
+  if (pl_length > 0) {
+    gst_buffer_append_memory (buf,
+        gst_memory_new_wrapped (0, string, pl_length, 0, pl_length,
+            string, g_free));
+  }
+
+  return buf;
+}
 
 /*** PUBLIC FUNCTIONS ***/
 
@@ -259,12 +374,15 @@ static const guint16 gst_dp_crc_table[256] = {
  *
  * Returns: a two-byte CRC checksum.
  */
-guint16
+static guint16
 gst_dp_crc (const guint8 * buffer, guint length)
 {
   guint16 crc_register = CRC_INIT;
 
-  g_return_val_if_fail (buffer != NULL || length == 0, 0);
+  if (length == 0)
+    return 0;
+
+  g_assert (buffer != NULL);
 
   /* calc CRC */
   for (; length--;) {
@@ -274,23 +392,37 @@ gst_dp_crc (const guint8 * buffer, guint length)
   return (0xffff ^ crc_register);
 }
 
-GType
-gst_dp_version_get_type (void)
+static guint16
+gst_dp_crc_from_memory_maps (const GstMapInfo * maps, guint n_maps)
 {
-  static gsize gst_dp_version_type = 0;
-  static const GEnumValue gst_dp_version[] = {
-    {GST_DP_VERSION_0_2, "GST_DP_VERSION_0_2", "0.2"},
-    {GST_DP_VERSION_1_0, "GST_DP_VERSION_1_0", "1.0"},
-    {0, NULL, NULL},
-  };
+  guint16 crc_register = CRC_INIT;
+  gsize total_length = 0;
 
-  if (g_once_init_enter (&gst_dp_version_type)) {
-    GType tmp = g_enum_register_static ("GstDPVersion", gst_dp_version);
-    g_once_init_leave (&gst_dp_version_type, tmp);
+  if (n_maps == 0)
+    return 0;
+
+  g_assert (maps != NULL);
+
+  /* calc CRC */
+  while (n_maps > 0) {
+    guint8 *buffer = maps->data;
+    gsize length = maps->size;
+
+    total_length += length;
+
+    while (length-- > 0) {
+      crc_register = (guint16) ((crc_register << 8) ^
+          gst_dp_crc_table[((crc_register >> 8) & 0x00ff) ^ *buffer++]);
+    }
+    --n_maps;
+    ++maps;
   }
 
-  return (GType) gst_dp_version_type;
-};
+  if (G_UNLIKELY (total_length == 0))
+    return 0;
+
+  return (0xffff ^ crc_register);
+}
 
 /**
  * gst_dp_init:
@@ -303,15 +435,6 @@ gst_dp_version_get_type (void)
 void
 gst_dp_init (void)
 {
-  static gboolean _gst_dp_initialized = FALSE;
-
-  if (_gst_dp_initialized)
-    return;
-
-  _gst_dp_initialized = TRUE;
-
-  g_type_class_ref (gst_dp_version_get_type ());
-
   GST_DEBUG_CATEGORY_INIT (data_protocol_debug, "gdp", 0,
       "GStreamer Data Protocol");
 }
@@ -346,68 +469,6 @@ gst_dp_header_payload_type (const guint8 * header)
   g_return_val_if_fail (header != NULL, GST_DP_PAYLOAD_NONE);
 
   return GST_DP_HEADER_PAYLOAD_TYPE (header);
-}
-
-/*** PACKETIZER FUNCTIONS ***/
-
-static gboolean
-gst_dp_header_from_buffer_1_0 (const GstBuffer * buffer, GstDPHeaderFlag flags,
-    guint * length, guint8 ** header)
-{
-  return gst_dp_header_from_buffer_any (buffer, flags, length, header,
-      GST_DP_VERSION_1_0);
-}
-
-static gboolean
-gst_dp_packet_from_caps_1_0 (const GstCaps * caps, GstDPHeaderFlag flags,
-    guint * length, guint8 ** header, guint8 ** payload)
-{
-  return gst_dp_packet_from_caps_any (caps, flags, length, header, payload,
-      GST_DP_VERSION_1_0);
-}
-
-static gboolean
-gst_dp_packet_from_event_1_0 (const GstEvent * event, GstDPHeaderFlag flags,
-    guint * length, guint8 ** header, guint8 ** payload)
-{
-  guint8 *h;
-  guint32 pl_length;            /* length of payload */
-  guchar *string = NULL;
-  const GstStructure *structure;
-
-  g_return_val_if_fail (GST_IS_EVENT (event), FALSE);
-  g_return_val_if_fail (length, FALSE);
-  g_return_val_if_fail (header, FALSE);
-  g_return_val_if_fail (payload, FALSE);
-
-  *length = GST_DP_HEADER_LENGTH;
-  h = g_malloc0 (GST_DP_HEADER_LENGTH);
-
-  structure = gst_event_get_structure ((GstEvent *) event);
-  if (structure) {
-    string = (guchar *) gst_structure_to_string (structure);
-    GST_LOG ("event %p has structure, string %s", event, string);
-    pl_length = strlen ((gchar *) string) + 1;  /* include trailing 0 */
-  } else {
-    GST_LOG ("event %p has no structure", event);
-    pl_length = 0;
-  }
-
-  /* version, flags, type */
-  GST_DP_INIT_HEADER (h, GST_DP_VERSION_1_0, flags,
-      GST_DP_PAYLOAD_EVENT_NONE + GST_EVENT_TYPE (event));
-
-  /* length */
-  GST_WRITE_UINT32_BE (h + 6, pl_length);
-  /* timestamp */
-  GST_WRITE_UINT64_BE (h + 10, GST_EVENT_TIMESTAMP (event));
-
-  GST_DP_SET_CRC (h, flags, string, pl_length);
-
-  GST_MEMDUMP ("created header from event", h, GST_DP_HEADER_LENGTH);
-  *header = h;
-  *payload = string;
-  return TRUE;
 }
 
 /*** DEPACKETIZING FUNCTIONS ***/
@@ -709,47 +770,4 @@ gst_dp_validate_packet (guint header_length, const guint8 * header,
     return FALSE;
 
   return TRUE;
-}
-
-/**
- * gst_dp_packetizer_new:
- * @version: the #GstDPVersion of the protocol to packetize for.
- *
- * Creates a new packetizer.
- *
- * Returns: a newly allocated #GstDPPacketizer
- */
-GstDPPacketizer *
-gst_dp_packetizer_new (GstDPVersion version)
-{
-  GstDPPacketizer *ret;
-
-  ret = g_malloc0 (sizeof (GstDPPacketizer));
-  ret->version = version;
-
-  switch (version) {
-    case GST_DP_VERSION_1_0:
-      ret->header_from_buffer = gst_dp_header_from_buffer_1_0;
-      ret->packet_from_caps = gst_dp_packet_from_caps_1_0;
-      ret->packet_from_event = gst_dp_packet_from_event_1_0;
-      break;
-    default:
-      g_free (ret);
-      ret = NULL;
-      break;
-  }
-
-  return ret;
-}
-
-/**
- * gst_dp_packetizer_free:
- * @packetizer: the #GstDPPacketizer to free.
- *
- * Free the given packetizer.
- */
-void
-gst_dp_packetizer_free (GstDPPacketizer * packetizer)
-{
-  g_free (packetizer);
 }

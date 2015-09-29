@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gst-plugins-bad 0.10.21.2\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2014-08-27 14:38+0300\n"
+"POT-Creation-Date: 2015-08-19 12:49+0300\n"
 "PO-Revision-Date: 2011-10-02 15:47+0200\n"
 "Last-Translator: Jorge González González <aloriel@gmail.com>\n"
 "Language-Team: Spanish <es@li.org>\n"
@@ -16,9 +16,6 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n!=1);\n"
-
-msgid "Internal data stream error."
-msgstr "Error en el flujo de datos interno."
 
 msgid "format wasn't negotiated before get function"
 msgstr ""
@@ -29,7 +26,7 @@ msgstr ""
 msgid ""
 "GStreamer can play audio using any number of output elements. Some possible "
 "choices are osssink, pulsesink and alsasink. The audiosink can be a partial "
-"pipeline instea of just one element."
+"pipeline instead of just one element."
 msgstr ""
 
 msgid "description for default GStreamer sound events audiosink"
@@ -112,6 +109,9 @@ msgstr ""
 msgid "Describes the selected visualization element."
 msgstr ""
 
+msgid "OpenCV failed to load template image"
+msgstr ""
+
 msgid "Could not read title information for DVD."
 msgstr "No se pudo leer la información del título para el DVD."
 
@@ -135,29 +135,9 @@ msgstr "No se pudo leer el DVD."
 msgid "This file contains no playable streams."
 msgstr ""
 
-msgid "Couldn't get the Manifest's URI"
-msgstr ""
-
-msgid "Failed to get fragment URL."
-msgstr ""
-
-msgid "Couldn't download fragments"
-msgstr ""
-
 #, fuzzy
 msgid "Could not open sndfile stream for reading."
 msgstr "No se pudo abrir el archivo «%s» para leer."
-
-msgid "No file name specified for writing."
-msgstr "No se especificó un nombre de archivo para su escritura."
-
-#, c-format
-msgid "Could not open file \"%s\" for writing."
-msgstr "No se pudo abrir el archivo «%s» para escribir."
-
-#, c-format
-msgid "Could not write to file \"%s\"."
-msgstr "No se pudo escribir en el archivo «%s»."
 
 msgid "Could not establish connection to sndio"
 msgstr ""
@@ -186,12 +166,31 @@ msgstr ""
 msgid "File location is set to NULL, please set it to a valid filename"
 msgstr ""
 
+msgid "Digitalzoom element couldn't be created"
+msgstr ""
+
 msgid "Subpicture format was not configured before data flow"
 msgstr ""
+
+msgid "Failed to get fragment URL."
+msgstr ""
+
+msgid "Internal data stream error."
+msgstr "Error en el flujo de datos interno."
+
+msgid "Couldn't download fragments"
+msgstr ""
+
+msgid "No file name specified for writing."
+msgstr "No se especificó un nombre de archivo para su escritura."
 
 #, c-format
 msgid "Given file name \"%s\" can't be converted to local file name encoding."
 msgstr ""
+
+#, c-format
+msgid "Could not open file \"%s\" for writing."
+msgstr "No se pudo abrir el archivo «%s» para escribir."
 
 #, c-format
 msgid "Device \"%s\" does not exist."
@@ -227,6 +226,9 @@ msgstr ""
 #, c-format
 msgid "Couldn't find details for DVB channel %s"
 msgstr ""
+
+#~ msgid "Could not write to file \"%s\"."
+#~ msgstr "No se pudo escribir en el archivo «%s»."
 
 #~ msgid "Internal clock error."
 #~ msgstr "Error en el reloj interno."

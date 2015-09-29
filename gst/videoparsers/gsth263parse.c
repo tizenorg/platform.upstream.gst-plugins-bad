@@ -97,6 +97,7 @@ static void
 gst_h263_parse_init (GstH263Parse * h263parse)
 {
   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (h263parse));
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (h263parse));
 }
 
 static gboolean
@@ -169,10 +170,15 @@ find_psc (GstBuffer * buffer, guint skip)
   if (gst_byte_reader_peek_uint24_be (&br, &psc) == FALSE)
     goto out;
 
-  /* Scan for the picture start code (22 bits - 0x0020) */
+  /* Scan for the picture start code (22 bits - 0x0020)
+   * startcode  : 0000 0000 0000 0000 1000 00xx
+   * mask (bin) : 1111 1111 1111 1111 1111 1100
+   * mask (hex) :    f    f    f    f    f    c
+   * match      :    0    0    0    0    8    0
+   */
   while ((gst_byte_reader_get_remaining (&br) >= 3)) {
     if (gst_byte_reader_peek_uint24_be (&br, &psc) &&
-        ((psc & 0xffffc0) == 0x000080)) {
+        ((psc & 0xfffffc) == 0x000080)) {
       psc_pos = gst_byte_reader_get_pos (&br);
       break;
     } else if (gst_byte_reader_skip (&br, 1) == FALSE)
@@ -272,6 +278,8 @@ gst_h263_parse_set_src_caps (GstH263Parse * h263parse,
 
   gst_pad_set_caps (GST_BASE_PARSE_SRC_PAD (GST_BASE_PARSE (h263parse)), caps);
   gst_caps_unref (caps);
+  if (sink_caps)
+    gst_caps_unref (sink_caps);
 }
 
 static GstFlowReturn
@@ -439,8 +447,8 @@ gst_h263_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (h263parse),
-        gst_event_new_tag (taglist));
+    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
+    gst_tag_list_unref (taglist);
 
     /* also signals the end of first-frame processing */
     h263parse->sent_codec_tag = TRUE;

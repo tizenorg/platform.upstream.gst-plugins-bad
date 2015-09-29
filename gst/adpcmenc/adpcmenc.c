@@ -57,7 +57,7 @@ static GstStaticPadTemplate adpcmenc_src_template =
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("audio/x-adpcm, "
-        " layout=(string){dvi}, "
+        " layout=(string)dvi, "
         " block_align = (int) [64, 8192], "
         " rate = (int)[ 1, MAX ], " "channels = (int)[1,2];")
     );
@@ -84,9 +84,9 @@ static const int ima_step_size[89] = {
 
 enum adpcm_properties
 {
-  ARG_0,
-  ARG_BLOCK_SIZE,
-  ARG_LAYOUT
+  PROP_0,
+  PROP_BLOCK_SIZE,
+  PROP_LAYOUT
 };
 
 enum adpcm_layout
@@ -100,7 +100,7 @@ adpcmenc_layout_get_type (void)
   static GType adpcmenc_layout_type = 0;
 
   if (!adpcmenc_layout_type) {
-    static GEnumValue layout_types[] = {
+    static const GEnumValue layout_types[] = {
       {LAYOUT_ADPCM_DVI, "DVI/IMA APDCM", "dvi"},
       {0, NULL, NULL},
     };
@@ -200,10 +200,10 @@ adpcmenc_set_property (GObject * object,
   ADPCMEnc *enc = GST_ADPCM_ENC (object);
 
   switch (prop_id) {
-    case ARG_BLOCK_SIZE:
+    case PROP_BLOCK_SIZE:
       enc->blocksize = g_value_get_int (value);
       break;
-    case ARG_LAYOUT:
+    case PROP_LAYOUT:
       enc->layout = g_value_get_enum (value);
       break;
     default:
@@ -219,10 +219,10 @@ adpcmenc_get_property (GObject * object,
   ADPCMEnc *enc = GST_ADPCM_ENC (object);
 
   switch (prop_id) {
-    case ARG_BLOCK_SIZE:
+    case PROP_BLOCK_SIZE:
       g_value_set_int (value, enc->blocksize);
       break;
-    case ARG_LAYOUT:
+    case PROP_LAYOUT:
       g_value_set_enum (value, enc->layout);
       break;
     default:
@@ -421,6 +421,8 @@ adpcmenc_stop (GstAudioEncoder * enc)
 static void
 adpcmenc_init (ADPCMEnc * enc)
 {
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_AUDIO_ENCODER_SINK_PAD (enc));
+
   /* Set defaults. */
   enc->blocksize = DEFAULT_ADPCM_BLOCK_SIZE;
   enc->layout = DEFAULT_ADPCM_LAYOUT;
@@ -450,13 +452,13 @@ adpcmenc_class_init (ADPCMEncClass * klass)
   base_class->set_format = GST_DEBUG_FUNCPTR (adpcmenc_set_format);
   base_class->handle_frame = GST_DEBUG_FUNCPTR (adpcmenc_handle_frame);
 
-  g_object_class_install_property (gobjectclass, ARG_LAYOUT,
+  g_object_class_install_property (gobjectclass, PROP_LAYOUT,
       g_param_spec_enum ("layout", "Layout",
           "Layout for output stream",
           GST_TYPE_ADPCMENC_LAYOUT, DEFAULT_ADPCM_LAYOUT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
-  g_object_class_install_property (gobjectclass, ARG_BLOCK_SIZE,
+  g_object_class_install_property (gobjectclass, PROP_BLOCK_SIZE,
       g_param_spec_int ("blockalign", "Block Align",
           "Block size for output stream",
           MIN_ADPCM_BLOCK_SIZE, MAX_ADPCM_BLOCK_SIZE,

@@ -53,10 +53,6 @@
 #include "config.h"
 #endif
 
-/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
- * with newer GLib versions (>= 2.31.0) */
-#define GLIB_DISABLE_DEPRECATION_WARNINGS
-
 #include <string.h>
 #include <math.h>
 
@@ -830,7 +826,7 @@ gst_aiff_parse_create_caps (GstAiffParse * aiff)
     if (aiff->endianness == G_BIG_ENDIAN) {
       if (aiff->width == 32)
         format = "F32BE";
-      else if (aiff->width == 32)
+      else if (aiff->width == 64)
         format = "F64BE";
     }
   } else {
@@ -1822,15 +1818,13 @@ gst_aiff_parse_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
         }
         if (stop > 0) {
           end_offset = stop;
-          segment.stop -= aiff->datastart;
-          segment.stop = MAX (stop, 0);
+          stop -= aiff->datastart;
+          stop = MAX (stop, 0);
         }
         if (aiff->state == AIFF_PARSE_DATA &&
             aiff->segment.format == GST_FORMAT_TIME) {
-          guint64 bps = aiff->bps;
-
           /* operating in format TIME, so we can convert */
-          if (bps) {
+          if (aiff->bps) {
             if (start >= 0)
               start =
                   gst_util_uint64_scale_ceil (start, GST_SECOND,

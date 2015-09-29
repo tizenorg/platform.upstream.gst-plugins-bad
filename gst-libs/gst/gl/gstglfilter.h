@@ -24,7 +24,6 @@
 #define _GST_GL_FILTER_H_
 
 #include <gst/gst.h>
-#include <gst/base/gstbasetransform.h>
 #include <gst/video/video.h>
 
 #include <gst/gl/gl.h>
@@ -38,9 +37,6 @@ GType gst_gl_filter_get_type(void);
 #define GST_GL_FILTER_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_GL_FILTER,GstGLFilterClass))
 #define GST_IS_GL_FILTER_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_GL_FILTER))
 #define GST_GL_FILTER_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_GL_FILTER,GstGLFilterClass))
-
-typedef struct _GstGLFilter GstGLFilter;
-typedef struct _GstGLFilterClass GstGLFilterClass;
 
 /**
  * GstGLFilter:
@@ -60,33 +56,27 @@ typedef struct _GstGLFilterClass GstGLFilterClass;
  */
 struct _GstGLFilter
 {
-  GstBaseTransform   base_transform;
-
-  GstBufferPool     *pool;
-
-  GstGLDisplay      *display;
+  GstGLBaseFilter    parent;
 
   GstVideoInfo       in_info;
   GstVideoInfo       out_info;
+
+  GstCaps           *out_caps;
+
+  /* <private> */
   GLuint             fbo;
   GLuint             depthbuffer;
 
-  GstGLUpload       *upload;
-  GstGLDownload     *download;
-
-  /* <private> */
   GLuint             in_tex_id;
   GLuint             out_tex_id;
 
   GstGLShader       *default_shader;
 
-  GstGLContext      *context;
-  GstGLContext      *other_context;
-
-#if GST_GL_HAVE_GLES2
-  GLint draw_attr_position_loc;
-  GLint draw_attr_texture_loc;
-#endif
+  GLuint             vao;
+  GLuint             vbo_indices;
+  GLuint             vertex_buffer;
+  GLint              draw_attr_position_loc;
+  GLint              draw_attr_texture_loc;
 };
 
 /**
@@ -99,25 +89,23 @@ struct _GstGLFilter
  *          Note: If @filter exists, then @filter_texture is not run
  * @filter_texture: given @in_tex, transform it into @out_tex.  Not used
  *                  if @filter exists
- * @onInitFBO: perform initialization when the Framebuffer object is created
- * @onStart: called when element activates see also #GstBaseTransform
- * @onStop: called when the element deactivates e also #GstBaseTransform
- * @onReset: called on inizialation and after @onStop
+ * @init_fbo: perform initialization when the Framebuffer object is created
  * @display_init_cb: execute arbitrary gl code on start
  * @display_reset_cb: execute arbitrary gl code at stop
+ * @transform_internal_caps: Perform sub-class specific modifications of the
+ *   caps to be processed between upload on input and before download for output.
  */
 struct _GstGLFilterClass
 {
-  GstBaseTransformClass base_transform_class;
+  GstGLBaseFilterClass parent_class;
 
   gboolean (*set_caps)          (GstGLFilter* filter, GstCaps* incaps, GstCaps* outcaps);
   gboolean (*filter)            (GstGLFilter *filter, GstBuffer *inbuf, GstBuffer *outbuf);
   gboolean (*filter_texture)    (GstGLFilter *filter, guint in_tex, guint out_tex);
-  gboolean (*onInitFBO)         (GstGLFilter *filter);
+  gboolean (*init_fbo)          (GstGLFilter *filter);
 
-  void (*onStart)               (GstGLFilter *filter);
-  void (*onStop)                (GstGLFilter *filter);
-  void (*onReset)               (GstGLFilter *filter);
+  GstCaps *(*transform_internal_caps) (GstGLFilter *filter,
+    GstPadDirection direction, GstCaps * caps, GstCaps * filter_caps);
 
   /* useful to init and cleanup custom gl resources */
   void (*display_init_cb)       (GstGLFilter *filter);

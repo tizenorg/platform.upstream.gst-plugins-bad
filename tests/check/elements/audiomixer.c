@@ -33,7 +33,10 @@
 
 #include <gst/check/gstcheck.h>
 #include <gst/check/gstconsistencychecker.h>
+#include <gst/audio/audio.h>
 #include <gst/base/gstbasesrc.h>
+#include <gst/controller/gstdirectcontrolbinding.h>
+#include <gst/controller/gstinterpolationcontrolsource.h>
 
 static GMainLoop *main_loop;
 
@@ -86,9 +89,10 @@ GST_START_TEST (test_filter_caps)
   GstPad *pad;
 
   filter_caps = gst_caps_new_simple ("audio/x-raw",
-      "format", G_TYPE_STRING, "F32LE",
+      "format", G_TYPE_STRING, GST_AUDIO_NE (F32),
       "layout", G_TYPE_STRING, "interleaved",
-      "rate", G_TYPE_INT, 44100, "channels", G_TYPE_INT, 1, NULL);
+      "rate", G_TYPE_INT, 44100, "channels", G_TYPE_INT, 1,
+      "channel-mask", GST_TYPE_BITMASK, (guint64) 0x04, NULL);
 
   /* build pipeline */
   pipeline = gst_pipeline_new ("pipeline");
@@ -586,10 +590,12 @@ test_live_seeking_try_audiosrc (const gchar * factory_name)
 /* test failing seeks on live-sources */
 GST_START_TEST (test_live_seeking)
 {
-  GstElement *bin, *src1 = NULL, *src2, *ac1, *ac2, *audiomixer, *sink;
+  GstElement *bin, *src1 = NULL, *cf, *src2, *audiomixer, *sink;
+  GstCaps *caps;
   GstBus *bus;
   gboolean res;
   GstPad *srcpad;
+  GstPad *sinkpad;
   gint i;
   GstStateChangeReturn state_res;
   GstStreamConsistency *consist;
@@ -622,25 +628,43 @@ GST_START_TEST (test_live_seeking)
     g_object_set (src1, "num-buffers", 4, "blocksize", 44100, NULL);
   }
 
-  ac1 = gst_element_factory_make ("audioconvert", "ac1");
-  src2 = gst_element_factory_make ("audiotestsrc", "src2");
-  g_object_set (src2, "wave", 4, NULL); /* silence */
-  ac2 = gst_element_factory_make ("audioconvert", "ac2");
   audiomixer = gst_element_factory_make ("audiomixer", "audiomixer");
+  cf = gst_element_factory_make ("capsfilter", "capsfilter");
   sink = gst_element_factory_make ("fakesink", "sink");
-  gst_bin_add_many (GST_BIN (bin), src1, ac1, src2, ac2, audiomixer, sink,
-      NULL);
 
-  res = gst_element_link (src1, ac1);
+  gst_bin_add_many (GST_BIN (bin), src1, cf, audiomixer, sink, NULL);
+  res = gst_element_link (src1, cf);
   fail_unless (res == TRUE, NULL);
-  res = gst_element_link (ac1, audiomixer);
-  fail_unless (res == TRUE, NULL);
-  res = gst_element_link (src2, ac2);
-  fail_unless (res == TRUE, NULL);
-  res = gst_element_link (ac2, audiomixer);
+  res = gst_element_link (cf, audiomixer);
   fail_unless (res == TRUE, NULL);
   res = gst_element_link (audiomixer, sink);
   fail_unless (res == TRUE, NULL);
+
+  gst_element_set_state (bin, GST_STATE_PLAYING);
+  /* wait for completion */
+  state_res =
+      gst_element_get_state (GST_ELEMENT (bin), NULL, NULL,
+      GST_CLOCK_TIME_NONE);
+  ck_assert_int_ne (state_res, GST_STATE_CHANGE_FAILURE);
+
+  sinkpad = gst_element_get_static_pad (sink, "sink");
+  fail_unless (sinkpad != NULL);
+  caps = gst_pad_get_current_caps (sinkpad);
+  fail_unless (caps != NULL);
+  gst_object_unref (sinkpad);
+
+  gst_element_set_state (bin, GST_STATE_NULL);
+
+  g_object_set (cf, "caps", caps, NULL);
+
+  src2 = gst_element_factory_make ("audiotestsrc", "src2");
+  g_object_set (src2, "wave", 4, NULL); /* silence */
+  gst_bin_add (GST_BIN (bin), src2);
+
+  res = gst_element_link_filtered (src2, audiomixer, caps);
+  fail_unless (res == TRUE, NULL);
+
+  gst_caps_unref (caps);
 
   play_seek_event = gst_event_new_seek (1.0, GST_FORMAT_TIME,
       GST_SEEK_FLAG_FLUSH,
@@ -870,11 +894,16 @@ GST_END_TEST;
 
 
 static GstBuffer *handoff_buffer = NULL;
+
 static void
 handoff_buffer_cb (GstElement * fakesink, GstBuffer * buffer, GstPad * pad,
     gpointer user_data)
 {
-  GST_DEBUG ("got buffer %p", buffer);
+  GST_DEBUG ("got buffer -- SIZE: %" G_GSIZE_FORMAT
+      " -- %p DURATION is %" GST_TIME_FORMAT,
+      gst_buffer_get_size (buffer), buffer,
+      GST_TIME_ARGS (GST_BUFFER_PTS (buffer) + GST_BUFFER_DURATION (buffer)));
+
   gst_buffer_replace (&handoff_buffer, buffer);
 }
 
@@ -891,6 +920,7 @@ GST_START_TEST (test_clip)
   GstEvent *event;
   GstBuffer *buffer;
   GstCaps *caps;
+  GstQuery *drain = gst_query_new_drain ();
 
   GST_INFO ("preparing test");
 
@@ -925,11 +955,7 @@ GST_START_TEST (test_clip)
   gst_pad_send_event (sinkpad, gst_event_new_stream_start ("test"));
 
   caps = gst_caps_new_simple ("audio/x-raw",
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-      "format", G_TYPE_STRING, "S16BE",
-#else
-      "format", G_TYPE_STRING, "S16LE",
-#endif
+      "format", G_TYPE_STRING, GST_AUDIO_NE (S16),
       "layout", G_TYPE_STRING, "interleaved",
       "rate", G_TYPE_INT, 44100, "channels", G_TYPE_INT, 2, NULL);
 
@@ -948,18 +974,32 @@ GST_START_TEST (test_clip)
   buffer = gst_buffer_new_and_alloc (44100);
   GST_BUFFER_TIMESTAMP (buffer) = 0;
   GST_BUFFER_DURATION (buffer) = 250 * GST_MSECOND;
-  GST_DEBUG ("pushing buffer %p", buffer);
+  GST_DEBUG ("pushing buffer %p END is %" GST_TIME_FORMAT,
+      buffer,
+      GST_TIME_ARGS (GST_BUFFER_PTS (buffer) + GST_BUFFER_DURATION (buffer)));
   ret = gst_pad_chain (sinkpad, buffer);
   ck_assert_int_eq (ret, GST_FLOW_OK);
+
+  /* The aggregation is done in a dedicated thread, so we can't
+   * not know when it is actually going to happen, so we use a DRAIN query
+   * to wait for it to complete.
+   */
+  gst_pad_query (sinkpad, drain);
   fail_unless (handoff_buffer == NULL);
 
   /* should be partially clipped */
   buffer = gst_buffer_new_and_alloc (44100);
   GST_BUFFER_TIMESTAMP (buffer) = 900 * GST_MSECOND;
   GST_BUFFER_DURATION (buffer) = 250 * GST_MSECOND;
-  GST_DEBUG ("pushing buffer %p", buffer);
+
+  GST_DEBUG ("pushing buffer %p START %" GST_TIME_FORMAT " -- DURATION is %"
+      GST_TIME_FORMAT, buffer, GST_TIME_ARGS (GST_BUFFER_PTS (buffer)),
+      GST_TIME_ARGS (GST_BUFFER_DURATION (buffer)));
+
   ret = gst_pad_chain (sinkpad, buffer);
   ck_assert_int_eq (ret, GST_FLOW_OK);
+  gst_pad_query (sinkpad, drain);
+
   fail_unless (handoff_buffer != NULL);
   gst_buffer_replace (&handoff_buffer, NULL);
 
@@ -967,19 +1007,28 @@ GST_START_TEST (test_clip)
   buffer = gst_buffer_new_and_alloc (44100);
   GST_BUFFER_TIMESTAMP (buffer) = 1 * GST_SECOND;
   GST_BUFFER_DURATION (buffer) = 250 * GST_MSECOND;
-  GST_DEBUG ("pushing buffer %p", buffer);
+
+  GST_DEBUG ("pushing buffer %p END is %" GST_TIME_FORMAT,
+      buffer,
+      GST_TIME_ARGS (GST_BUFFER_PTS (buffer) + GST_BUFFER_DURATION (buffer)));
   ret = gst_pad_chain (sinkpad, buffer);
   ck_assert_int_eq (ret, GST_FLOW_OK);
+  gst_pad_query (sinkpad, drain);
   fail_unless (handoff_buffer != NULL);
   gst_buffer_replace (&handoff_buffer, NULL);
+  fail_unless (handoff_buffer == NULL);
 
   /* should be clipped and ok */
+
   buffer = gst_buffer_new_and_alloc (44100);
   GST_BUFFER_TIMESTAMP (buffer) = 2 * GST_SECOND;
   GST_BUFFER_DURATION (buffer) = 250 * GST_MSECOND;
-  GST_DEBUG ("pushing buffer %p", buffer);
+  GST_DEBUG ("pushing buffer %p END is %" GST_TIME_FORMAT,
+      buffer,
+      GST_TIME_ARGS (GST_BUFFER_PTS (buffer) + GST_BUFFER_DURATION (buffer)));
   ret = gst_pad_chain (sinkpad, buffer);
   ck_assert_int_eq (ret, GST_FLOW_OK);
+  gst_pad_query (sinkpad, drain);
   fail_unless (handoff_buffer == NULL);
 
   gst_element_release_request_pad (audiomixer, sinkpad);
@@ -988,6 +1037,7 @@ GST_START_TEST (test_clip)
   gst_bus_remove_signal_watch (bus);
   gst_object_unref (bus);
   gst_object_unref (bin);
+  gst_query_unref (drain);
 }
 
 GST_END_TEST;
@@ -1207,7 +1257,7 @@ GST_END_TEST;
 GST_START_TEST (test_flush_start_flush_stop)
 {
   GstPadTemplate *sink_template;
-  GstPad *tmppad, *sinkpad1, *sinkpad2, *audiomixer_src;
+  GstPad *tmppad, *srcpad1, *sinkpad1, *sinkpad2, *audiomixer_src;
   GstElement *pipeline, *src1, *src2, *audiomixer, *sink;
 
   GST_INFO ("preparing test");
@@ -1227,9 +1277,8 @@ GST_START_TEST (test_flush_start_flush_stop)
       "sink_%u");
   fail_unless (GST_IS_PAD_TEMPLATE (sink_template));
   sinkpad1 = gst_element_request_pad (audiomixer, sink_template, NULL, NULL);
-  tmppad = gst_element_get_static_pad (src1, "src");
-  gst_pad_link (tmppad, sinkpad1);
-  gst_object_unref (tmppad);
+  srcpad1 = gst_element_get_static_pad (src1, "src");
+  gst_pad_link (srcpad1, sinkpad1);
 
   sinkpad2 = gst_element_request_pad (audiomixer, sink_template, NULL, NULL);
   tmppad = gst_element_get_static_pad (src2, "src");
@@ -1245,15 +1294,22 @@ GST_START_TEST (test_flush_start_flush_stop)
   audiomixer_src = gst_element_get_static_pad (audiomixer, "src");
   fail_if (GST_PAD_IS_FLUSHING (audiomixer_src));
   gst_pad_send_event (sinkpad1, gst_event_new_flush_start ());
-  fail_unless (GST_PAD_IS_FLUSHING (audiomixer_src));
-  gst_pad_send_event (sinkpad1, gst_event_new_flush_stop (TRUE));
   fail_if (GST_PAD_IS_FLUSHING (audiomixer_src));
+  fail_unless (GST_PAD_IS_FLUSHING (sinkpad1));
+  /* Hold the streamlock to make sure the flush stop is not between
+     the attempted push of a segment event and of the following buffer. */
+  GST_PAD_STREAM_LOCK (srcpad1);
+  gst_pad_send_event (sinkpad1, gst_event_new_flush_stop (TRUE));
+  GST_PAD_STREAM_UNLOCK (srcpad1);
+  fail_if (GST_PAD_IS_FLUSHING (audiomixer_src));
+  fail_if (GST_PAD_IS_FLUSHING (sinkpad1));
   gst_object_unref (audiomixer_src);
 
   gst_element_release_request_pad (audiomixer, sinkpad1);
   gst_object_unref (sinkpad1);
   gst_element_release_request_pad (audiomixer, sinkpad2);
   gst_object_unref (sinkpad2);
+  gst_object_unref (srcpad1);
 
   /* cleanup */
   gst_element_set_state (pipeline, GST_STATE_NULL);
@@ -1309,7 +1365,7 @@ run_sync_test (SendBuffersFunction send_buffers,
   queue1 = gst_element_factory_make ("queue", "queue1");
   queue2 = gst_element_factory_make ("queue", "queue2");
   audiomixer = gst_element_factory_make ("audiomixer", "audiomixer");
-  g_object_set (audiomixer, "blocksize", 500, NULL);
+  g_object_set (audiomixer, "output-buffer-duration", 500 * GST_MSECOND, NULL);
   sink = gst_element_factory_make ("fakesink", "sink");
   g_object_set (sink, "signal-handoffs", TRUE, NULL);
   g_signal_connect (sink, "handoff", (GCallback) handoff_buffer_collect_cb,
@@ -1345,11 +1401,7 @@ run_sync_test (SendBuffersFunction send_buffers,
   gst_pad_send_event (queue2_sinkpad, gst_event_new_stream_start ("test"));
 
   caps = gst_caps_new_simple ("audio/x-raw",
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-      "format", G_TYPE_STRING, "S16BE",
-#else
-      "format", G_TYPE_STRING, "S16LE",
-#endif
+      "format", G_TYPE_STRING, GST_AUDIO_NE (S16),
       "layout", G_TYPE_STRING, "interleaved",
       "rate", G_TYPE_INT, 1000, "channels", G_TYPE_INT, 1, NULL);
 
@@ -1725,6 +1777,139 @@ GST_START_TEST (test_sync_unaligned)
 
 GST_END_TEST;
 
+GST_START_TEST (test_segment_base_handling)
+{
+  GstElement *pipeline, *sink, *mix, *src1, *src2;
+  GstPad *srcpad, *sinkpad;
+  GstClockTime end_time;
+  GstSample *last_sample = NULL;
+  GstSample *sample;
+  GstBuffer *buf;
+  GstCaps *caps;
+
+  caps = gst_caps_new_simple ("audio/x-raw", "rate", G_TYPE_INT, 44100,
+      "channels", G_TYPE_INT, 2, NULL);
+
+  pipeline = gst_pipeline_new ("pipeline");
+  mix = gst_element_factory_make ("audiomixer", "audiomixer");
+  sink = gst_element_factory_make ("appsink", "sink");
+  g_object_set (sink, "caps", caps, "sync", FALSE, NULL);
+  gst_caps_unref (caps);
+  src1 = gst_element_factory_make ("audiotestsrc", "src1");
+  g_object_set (src1, "samplesperbuffer", 4410, "num-buffers", 50, NULL);
+  src2 = gst_element_factory_make ("audiotestsrc", "src2");
+  g_object_set (src2, "samplesperbuffer", 4410, "num-buffers", 50, NULL);
+  gst_bin_add_many (GST_BIN (pipeline), src1, src2, mix, sink, NULL);
+  fail_unless (gst_element_link (mix, sink));
+
+  srcpad = gst_element_get_static_pad (src1, "src");
+  sinkpad = gst_element_get_request_pad (mix, "sink_1");
+  fail_unless (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  srcpad = gst_element_get_static_pad (src2, "src");
+  sinkpad = gst_element_get_request_pad (mix, "sink_2");
+  fail_unless (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
+  gst_pad_set_offset (sinkpad, 5 * GST_SECOND);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+  do {
+    g_signal_emit_by_name (sink, "pull-sample", &sample);
+    if (sample == NULL)
+      break;
+    if (last_sample)
+      gst_sample_unref (last_sample);
+    last_sample = sample;
+  } while (TRUE);
+
+  buf = gst_sample_get_buffer (last_sample);
+  end_time = GST_BUFFER_TIMESTAMP (buf) + GST_BUFFER_DURATION (buf);
+  fail_unless_equals_int64 (end_time, 10 * GST_SECOND);
+  gst_sample_unref (last_sample);
+
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+}
+
+GST_END_TEST;
+
+static void
+set_pad_volume_fade (GstPad * pad, GstClockTime start, gdouble start_value,
+    GstClockTime end, gdouble end_value)
+{
+  GstControlSource *cs;
+  GstTimedValueControlSource *tvcs;
+
+  cs = gst_interpolation_control_source_new ();
+  fail_unless (gst_object_add_control_binding (GST_OBJECT_CAST (pad),
+          gst_direct_control_binding_new_absolute (GST_OBJECT_CAST (pad),
+              "volume", cs)));
+
+  /* set volume interpolation mode */
+  g_object_set (cs, "mode", GST_INTERPOLATION_MODE_LINEAR, NULL);
+
+  tvcs = (GstTimedValueControlSource *) cs;
+  fail_unless (gst_timed_value_control_source_set (tvcs, start, start_value));
+  fail_unless (gst_timed_value_control_source_set (tvcs, end, end_value));
+  gst_object_unref (cs);
+}
+
+GST_START_TEST (test_sinkpad_property_controller)
+{
+  GstBus *bus;
+  GstMessage *msg;
+  GstElement *pipeline, *sink, *mix, *src1;
+  GstPad *srcpad, *sinkpad;
+  GError *error = NULL;
+  gchar *debug;
+
+  pipeline = gst_pipeline_new ("pipeline");
+  mix = gst_element_factory_make ("audiomixer", "audiomixer");
+  sink = gst_element_factory_make ("fakesink", "sink");
+  src1 = gst_element_factory_make ("audiotestsrc", "src1");
+  g_object_set (src1, "num-buffers", 100, NULL);
+  gst_bin_add_many (GST_BIN (pipeline), src1, mix, sink, NULL);
+  fail_unless (gst_element_link (mix, sink));
+
+  srcpad = gst_element_get_static_pad (src1, "src");
+  sinkpad = gst_element_get_request_pad (mix, "sink_0");
+  fail_unless (gst_pad_link (srcpad, sinkpad) == GST_PAD_LINK_OK);
+  set_pad_volume_fade (sinkpad, 0, 0, 1.0, 2.0);
+  gst_object_unref (sinkpad);
+  gst_object_unref (srcpad);
+
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+  bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+  msg = gst_bus_timed_pop_filtered (bus, GST_CLOCK_TIME_NONE,
+      GST_MESSAGE_EOS | GST_MESSAGE_ERROR);
+  switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_ERROR:
+      gst_message_parse_error (msg, &error, &debug);
+      g_printerr ("ERROR from element %s: %s\n",
+          GST_OBJECT_NAME (msg->src), error->message);
+      g_printerr ("Debug info: %s\n", debug);
+      g_error_free (error);
+      g_free (debug);
+      break;
+    case GST_MESSAGE_EOS:
+      break;
+    default:
+      g_assert_not_reached ();
+  }
+  gst_message_unref (msg);
+  g_object_unref (bus);
+
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (pipeline);
+}
+
+GST_END_TEST;
+
 static Suite *
 audiomixer_suite (void)
 {
@@ -1748,6 +1933,8 @@ audiomixer_suite (void)
   tcase_add_test (tc_chain, test_sync);
   tcase_add_test (tc_chain, test_sync_discont);
   tcase_add_test (tc_chain, test_sync_unaligned);
+  tcase_add_test (tc_chain, test_segment_base_handling);
+  tcase_add_test (tc_chain, test_sinkpad_property_controller);
 
   /* Use a longer timeout */
 #ifdef HAVE_VALGRIND

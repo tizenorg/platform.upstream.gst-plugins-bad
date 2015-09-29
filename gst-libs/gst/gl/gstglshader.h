@@ -67,6 +67,8 @@ GType gst_gl_shader_get_type (void);
 
 GstGLShader * gst_gl_shader_new (GstGLContext *context);
 
+int gst_gl_shader_get_program_handle(GstGLShader * shader);
+
 void          gst_gl_shader_set_vertex_source   (GstGLShader *shader, const gchar *src);
 void          gst_gl_shader_set_fragment_source (GstGLShader *shader, const gchar *src);
 const gchar * gst_gl_shader_get_vertex_source   (GstGLShader *shader);
@@ -77,11 +79,10 @@ gboolean gst_gl_shader_is_compiled       (GstGLShader *shader);
 gboolean gst_gl_shader_compile           (GstGLShader *shader, GError **error);
 gboolean gst_gl_shader_compile_and_check (GstGLShader *shader, const gchar *source, GstGLShaderSourceType type);
 gboolean gst_gl_shader_compile_all_with_attribs_and_check (GstGLShader *shader, const gchar *v_src, const gchar *f_src, const gint n_attribs, const gchar *attrib_names[], GLint attrib_locs[]);
-#if GST_GL_HAVE_GLES2
+
 gboolean gst_gl_shader_compile_with_default_f_and_check   (GstGLShader *shader, const gchar *v_src, const gint n_attribs, const gchar *attrib_names[], GLint attrib_locs[]);
 gboolean gst_gl_shader_compile_with_default_v_and_check   (GstGLShader *shader, const gchar *f_src, GLint *pos_loc, GLint *tex_loc);
 gboolean gst_gl_shader_compile_with_default_vf_and_check  (GstGLShader *shader, GLint *pos_loc, GLint *tex_loc);
-#endif
 
 void gst_gl_shader_release       (GstGLShader *shader);
 void gst_gl_shader_use           (GstGLShader *shader);

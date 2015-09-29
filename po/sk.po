@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gst-plugins-bad 1.2.1\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2014-08-27 14:38+0300\n"
+"POT-Creation-Date: 2015-08-19 12:49+0300\n"
 "PO-Revision-Date: 2014-01-30 10:44+0100\n"
 "Last-Translator: Peter Tuharsky <tuharsky@misbb.sk>\n"
 "Language-Team: Slovak <sk-i18n@lists.linux.sk>\n"
@@ -21,9 +21,6 @@ msgstr ""
 "X-Poedit-Language: Slovak\n"
 "X-Poedit-Country: SLOVAKIA\n"
 
-msgid "Internal data stream error."
-msgstr "Vnútorná chyba prúdu údajov."
-
 msgid "format wasn't negotiated before get function"
 msgstr ""
 
@@ -33,7 +30,7 @@ msgstr ""
 msgid ""
 "GStreamer can play audio using any number of output elements. Some possible "
 "choices are osssink, pulsesink and alsasink. The audiosink can be a partial "
-"pipeline instea of just one element."
+"pipeline instead of just one element."
 msgstr ""
 
 msgid "description for default GStreamer sound events audiosink"
@@ -116,6 +113,9 @@ msgstr ""
 msgid "Describes the selected visualization element."
 msgstr ""
 
+msgid "OpenCV failed to load template image"
+msgstr ""
+
 msgid "Could not read title information for DVD."
 msgstr "Nepodarilo sa prečítať titulok DVD."
 
@@ -139,29 +139,9 @@ msgstr "Nepodarilo sa prečítať DVD."
 msgid "This file contains no playable streams."
 msgstr "Tento súbor neobsahuje prehrateľné prúdy údajov."
 
-msgid "Couldn't get the Manifest's URI"
-msgstr "Nepodarilo sa získať URI Manifestu"
-
-msgid "Failed to get fragment URL."
-msgstr "Nepodarilo sa získať URL fragmentu."
-
-msgid "Couldn't download fragments"
-msgstr "Nepodarilo sa získať fragmenty"
-
 #, fuzzy
 msgid "Could not open sndfile stream for reading."
 msgstr "Nepodarilo sa otvoriť súbor \"%s\" na čítanie."
-
-msgid "No file name specified for writing."
-msgstr "Nebolo zadané žiadne meno súboru pre zápis."
-
-#, c-format
-msgid "Could not open file \"%s\" for writing."
-msgstr "Nepodarilo sa otvoriť súbor \"%s\" pre zápis."
-
-#, c-format
-msgid "Could not write to file \"%s\"."
-msgstr "Nepodarilo sa zapísať do súboru \"%s\"."
 
 msgid "Could not establish connection to sndio"
 msgstr "Nepodarilo sa pripojiť na sndio"
@@ -191,14 +171,33 @@ msgstr ""
 "Umiestnenie súboru je nastavené na NULOVÉ, prosím nastavte platný názov "
 "súboru"
 
+msgid "Digitalzoom element couldn't be created"
+msgstr ""
+
 msgid "Subpicture format was not configured before data flow"
 msgstr "Formát podobrázku nebol nastavený pred prúdom údajov."
+
+msgid "Failed to get fragment URL."
+msgstr "Nepodarilo sa získať URL fragmentu."
+
+msgid "Internal data stream error."
+msgstr "Vnútorná chyba prúdu údajov."
+
+msgid "Couldn't download fragments"
+msgstr "Nepodarilo sa získať fragmenty"
+
+msgid "No file name specified for writing."
+msgstr "Nebolo zadané žiadne meno súboru pre zápis."
 
 #, c-format
 msgid "Given file name \"%s\" can't be converted to local file name encoding."
 msgstr ""
 "Zadaný názov súboru \"%s\" sa nedá previesť na miestne kódovanie názvu "
 "súboru."
+
+#, c-format
+msgid "Could not open file \"%s\" for writing."
+msgstr "Nepodarilo sa otvoriť súbor \"%s\" pre zápis."
 
 #, c-format
 msgid "Device \"%s\" does not exist."
@@ -233,6 +232,12 @@ msgstr "Konfiguračný súbor DVB kanála neobsahuje žiadne kanály"
 #, c-format
 msgid "Couldn't find details for DVB channel %s"
 msgstr "Nepodarilo sa nájsť podrobnosti o DVB kanáli %s"
+
+#~ msgid "Couldn't get the Manifest's URI"
+#~ msgstr "Nepodarilo sa získať URI Manifestu"
+
+#~ msgid "Could not write to file \"%s\"."
+#~ msgstr "Nepodarilo sa zapísať do súboru \"%s\"."
 
 #~ msgid "Could not open audio device for mixer control handling."
 #~ msgstr ""

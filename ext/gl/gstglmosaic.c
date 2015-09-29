@@ -29,7 +29,12 @@
  * <refsect2>
  * <title>Examples</title>
  * |[
- * gst-launch-0.10 videotestsrc ! "video/x-raw-yuv, format=(fourcc)YUY2" ! glupload ! queue ! glmosaic name=m ! glimagesink videotestsrc pattern=12 ! "video/x-raw-yuv, format=(fourcc)I420, framerate=(fraction)5/1, width=100, height=200" ! glupload ! queue ! m. videotestsrc ! "video/x-raw-rgb, framerate=(fraction)15/1, width=1500, height=1500" ! glupload ! gleffects effect=3 ! queue ! m. videotestsrc ! glupload ! gleffects effect=2 ! queue ! m.  videotestsrc ! glupload ! glfiltercube ! queue ! m. videotestsrc ! glupload ! gleffects effect=6 ! queue ! m.
+ * gst-launch-1.0 videotestsrc ! video/x-raw, format=YUY2 ! queue ! glmosaic name=m ! glimagesink \
+ *     videotestsrc pattern=12 ! video/x-raw, format=I420, framerate=5/1, width=100, height=200 ! queue ! m. \
+ *     videotestsrc ! video/x-raw, framerate=15/1, width=1500, height=1500 ! gleffects effect=3 ! queue ! m. \
+ *     videotestsrc ! gleffects effect=2 ! queue ! m.  \
+ *     videotestsrc ! glfiltercube ! queue ! m. \
+ *     videotestsrc ! gleffects effect=6 ! queue ! m.
  * ]|
  * FBO (Frame Buffer Object) is required.
  * </refsect2>
@@ -129,6 +134,8 @@ gst_gl_mosaic_class_init (GstGLMosaicClass * klass)
   GST_GL_MIXER_CLASS (klass)->set_caps = gst_gl_mosaic_init_shader;
   GST_GL_MIXER_CLASS (klass)->reset = gst_gl_mosaic_reset;
   GST_GL_MIXER_CLASS (klass)->process_textures = gst_gl_mosaic_process_textures;
+
+  GST_GL_BASE_MIXER_CLASS (klass)->supported_gl_api = GST_GL_API_OPENGL;
 }
 
 static void
@@ -173,7 +180,8 @@ gst_gl_mosaic_reset (GstGLMixer * mixer)
 
   //blocking call, wait the opengl thread has destroyed the shader
   if (mosaic->shader)
-    gst_gl_context_del_shader (mixer->context, mosaic->shader);
+    gst_gl_context_del_shader (GST_GL_BASE_MIXER (mixer)->context,
+        mosaic->shader);
   mosaic->shader = NULL;
 }
 
@@ -183,8 +191,8 @@ gst_gl_mosaic_init_shader (GstGLMixer * mixer, GstCaps * outcaps)
   GstGLMosaic *mosaic = GST_GL_MOSAIC (mixer);
 
   //blocking call, wait the opengl thread has compiled the shader
-  return gst_gl_context_gen_shader (mixer->context, mosaic_v_src, mosaic_f_src,
-      &mosaic->shader);
+  return gst_gl_context_gen_shader (GST_GL_BASE_MIXER (mixer)->context,
+      mosaic_v_src, mosaic_f_src, &mosaic->shader);
 }
 
 static gboolean
@@ -196,7 +204,7 @@ gst_gl_mosaic_process_textures (GstGLMixer * mix, GPtrArray * frames,
   mosaic->input_frames = frames;
 
   //blocking call, use a FBO
-  gst_gl_context_use_fbo_v2 (mix->context,
+  gst_gl_context_use_fbo_v2 (GST_GL_BASE_MIXER (mix)->context,
       GST_VIDEO_INFO_WIDTH (&GST_VIDEO_AGGREGATOR (mix)->info),
       GST_VIDEO_INFO_HEIGHT (&GST_VIDEO_AGGREGATOR (mix)->info), mix->fbo,
       mix->depthbuffer, out_tex, gst_gl_mosaic_callback, (gpointer) mosaic);
@@ -210,7 +218,7 @@ gst_gl_mosaic_callback (gpointer stuff)
 {
   GstGLMosaic *mosaic = GST_GL_MOSAIC (stuff);
   GstGLMixer *mixer = GST_GL_MIXER (mosaic);
-  GstGLFuncs *gl = mixer->context->gl_vtable;
+  GstGLFuncs *gl = GST_GL_BASE_MIXER (mixer)->context->gl_vtable;
 
   static GLfloat xrot = 0;
   static GLfloat yrot = 0;
@@ -232,9 +240,8 @@ gst_gl_mosaic_callback (gpointer stuff)
 
   guint count = 0;
 
-  gst_gl_context_clear_shader (mixer->context);
+  gst_gl_context_clear_shader (GST_GL_BASE_MIXER (mixer)->context);
   gl->BindTexture (GL_TEXTURE_2D, 0);
-  gl->Disable (GL_TEXTURE_2D);
 
   gl->Enable (GL_DEPTH_TEST);
 
@@ -337,7 +344,7 @@ gst_gl_mosaic_callback (gpointer stuff)
 
   gl->Disable (GL_DEPTH_TEST);
 
-  gst_gl_context_clear_shader (mixer->context);
+  gst_gl_context_clear_shader (GST_GL_BASE_MIXER (mixer)->context);
 
   xrot += 0.6f;
   yrot += 0.4f;

@@ -28,7 +28,7 @@ GST_DEBUG_CATEGORY_EXTERN (gst_ks_debug);
 
 #ifndef STATIC_KSPROPSETID_Wave_Queued
 #define STATIC_KSPROPSETID_Wave_Queued \
-    0x16a15b10L,0x16f0,0x11d0,0xa1,0x95,0x00,0x20,0xaf,0xd1,0x56,0xe4
+    0x16a15b10L, 0x16f0, 0x11d0, { 0xa1, 0x95, 0x00, 0x20, 0xaf, 0xd1, 0x56, 0xe4 }
 DEFINE_GUIDSTRUCT ("16a15b10-16f0-11d0-a195-0020afd156e4",
     KSPROPSETID_Wave_Queued);
 #endif
@@ -40,13 +40,13 @@ ks_is_valid_handle (HANDLE h)
 }
 
 GList *
-ks_enumerate_devices (const GUID * category)
+ks_enumerate_devices (const GUID * devtype, const GUID * direction_category)
 {
   GList *result = NULL;
   HDEVINFO devinfo;
   gint i;
 
-  devinfo = SetupDiGetClassDevsW (category, NULL, NULL,
+  devinfo = SetupDiGetClassDevsW (devtype, NULL, NULL,
       DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
   if (!ks_is_valid_handle (devinfo))
     return NULL;                /* no devices */
@@ -54,6 +54,7 @@ ks_enumerate_devices (const GUID * category)
   for (i = 0;; i++) {
     BOOL success;
     SP_DEVICE_INTERFACE_DATA if_data = { 0, };
+    SP_DEVICE_INTERFACE_DATA if_alias_data = { 0, };
     SP_DEVICE_INTERFACE_DETAIL_DATA_W *if_detail_data;
     DWORD if_detail_data_size;
     SP_DEVINFO_DATA devinfo_data = { 0, };
@@ -61,10 +62,16 @@ ks_enumerate_devices (const GUID * category)
 
     if_data.cbSize = sizeof (SP_DEVICE_INTERFACE_DATA);
 
-    success = SetupDiEnumDeviceInterfaces (devinfo, NULL, category, i,
-        &if_data);
+    success = SetupDiEnumDeviceInterfaces (devinfo, NULL, devtype, i, &if_data);
     if (!success)               /* all devices enumerated? */
       break;
+
+    if_alias_data.cbSize = sizeof (SP_DEVICE_INTERFACE_DATA);
+    success =
+        SetupDiGetDeviceInterfaceAlias (devinfo, &if_data, direction_category,
+        &if_alias_data);
+    if (!success)
+      continue;
 
     if_detail_data_size = (MAX_PATH - 1) * sizeof (gunichar2);
     if_detail_data = g_malloc0 (if_detail_data_size);
@@ -403,28 +410,28 @@ typedef struct
 
 #ifndef STATIC_KSPROPSETID_GM
 #define STATIC_KSPROPSETID_GM \
-    0xAF627536, 0xE719, 0x11D2, 0x8A, 0x1D, 0x00, 0x60, 0x97, 0xD2, 0xDF, 0x5D
+    0xAF627536, 0xE719, 0x11D2, { 0x8A, 0x1D, 0x00, 0x60, 0x97, 0xD2, 0xDF, 0x5D }
 #endif
 #ifndef STATIC_KSPROPSETID_Jack
 #define STATIC_KSPROPSETID_Jack \
-    0x4509F757, 0x2D46, 0x4637, 0x8E, 0x62, 0xCE, 0x7D, 0xB9, 0x44, 0xF5, 0x7B
+    0x4509F757, 0x2D46, 0x4637, { 0x8E, 0x62, 0xCE, 0x7D, 0xB9, 0x44, 0xF5, 0x7B }
 #endif
 
 #ifndef STATIC_PROPSETID_VIDCAP_SELECTOR
 #define STATIC_PROPSETID_VIDCAP_SELECTOR \
-    0x1ABDAECA, 0x68B6, 0x4F83, 0x93, 0x71, 0xB4, 0x13, 0x90, 0x7C, 0x7B, 0x9F
+    0x1ABDAECA, 0x68B6, 0x4F83, { 0x93, 0x71, 0xB4, 0x13, 0x90, 0x7C, 0x7B, 0x9F }
 #endif
 #ifndef STATIC_PROPSETID_EXT_DEVICE
 #define STATIC_PROPSETID_EXT_DEVICE \
-    0xB5730A90, 0x1A2C, 0x11cf, 0x8c, 0x23, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14
+    0xB5730A90, 0x1A2C, 0x11cf, { 0x8c, 0x23, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14 }
 #endif
 #ifndef STATIC_PROPSETID_EXT_TRANSPORT
 #define STATIC_PROPSETID_EXT_TRANSPORT \
-    0xA03CD5F0, 0x3045, 0x11cf, 0x8c, 0x44, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14
+    0xA03CD5F0, 0x3045, 0x11cf, { 0x8c, 0x44, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14 }
 #endif
 #ifndef STATIC_PROPSETID_TIMECODE_READER
 #define STATIC_PROPSETID_TIMECODE_READER \
-    0x9B496CE1, 0x811B, 0x11cf, 0x8C, 0x77, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14
+    0x9B496CE1, 0x811B, 0x11cf, { 0x8C, 0x77, 0x00, 0xAA, 0x00, 0x6B, 0x68, 0x14 }
 #endif
 
 static const KsPropertySetMapping known_property_sets[] = {

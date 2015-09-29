@@ -1349,8 +1349,10 @@ gst_dfbvideosink_getcaps (GstBaseSink * bsink, GstCaps * filter)
   dfbvideosink = GST_DFBVIDEOSINK (bsink);
 
   if (!dfbvideosink->setup) {
-    caps = gst_caps_copy (gst_pad_get_pad_template_caps (GST_VIDEO_SINK_PAD
-            (dfbvideosink)));
+    GstCaps *tcaps =
+        gst_pad_get_pad_template_caps (GST_VIDEO_SINK_PAD (dfbvideosink));
+    caps = gst_caps_copy (tcaps);
+    gst_caps_unref (tcaps);
     GST_DEBUG_OBJECT (dfbvideosink, "getcaps called and we are not setup yet, "
         "returning template %" GST_PTR_FORMAT, caps);
     goto beach;
@@ -1742,7 +1744,9 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 {
   GstDfbVideoSink *dfbvideosink = NULL;
   DFBResult res;
-  GstVideoRectangle dst, src, result;
+  GstVideoRectangle dst = { 0, };
+  GstVideoRectangle src = { 0, };
+  GstVideoRectangle result;
   GstFlowReturn ret = GST_FLOW_OK;
   gboolean mem_cpy = TRUE;
   GstMetaDfbSurface *meta;
@@ -1814,7 +1818,7 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
       src.h = dfbvideosink->video_height;
     }
     gst_caps_unref (caps);
-    res = surface->GetSize (surface, &dst.w, &dst.h);
+    surface->GetSize (surface, &dst.w, &dst.h);
 
     /* Center / Clip */
     gst_video_sink_center_rect (src, dst, &result, FALSE);
@@ -1906,15 +1910,15 @@ gst_dfbvideosink_show_frame (GstBaseSink * bsink, GstBuffer * buf)
 
     gst_video_frame_unmap (&src_frame);
 
-    res = dest->Unlock (dest);
+    dest->Unlock (dest);
 
     dest->Release (dest);
 
     if (dfbvideosink->backbuffer) {
       if (dfbvideosink->vsync) {
-        res = surface->Flip (surface, NULL, DSFLIP_ONSYNC);
+        surface->Flip (surface, NULL, DSFLIP_ONSYNC);
       } else {
-        res = surface->Flip (surface, NULL, DSFLIP_NONE);
+        surface->Flip (surface, NULL, DSFLIP_NONE);
       }
     }
   } else {
@@ -1973,7 +1977,9 @@ gst_dfbvideosink_navigation_send_event (GstNavigation * navigation,
 {
   GstDfbVideoSink *dfbvideosink = GST_DFBVIDEOSINK (navigation);
   GstEvent *event;
-  GstVideoRectangle src, dst, result;
+  GstVideoRectangle dst = { 0, };
+  GstVideoRectangle src = { 0, };
+  GstVideoRectangle result;
   double x, y, old_x, old_y;
   GstPad *pad = NULL;
 

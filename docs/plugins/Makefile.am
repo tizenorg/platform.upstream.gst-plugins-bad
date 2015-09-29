@@ -85,7 +85,6 @@ EXTRA_HFILES = \
 	$(top_srcdir)/ext/modplug/gstmodplug.h \
 	$(top_srcdir)/ext/mpeg2enc/gstmpeg2enc.hh \
 	$(top_srcdir)/ext/mplex/gstmplex.hh \
-	$(top_srcdir)/ext/mythtv/gstmythtvsrc.h \
 	$(top_srcdir)/ext/opencv/gstcvdilate.h \
 	$(top_srcdir)/ext/opencv/gstcverode.h \
 	$(top_srcdir)/ext/opencv/gstcvequalizehist.h \
@@ -163,11 +162,9 @@ EXTRA_HFILES = \
 	$(top_srcdir)/gst/speed/gstspeed.h \
 	$(top_srcdir)/gst/stereo/gststereo.h \
 	$(top_srcdir)/gst/videosignal/gstvideoanalyse.h \
-	$(top_srcdir)/sys/directdraw/gstdirectdrawsink.h \
 	$(top_srcdir)/sys/dvb/gstdvbsrc.h \
 	$(top_srcdir)/sys/shm/gstshmsink.h \
-	$(top_srcdir)/sys/shm/gstshmsrc.h \
-	$(top_srcdir)/gst-libs/gst/interfaces/photography.h
+	$(top_srcdir)/sys/shm/gstshmsrc.h
 
 # Images to copy into HTML directory.
 HTML_IMAGES = camerabin.png
@@ -182,11 +179,7 @@ extra_files =
 # contains GtkObjects/GObjects and you want to document signals and properties.
 GTKDOC_CFLAGS = -DGST_USE_UNSTABLE_API $(GST_PLUGINS_BAD_CFLAGS) $(GST_BASE_CFLAGS) -I$(top_builddir)
 GTKDOC_LIBS = \
-	$(top_builddir)/gst-libs/gst/interfaces/libgstphotography-@GST_API_VERSION@.la \
 	$(GST_BASE_LIBS)
-
-GTKDOC_CC=$(LIBTOOL) --tag=CC --mode=compile $(CC)
-GTKDOC_LD=$(LIBTOOL) --tag=CC --mode=link $(CC)
 
 # If you need to override some of the declarations, place them in this file
 # and uncomment this line.

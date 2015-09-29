@@ -22,20 +22,18 @@
 #define __GST_WL_WINDOW_H__
 
 #include "wldisplay.h"
+#include "wlbuffer.h"
 #include <gst/video/video.h>
 
 G_BEGIN_DECLS
+
 #define GST_TYPE_WL_WINDOW                  (gst_wl_window_get_type ())
 #define GST_WL_WINDOW(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_WINDOW, GstWlWindow))
 #define GST_IS_WL_WINDOW(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_WINDOW))
 #define GST_WL_WINDOW_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_WINDOW, GstWlWindowClass))
 #define GST_IS_WL_WINDOW_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_WINDOW))
 #define GST_WL_WINDOW_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_WINDOW, GstWlWindowClass))
-#if 1
-#define FUNCTION_ENTER()	GST_INFO("<ENTER>")
-#else
-#define FUNCTION_ENTER()
-#endif
+
 typedef struct _GstWlWindow GstWlWindow;
 typedef struct _GstWlWindowClass GstWlWindowClass;
 
@@ -44,24 +42,20 @@ struct _GstWlWindow
   GObject parent_instance;
 
   GstWlDisplay *display;
-  struct wl_surface *surface;
-  struct wl_subsurface *subsurface;
-  struct wl_viewport *viewport;
+  struct wl_surface *area_surface;
+  struct wl_subsurface *area_subsurface;
+  struct wl_viewport *area_viewport;
+  struct wl_surface *video_surface;
+  struct wl_subsurface *video_subsurface;
+  struct wl_viewport *video_viewport;
   struct wl_shell_surface *shell_surface;
 
-  /* the size of the destination area where we are overlaying our subsurface */
+  /* the size and position of the area_(sub)surface */
   GstVideoRectangle render_rectangle;
   /* the size of the video in the buffers */
   gint video_width, video_height;
-  /* the size of the (sub)surface */
+  /* the size of the video_(sub)surface */
   gint surface_width, surface_height;
-#ifdef GST_WLSINK_ENHANCEMENT
-  /*Display geometry method */
-  guint disp_geo_method;
-  guint rotate_angle;
-  guint orientation;
-  guint flip;
-#endif
 };
 
 struct _GstWlWindowClass
@@ -72,26 +66,19 @@ struct _GstWlWindowClass
 GType gst_wl_window_get_type (void);
 
 GstWlWindow *gst_wl_window_new_toplevel (GstWlDisplay * display,
-    GstVideoInfo * video_info);
+        const GstVideoInfo * info);
 GstWlWindow *gst_wl_window_new_in_surface (GstWlDisplay * display,
-    struct wl_surface *parent);
+        struct wl_surface * parent);
 
 GstWlDisplay *gst_wl_window_get_display (GstWlWindow * window);
 struct wl_surface *gst_wl_window_get_wl_surface (GstWlWindow * window);
-gboolean gst_wl_window_is_toplevel (GstWlWindow * window);
+gboolean gst_wl_window_is_toplevel (GstWlWindow *window);
 
-/* functions to manipulate the size on non-toplevel windows */
-void gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info);
+void gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
+        const GstVideoInfo * info);
 void gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
-    gint w, gint h);
-
-#ifdef GST_WLSINK_ENHANCEMENT
-void gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle);
-void gst_wl_window_set_disp_geo_method (GstWlWindow * window, guint disp_geo_method);
-void gst_wl_window_set_orientation (GstWlWindow * window, guint orientation);
-void gst_wl_window_set_flip (GstWlWindow * window, guint flip);
-#endif
-
+        gint w, gint h);
 
 G_END_DECLS
+
 #endif /* __GST_WL_WINDOW_H__ */

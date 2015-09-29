@@ -27,9 +27,6 @@
 #include <gst/base/gstbasesrc.h>
 
 #include "shmpipe.h"
-#ifdef GST_TBM_SUPPORT
-#include <tbm_bufmgr.h>
-#endif
 
 G_BEGIN_DECLS
 #define GST_TYPE_SHM_SRC \
@@ -59,10 +56,6 @@ struct _GstShmSrc
 
   GstFlowReturn flow_return;
   gboolean unlocked;
-#ifdef GST_TBM_SUPPORT
-  gboolean use_tbm;
-  tbm_bufmgr h_bufmgr;
-#endif
 };
 
 struct _GstShmSrcClass

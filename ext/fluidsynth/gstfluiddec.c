@@ -322,6 +322,7 @@ gst_fluid_dec_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 
       res = gst_pad_push_event (fluiddec->srcpad, gst_event_new_caps (caps));
       gst_caps_unref (caps);
+      gst_event_unref (event);
       break;
     }
     case GST_EVENT_SEGMENT:
@@ -396,6 +397,9 @@ handle_buffer (GstFluidDec * fluiddec, GstBuffer * buffer)
 
   gst_buffer_map (buffer, &info, GST_MAP_READ);
 
+  if (info.size == 0)
+    goto done;
+
   event = info.data[0];
 
   switch (event & 0xf0) {
@@ -461,6 +465,9 @@ handle_buffer (GstFluidDec * fluiddec, GstBuffer * buffer)
       break;
     }
   }
+
+done:
+
   gst_buffer_unmap (buffer, &info);
 }
 
@@ -557,10 +564,14 @@ gst_fluid_dec_open (GstFluidDec * fluiddec)
           fluiddec->sf = fluid_synth_sfload (fluiddec->synth, filename, 1);
           if (fluiddec->sf != -1) {
             GST_DEBUG_OBJECT (fluiddec, "loaded soundfont file %s", filename);
+            g_free (filename);
+            g_dir_close (dir);
+            g_free (soundfont_path);
             goto done;
           }
           GST_DEBUG_OBJECT (fluiddec, "could not load soundfont file %s",
               filename);
+          g_free (filename);
         }
         g_dir_close (dir);
         g_free (soundfont_path);

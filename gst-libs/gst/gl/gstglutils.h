@@ -67,21 +67,18 @@ typedef void (*GLCB) (gint, gint, guint, gpointer stuff);
  */
 typedef void (*GLCB_V2) (gpointer stuff);
 
+/* deprecated. replaced by GstGLMemory */
 void gst_gl_context_gen_texture (GstGLContext * context, GLuint * pTexture,
     GstVideoFormat v_format, GLint width, GLint height);
+/* deprecated. replaced by GstGLMemory */
 void gst_gl_context_del_texture (GstGLContext * context, GLuint * pTexture);
 
+/* deprecated. replaced by GstGLMemory */
 void gst_gl_generate_texture_full (GstGLContext * context, const GstVideoInfo * info,
     const guint comp, gint stride[], gsize offset[], gsize size[], GLuint * pTexture);
 
 gboolean gst_gl_context_gen_fbo (GstGLContext * context, gint width, gint height,
     GLuint * fbo, GLuint * depthbuffer);
-gboolean gst_gl_context_use_fbo (GstGLContext * context, gint texture_fbo_width,
-    gint texture_fbo_height, GLuint fbo, GLuint depth_buffer,
-    GLuint texture_fbo, GLCB cb, gint input_texture_width,
-    gint input_texture_height, GLuint input_texture, gdouble proj_param1,
-    gdouble proj_param2, gdouble proj_param3, gdouble proj_param4,
-    GstGLDisplayProjection projection, gpointer stuff);
 gboolean gst_gl_context_use_fbo_v2 (GstGLContext * context, gint texture_fbo_width,
     gint texture_fbo_height, GLuint fbo, GLuint depth_buffer,
     GLuint texture_fbo, GLCB_V2 cb, gpointer stuff);
@@ -98,11 +95,19 @@ gboolean gst_gl_context_check_framebuffer_status (GstGLContext * context);
 void gst_gl_context_set_error (GstGLContext * context, const char * format, ...);
 gchar *gst_gl_context_get_error (void);
 
-gboolean gst_gl_ensure_display (gpointer element, GstGLDisplay **display_ptr);
+gboolean gst_gl_ensure_element_data (gpointer element,
+    GstGLDisplay **display_ptr, GstGLContext ** other_context_ptr);
 gboolean gst_gl_handle_set_context (GstElement * element, GstContext * context, 
-    GstGLDisplay ** display);
+    GstGLDisplay ** display, GstGLContext ** other_context);
 gboolean gst_gl_handle_context_query (GstElement * element, GstQuery * query, 
-    GstGLDisplay ** display);
+    GstGLDisplay ** display, GstGLContext ** other_context);
+
+gboolean gst_gl_run_query (GstElement * element,
+    GstQuery * query, GstPadDirection direction);
+gsize gst_gl_get_plane_data_size (GstVideoInfo * info, GstVideoAlignment * align,
+    guint plane);
+GstCaps * gst_gl_caps_replace_all_caps_features (const GstCaps * caps,
+    const gchar * feature_name);
 
 G_END_DECLS
 

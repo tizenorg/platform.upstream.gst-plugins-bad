@@ -1,16 +1,15 @@
 %bcond_with wayland
-%bcond_with x
+#%bcond_with x
 %define gst_branch 1.0
 
 Name:           gst-plugins-bad
-Version:        1.4.1
-Release:        6
+Version:        1.5.90
+Release:        1
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
-Source100:      common.tar.bz2
 BuildRequires:  gettext-tools
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
@@ -34,8 +33,14 @@ BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(libtbm)
 BuildRequires:	pkgconfig(mm-common)
+#BuildRequires:  mesa-libGLESv2
+#BuildRequires:  mesa-libEGL
 %if %{with wayland}
+#BuildRequires:  opengl-es-devel
+BuildRequires:  pkgconfig(gles20)
+BuildRequires:  pkgconfig(wayland-egl) >= 9.0
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
+BuildRequires:  pkgconfig(wayland-cursor) >= 1.0.0
 BuildRequires:  pkgconfig(tizen-extension-client)
 %endif
 %if %{with x}
@@ -67,27 +72,30 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %prep
 %setup -q -n %{name}-%{version}
-%setup -q -T -D -a 100
 
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
-export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT"
+export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS"
 %configure\
     --disable-static\
     --disable-examples\
     --enable-experimental\
     --disable-audiomixer\
-    --disable-compositor\
+    --enable-compositor\
     --disable-ivfparse\
     --disable-jp2kdecimator\
     --disable-opengl\
-    --disable-gles2\
+    --enable-egl=yes\
+    --enable-wayland=yes\
+    --enable-gles2=yes\
+    --disable-glx\
     --disable-sndfile\
     --disable-stereo\
     --disable-videosignal\
     --disable-vmnc\
-    --disable-gtk-doc
+    --disable-gtk-doc\
+    --disable-warnings-as-errors
 %__make %{?_smp_mflags} V=1
 
 %install
@@ -99,7 +107,7 @@ mv %{name}-%{gst_branch}.lang %{name}.lang
 
 
 %clean
-rm -rf $RPM_BUILD_ROOT
+rm -rf %{_builddir}
 
 
 %post -p /sbin/ldconfig
@@ -182,6 +190,35 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
 %{_libdir}/libgstbadbase-%{gst_branch}.so.0*
 %{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
+%{_libdir}/debug/usr/lib/gstreamer-%{gst_branch}/*.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstdtls.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstfragmented.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstopengl.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstrtpbad.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstrtponvif.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstvcdsrc.so.debug
+#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstwaylandsink.so.debug
+#/usr/lib/debug/usr/lib/libgstadaptivedemux-1.0.so.0.590.0.debug
+#/usr/lib/debug/usr/lib/libgstgl-1.0.so.0.590.0.debug
+#/usr/lib/debug/usr/lib/libgstwayland-1.0.so.0.590.0.debug
+/usr/lib/gstreamer-1.0/include/gst/gl/gstglconfig.h
+/usr/lib/gstreamer-1.0/libgstcompositor.so
+/usr/lib/gstreamer-1.0/libgstdtls.so
+/usr/lib/gstreamer-1.0/libgstfragmented.so
+/usr/lib/gstreamer-1.0/libgstopengl.so
+/usr/lib/gstreamer-1.0/libgstrtpbad.so
+/usr/lib/gstreamer-1.0/libgstrtponvif.so
+/usr/lib/gstreamer-1.0/libgstvcdsrc.so
+#/usr/lib/gstreamer-1.0/libgstwaylandsink.so
+/usr/lib/libgstadaptivedemux-1.0.so.0
+/usr/lib/libgstadaptivedemux-1.0.so.0.590.0
+/usr/lib/libgstgl-1.0.so.0
+/usr/lib/libgstgl-1.0.so.0.590.0
+#/usr/lib/libgstwayland-1.0.so.0
+#/usr/lib/libgstwayland-1.0.so.0.590.0
+/usr/lib/pkgconfig/gstreamer-gl-1.0.pc
+/usr/share/gstreamer-1.0/presets/GstFreeverb.prs
+
 
 %files devel
 %manifest %{name}.manifest
@@ -193,6 +230,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
 %if %{with wayland}
-%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
-%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
+#%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
+#%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
 %endif
+

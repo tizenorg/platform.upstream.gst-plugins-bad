@@ -190,7 +190,7 @@ get_encoding (const gchar * text, guint * start_text, gboolean * is_multibyte)
       if (table < 17)
         encoding = _ICONV_UNKNOWN + table;
       else
-        encoding = _ICONV_UNKNOWN;;
+        encoding = _ICONV_UNKNOWN;
       *start_text = 3;
       break;
     }
@@ -775,7 +775,7 @@ gst_mpegts_parse_descriptors (guint8 * buffer, gsize buf_len)
   }
 
   GST_DEBUG ("Saw %d descriptors, read %" G_GSIZE_FORMAT " bytes",
-      nb_desc, data - buffer);
+      nb_desc, (gsize) (data - buffer));
 
   if (data - buffer != buf_len) {
     GST_WARNING ("descriptors size %d expected %" G_GSIZE_FORMAT,
@@ -969,7 +969,7 @@ gst_mpegts_descriptor_parse_iso_639_language (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && desc != NULL, FALSE);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
+  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
 
   data = (guint8 *) descriptor->data + 2;
 
@@ -1011,7 +1011,7 @@ gst_mpegts_descriptor_parse_iso_639_language_idx (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && lang != NULL, FALSE);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
+  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
 
   if (descriptor->length / 4 <= idx)
     return FALSE;
@@ -1040,7 +1040,7 @@ gst_mpegts_descriptor_parse_iso_639_language_nb (const GstMpegtsDescriptor *
 {
   g_return_val_if_fail (descriptor != NULL, 0);
   /* This descriptor can be empty, no size check needed */
-  __common_desc_checks (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, 0, FALSE);
+  __common_desc_check_base (descriptor, GST_MTS_DESC_ISO_639_LANGUAGE, FALSE);
 
   return descriptor->length / 4;
 }
@@ -1063,7 +1063,8 @@ gst_mpegts_descriptor_parse_logical_channel (const GstMpegtsDescriptor *
 
   g_return_val_if_fail (descriptor != NULL && res != NULL, FALSE);
   /* This descriptor loop can be empty, no size check required */
-  __common_desc_checks (descriptor, GST_MTS_DESC_DTG_LOGICAL_CHANNEL, 0, FALSE);
+  __common_desc_check_base (descriptor, GST_MTS_DESC_DTG_LOGICAL_CHANNEL,
+      FALSE);
 
   data = (guint8 *) descriptor->data + 2;
 

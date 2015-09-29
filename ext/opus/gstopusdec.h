@@ -24,7 +24,7 @@
 
 #include <gst/gst.h>
 #include <gst/audio/gstaudiodecoder.h>
-#include <opus/opus_multistream.h>
+#include <opus_multistream.h>
 
 G_BEGIN_DECLS
 
@@ -71,6 +71,8 @@ struct _GstOpusDec {
   gboolean use_inband_fec;
   GstBuffer *last_buffer;
   gboolean primed;
+
+  guint64 leftover_plc_duration;
 };
 
 struct _GstOpusDecClass {

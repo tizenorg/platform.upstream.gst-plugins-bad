@@ -7,13 +7,14 @@ libgstgl_egl_la_SOURCES = \
 	gstglcontext_egl.c \
 	gsteglimagememory.c
 
-noinst_HEADERS = \
-	gstglcontext_egl.h
+noinst_HEADERS =
 
 libgstgl_eglincludedir = $(includedir)/gstreamer-@GST_API_VERSION@/gst/gl/egl
 libgstgl_eglinclude_HEADERS = \
 	gstgldisplay_egl.h \
-	gsteglimagememory.h
+	gstglcontext_egl.h \
+	gsteglimagememory.h \
+	gstegl.h
 
 libgstgl_egl_la_CFLAGS = \
 	-I$(top_srcdir)/gst-libs \

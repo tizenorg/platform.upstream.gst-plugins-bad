@@ -73,9 +73,16 @@ struct _GstGLDownloadClass
 GstGLDownload * gst_gl_download_new          (GstGLContext * context);
 
 void gst_gl_download_set_format                (GstGLDownload * download, GstVideoInfo * out_info);
+GstCaps * gst_gl_download_transform_caps       (GstGLContext * convert,
+                                                GstPadDirection direction,
+                                                GstCaps * caps,
+                                                GstCaps * filter);
 
-gboolean gst_gl_download_perform_with_data          (GstGLDownload * download, GLuint texture_id,
+gboolean gst_gl_download_perform_with_data          (GstGLDownload * download,
+                                                     GLuint texture_id, GLuint texture_target,
                                                      gpointer data[GST_VIDEO_MAX_PLANES]);
+gboolean gst_gl_download_perform (GstGLDownload * download,
+                                  GstBuffer *inbuf, GstBuffer *outbuf);
 
 G_END_DECLS
 

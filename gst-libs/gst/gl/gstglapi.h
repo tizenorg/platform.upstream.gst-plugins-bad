@@ -22,39 +22,13 @@
 #define __GST_GL_API_H__
 
 #include <gst/gl/gstglconfig.h>
-#include <gst/gl/glprototypes/gstgl_compat.h>
-
-#if GST_GL_HAVE_PLATFORM_EGL
-
-#if defined (USE_EGL_RPI) && defined(__GNUC__)
-#ifndef __VCCOREVER__
-#define __VCCOREVER__ 0x04000000
-#endif
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wredundant-decls"
-#pragma GCC optimize ("gnu89-inline")
-#endif
-
-#ifndef EGL_EGLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES 1
-#endif
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-
-#if defined (USE_EGL_RPI) && defined(__GNUC__)
-#pragma GCC reset_options
-#pragma GCC diagnostic pop
-#endif
-
-#endif
 
 /* OpenGL 2.0 for Embedded Systems */
 #if GST_GL_HAVE_GLES2
 #ifndef GL_GLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 1
 #endif
-# ifdef __APPLE__
+# ifdef HAVE_IOS
 #  include <OpenGLES/ES2/gl.h>
 #  include <OpenGLES/ES2/glext.h>
 # else
@@ -71,11 +45,13 @@
 # ifdef __APPLE__
 #  include <OpenGL/OpenGL.h>
 #  include <OpenGL/gl.h>
-#  include <OpenGL/glu.h>
+#  if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+#   define GL_DO_NOT_WARN_IF_MULTI_GL_VERSION_HEADERS_INCLUDED
+#   include <OpenGL/gl3.h>
+#  endif
 # else
 #  include <GL/gl.h>
-#  include <GL/glu.h>
-#  if __WIN32__ || _WIN32
+#  if defined(__WIN32__) || defined(_WIN32)
 #   include <GL/glext.h>
 #  endif
 # endif
@@ -86,6 +62,7 @@
 #else
 #define GSTGLAPI
 #endif
+#include <gst/gl/glprototypes/gstgl_compat.h>
 
 #include <gst/gst.h>
 
@@ -121,7 +98,7 @@ typedef enum
 #define GST_GL_EXT_BEGIN(name, gl_availability, min_gl, maj_gl, gles_maj, \
     gles_min, ext_suf, ext_name)
 #define GST_GL_EXT_FUNCTION(ret, name, args) \
-  ret GSTGLAPI (*name) args;
+  ret (GSTGLAPI *name) args;
 #define GST_GL_EXT_END()
 
 typedef struct _GstGLFuncs

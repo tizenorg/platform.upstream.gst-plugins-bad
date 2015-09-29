@@ -20,7 +20,7 @@
  * SECTION:element-sdpdemux
  *
  * sdpdemux currently understands SDP as the input format of the session description.
- * For each stream listed in the SDP a new stream_%u pad will be created
+ * For each stream listed in the SDP a new stream_\%u pad will be created
  * with caps derived from the SDP media description. This is a caps of mime type
  * "application/x-rtp" that can be connected to any available RTP depayloader
  * element. 
@@ -44,10 +44,6 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-
-/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
- * with newer GLib versions (>= 2.31.0) */
-#define GLIB_DISABLE_DEPRECATION_WARNINGS
 
 #include "gstsdpdemux.h"
 
@@ -88,8 +84,7 @@ enum
   PROP_DEBUG,
   PROP_TIMEOUT,
   PROP_LATENCY,
-  PROP_REDIRECT,
-  PROP_LAST
+  PROP_REDIRECT
 };
 
 static void gst_sdp_demux_finalize (GObject * object);
@@ -529,7 +524,7 @@ gst_sdp_demux_parse_rtpmap (const gchar * rtpmap, gint * payload, gchar ** name,
 {
   gchar *p, *t;
 
-  t = p = (gchar *) rtpmap;
+  p = (gchar *) rtpmap;
 
   PARSE_INT (p, " ", *payload);
   if (*payload == -1)
@@ -673,8 +668,13 @@ gst_sdp_demux_media_to_caps (gint pt, const GstSDPMedia * media)
       /* <param>[=<value>] are separated with ';' */
       pairs = g_strsplit (p, ";", 0);
       for (i = 0; pairs[i]; i++) {
-        gchar *valpos, *key;
-        const gchar *val;
+        gchar *valpos;
+        const gchar *key, *val;
+        gint j;
+        const gchar *reserved_keys[] =
+            { "media", "payload", "clock-rate", "encoding-name",
+          "encoding-params"
+        };
 
         /* the key may not have a '=', the value can have other '='s */
         valpos = strstr (pairs[i], "=");
@@ -689,6 +689,19 @@ gst_sdp_demux_media_to_caps (gint pt, const GstSDPMedia * media)
         }
         /* strip the key of spaces, convert key to lowercase but not the value. */
         key = g_strstrip (pairs[i]);
+
+        /* skip keys from the fmtp, which we already use ourselves for the
+         * caps. Some software is adding random things like clock-rate into
+         * the fmtp, and we would otherwise here set a string-typed clock-rate
+         * in the caps... and thus fail to create valid RTP caps
+         */
+        for (j = 0; j < G_N_ELEMENTS (reserved_keys); j++) {
+          if (g_ascii_strcasecmp (reserved_keys[j], key) == 0) {
+            key = "";
+            break;
+          }
+        }
+
         if (strlen (key) > 1) {
           tmp = g_ascii_strdown (key, -1);
           gst_structure_set (s, tmp, G_TYPE_STRING, val, NULL);
@@ -1263,7 +1276,7 @@ gst_sdp_demux_handle_message (GstBin * bin, GstMessage * message)
 static gboolean
 gst_sdp_demux_start (GstSDPDemux * demux)
 {
-  guint8 *data;
+  guint8 *data = NULL;
   guint size;
   gint i, n_streams;
   GstSDPMessage sdp = { 0 };
@@ -1278,6 +1291,9 @@ gst_sdp_demux_start (GstSDPDemux * demux)
   GST_DEBUG_OBJECT (demux, "parse SDP...");
 
   size = gst_adapter_available (demux->adapter);
+  if (size == 0)
+    goto no_data;
+
   data = gst_adapter_take (demux->adapter, size);
 
   gst_sdp_message_init (&sdp);
@@ -1419,6 +1435,12 @@ no_manager:
   {
     GST_ELEMENT_ERROR (demux, STREAM, TYPE_NOT_FOUND, (NULL),
         ("Could not create RTP session manager."));
+    goto done;
+  }
+no_data:
+  {
+    GST_ELEMENT_ERROR (demux, STREAM, TYPE_NOT_FOUND, (NULL),
+        ("Empty SDP message."));
     goto done;
   }
 could_not_parse:

@@ -25,8 +25,8 @@
 #define __GST_AUDIO_MIXER_H__
 
 #include <gst/gst.h>
-#include <gst/base/gstcollectpads.h>
 #include <gst/audio/audio.h>
+#include "gstaudioaggregator.h"
 
 G_BEGIN_DECLS
 
@@ -49,50 +49,14 @@ typedef struct _GstAudioMixerPadClass GstAudioMixerPadClass;
  * The audiomixer object structure.
  */
 struct _GstAudioMixer {
-  GstElement      element;
-
-  GstPad         *srcpad;
-  GstCollectPads *collect;
-  /* pad counter, used for creating unique request pads */
-  gint            padcount;
-
-  /* the next are valid for both int and float */
-  GstAudioInfo    info;
-
-  /* counters to keep track of timestamps */
-  gint64          offset;
-  /* Buffer starting at offset containing block_size samples */
-  GstBuffer      *current_buffer;
-
-  /* sink event handling */
-  GstSegment      segment;
-  volatile gboolean segment_pending;
-  volatile gboolean flush_stop_pending;
-
-  /* current caps */
-  GstCaps *current_caps;
+  GstAudioAggregator element;
 
   /* target caps (set via property) */
   GstCaps *filter_caps;
-
-  GstClockTime alignment_threshold;
-  GstClockTime discont_wait;
-
-  /* Last time we noticed a discont */
-  GstClockTime discont_time;
-
-  /* Size in samples that is output per buffer */
-  guint blocksize;
-
-  /* Pending inline events */
-  GList *pending_events;
-  
-  gboolean send_stream_start;
-  gboolean send_caps;
 };
 
 struct _GstAudioMixerClass {
-  GstElementClass parent_class;
+  GstAudioAggregatorClass parent_class;
 };
 
 GType    gst_audiomixer_get_type (void);
@@ -105,7 +69,7 @@ GType    gst_audiomixer_get_type (void);
 #define GST_AUDIO_MIXER_PAD_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_AUDIO_MIXER_PAD,GstAudioMixerPadClass))
 
 struct _GstAudioMixerPad {
-  GstPad parent;
+  GstAudioAggregatorPad parent;
 
   gdouble volume;
   gint volume_i32;
@@ -115,7 +79,7 @@ struct _GstAudioMixerPad {
 };
 
 struct _GstAudioMixerPadClass {
-  GstPadClass parent_class;
+  GstAudioAggregatorPadClass parent_class;
 };
 
 GType gst_audiomixer_pad_get_type (void);

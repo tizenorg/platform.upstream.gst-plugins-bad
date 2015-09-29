@@ -18,12 +18,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include <GL/gl.h>
-#include <GL/glu.h>
-#if __WIN32__ || _WIN32
-# include <GL/glext.h>
-#endif
 #include <gst/gst.h>
+#include <gst/gl/gl.h>
 
 #include <iostream>
 #include <string>
@@ -65,19 +61,18 @@ static gboolean bus_call (GstBus *bus, GstMessage *msg, gpointer data)
 }
 
 //client reshape callback
-static gboolean reshapeCallback (void *gl_sink, GLuint width, GLuint height, gpointer data)
+static gboolean reshapeCallback (void *gl_sink, void *context, GLuint width, GLuint height, gpointer data)
 {
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45, (gfloat)width/(gfloat)height, 0.1, 100);
     glMatrixMode(GL_MODELVIEW);
 
     return TRUE;
 }
 
 //client draw callback
-static gboolean drawCallback (void * gl_sink, GLuint texture, GLuint width, GLuint height, gpointer data)
+static gboolean drawCallback (GstElement * gl_sink, GstGLContext *context, GstSample * sample, gpointer data)
 {
     static GLfloat	xrot = 0;
     static GLfloat	yrot = 0;
@@ -85,6 +80,21 @@ static gboolean drawCallback (void * gl_sink, GLuint texture, GLuint width, GLui
     static GTimeVal current_time;
     static glong last_sec = current_time.tv_sec;
     static gint nbFrames = 0;
+
+    GstVideoFrame v_frame;
+    GstVideoInfo v_info;
+    guint texture = 0;
+    GstBuffer *buf = gst_sample_get_buffer (sample);
+    GstCaps *caps = gst_sample_get_caps (sample);
+
+    gst_video_info_from_caps (&v_info, caps);
+
+    if (!gst_video_frame_map (&v_frame, &v_info, buf, (GstMapFlags) (GST_MAP_READ | GST_MAP_GL))) {
+      g_warning ("Failed to map the video buffer");
+      return TRUE;
+    }
+
+    texture = *(guint *) v_frame.data[0];
 
     g_get_current_time (&current_time);
     nbFrames++ ;
@@ -110,7 +120,7 @@ static gboolean drawCallback (void * gl_sink, GLuint texture, GLuint width, GLui
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    glTranslatef(0.0f,0.0f,-5.0f);
+    glScalef(0.5f,0.5f,0.5f);
 
     glRotatef(xrot,1.0f,0.0f,0.0f);
     glRotatef(yrot,0.0f,1.0f,0.0f);
@@ -149,11 +159,15 @@ static gboolean drawCallback (void * gl_sink, GLuint texture, GLuint width, GLui
 	      glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
     glEnd();
 
+    gst_video_frame_unmap (&v_frame);
+
     xrot+=0.3f;
     yrot+=0.2f;
     zrot+=0.4f;
 
-    //return TRUE causes a postRedisplay
+    glDisable (GL_DEPTH_TEST);
+    glDisable (GL_TEXTURE_2D);
+
     return TRUE;
 }
 

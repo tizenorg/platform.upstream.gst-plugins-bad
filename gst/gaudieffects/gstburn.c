@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright (C) >2010-2012> Luis de Bethencourt <luis@debethencourt.com>
+ * Copyright (C) <2010-2015> Luis de Bethencourt <luis@debethencourt.com>
  *
  * Burn - curve adjustment video effect.
  * Based on Pete Warden's FreeFrame plugin with the same name.
@@ -91,7 +91,6 @@ enum
 {
   PROP_0 = 0,
   PROP_ADJUSTMENT,
-  PROP_SILENT
 };
 
 /* Initializations */
@@ -153,10 +152,6 @@ gst_burn_class_init (GstBurnClass * klass)
           "Adjustment parameter", 0, 256, DEFAULT_ADJUSTMENT,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | GST_PARAM_CONTROLLABLE));
 
-  g_object_class_install_property (gobject_class, PROP_SILENT,
-      g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
-          FALSE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
   vfilter_class->transform_frame = GST_DEBUG_FUNCPTR (gst_burn_transform_frame);
 }
 
@@ -169,7 +164,6 @@ static void
 gst_burn_init (GstBurn * filter)
 {
   filter->adjustment = DEFAULT_ADJUSTMENT;
-  filter->silent = FALSE;
 }
 
 static void
@@ -179,9 +173,6 @@ gst_burn_set_property (GObject * object, guint prop_id,
   GstBurn *filter = GST_BURN (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      filter->silent = g_value_get_boolean (value);
-      break;
     case PROP_ADJUSTMENT:
       filter->adjustment = g_value_get_uint (value);
       break;
@@ -199,9 +190,6 @@ gst_burn_get_property (GObject * object, guint prop_id,
 
   GST_OBJECT_LOCK (filter);
   switch (prop_id) {
-    case PROP_SILENT:
-      g_value_set_boolean (value, filter->silent);
-      break;
     case PROP_ADJUSTMENT:
       g_value_set_uint (value, filter->adjustment);
       break;
@@ -226,7 +214,7 @@ gst_burn_transform_frame (GstVideoFilter * vfilter,
     GstVideoFrame * in_frame, GstVideoFrame * out_frame)
 {
   GstBurn *filter = GST_BURN (vfilter);
-  gint video_size, adjustment, width, height;
+  gint video_size, adjustment;
   guint32 *src, *dest;
   GstClockTime timestamp;
   gint64 stream_time;
@@ -234,10 +222,8 @@ gst_burn_transform_frame (GstVideoFilter * vfilter,
   src = GST_VIDEO_FRAME_PLANE_DATA (in_frame, 0);
   dest = GST_VIDEO_FRAME_PLANE_DATA (out_frame, 0);
 
-  width = GST_VIDEO_FRAME_WIDTH (in_frame);
-  height = GST_VIDEO_FRAME_HEIGHT (in_frame);
-
-  video_size = width * height;
+  video_size = GST_VIDEO_FRAME_WIDTH (in_frame) *
+      GST_VIDEO_FRAME_HEIGHT (in_frame);
 
   /* GstController: update the properties */
   timestamp = GST_BUFFER_TIMESTAMP (in_frame->buffer);

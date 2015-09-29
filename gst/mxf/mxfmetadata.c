@@ -2239,6 +2239,7 @@ mxf_metadata_source_package_resolve (MXFMetadataBase * m, GHashTable * metadata)
       if (d->linked_track_id == package->tracks[i]->track_id ||
           (d->linked_track_id == 0 && package->n_essence_tracks == 1 &&
               (package->tracks[i]->type & 0xf0) == 0x30)) {
+        g_free (package->tracks[i]->descriptor);
         package->tracks[i]->descriptor =
             g_new0 (MXFMetadataFileDescriptor *, 1);
         package->tracks[i]->descriptor[0] = d;
@@ -2264,6 +2265,7 @@ mxf_metadata_source_package_resolve (MXFMetadataBase * m, GHashTable * metadata)
           n_descriptor++;
       }
 
+      g_free (package->tracks[i]->descriptor);
       package->tracks[i]->descriptor =
           g_new0 (MXFMetadataFileDescriptor *, n_descriptor);
       package->tracks[i]->n_descriptor = n_descriptor;
@@ -4080,7 +4082,7 @@ mxf_metadata_generic_descriptor_write_tags (MXFMetadataBase * m,
 
     t = g_slice_new0 (MXFLocalTag);
     memcpy (&t->ul, MXF_UL (LOCATORS), 16);
-    t->size = 8 + 16 * self->n_locators;;
+    t->size = 8 + 16 * self->n_locators;
     t->data = g_slice_alloc0 (t->size);
     t->g_slice = TRUE;
     GST_WRITE_UINT32_BE (t->data, self->n_locators);

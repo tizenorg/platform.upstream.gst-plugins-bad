@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gst-plugins-bad 1.4.0\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2014-08-27 14:38+0300\n"
+"POT-Creation-Date: 2015-08-19 12:49+0300\n"
 "PO-Revision-Date: 2014-07-22 10:49+0200\n"
 "Last-Translator: Freek de Kruijf <f.de.kruijf@gmail.com>\n"
 "Language-Team: Dutch <vertaling@vrijschrift.org>\n"
@@ -19,9 +19,6 @@ msgstr ""
 "X-Generator: Lokalize 1.5\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
 
-msgid "Internal data stream error."
-msgstr "Interne fout in gegevensstroom."
-
 msgid "format wasn't negotiated before get function"
 msgstr "formaat is niet onderhandeld vóór get-functie"
 
@@ -31,7 +28,7 @@ msgstr ""
 msgid ""
 "GStreamer can play audio using any number of output elements. Some possible "
 "choices are osssink, pulsesink and alsasink. The audiosink can be a partial "
-"pipeline instea of just one element."
+"pipeline instead of just one element."
 msgstr ""
 
 msgid "description for default GStreamer sound events audiosink"
@@ -114,6 +111,9 @@ msgstr ""
 msgid "Describes the selected visualization element."
 msgstr ""
 
+msgid "OpenCV failed to load template image"
+msgstr ""
+
 msgid "Could not read title information for DVD."
 msgstr "Kan de titelinformatie voor de DVD niet lezen."
 
@@ -137,28 +137,8 @@ msgstr "Kon de dvd niet lezen."
 msgid "This file contains no playable streams."
 msgstr "Dit bestand bevat geen af te spelen streams."
 
-msgid "Couldn't get the Manifest's URI"
-msgstr "De URI van het manifest verkrijgen lukt niet"
-
-msgid "Failed to get fragment URL."
-msgstr "Verkrijgen van de URL van het fragment is mislukt."
-
-msgid "Couldn't download fragments"
-msgstr "Kan fragmenten niet downloaden"
-
 msgid "Could not open sndfile stream for reading."
 msgstr "Kan sndfile-stream niet openen om te lezen."
-
-msgid "No file name specified for writing."
-msgstr "Geen bestandsnaam gespecificeerd voor de uitvoer."
-
-#, c-format
-msgid "Could not open file \"%s\" for writing."
-msgstr "Kan bestand \"%s\" niet openen voor uitvoer."
-
-#, c-format
-msgid "Could not write to file \"%s\"."
-msgstr "Kan niet in bestand \"%s\" schrijven."
 
 msgid "Could not establish connection to sndio"
 msgstr "Kon geen verbinding opzetten naar sndio"
@@ -188,15 +168,34 @@ msgid "File location is set to NULL, please set it to a valid filename"
 msgstr ""
 "Locatie van bestand is op NUL gezet, stel het in op een geldige bestandsnaam"
 
+msgid "Digitalzoom element couldn't be created"
+msgstr ""
+
 msgid "Subpicture format was not configured before data flow"
 msgstr ""
 "Het format van de subafbeelding was niet ingesteld voor de gegevensstroom"
+
+msgid "Failed to get fragment URL."
+msgstr "Verkrijgen van de URL van het fragment is mislukt."
+
+msgid "Internal data stream error."
+msgstr "Interne fout in gegevensstroom."
+
+msgid "Couldn't download fragments"
+msgstr "Kan fragmenten niet downloaden"
+
+msgid "No file name specified for writing."
+msgstr "Geen bestandsnaam gespecificeerd voor de uitvoer."
 
 #, c-format
 msgid "Given file name \"%s\" can't be converted to local file name encoding."
 msgstr ""
 "Ingegeven bestandsnaam \"%s\" kan niet geconverteerd worden naar de codering "
 "van een lokale bestandsnaam."
+
+#, c-format
+msgid "Could not open file \"%s\" for writing."
+msgstr "Kan bestand \"%s\" niet openen voor uitvoer."
 
 #, c-format
 msgid "Device \"%s\" does not exist."
@@ -231,6 +230,12 @@ msgstr "Het instellingenbestand van het DVB-kanaal bevat geen kanalen"
 #, c-format
 msgid "Couldn't find details for DVB channel %s"
 msgstr "Kon de details voor het DVB-kanaal %s niet vinden"
+
+#~ msgid "Couldn't get the Manifest's URI"
+#~ msgstr "De URI van het manifest verkrijgen lukt niet"
+
+#~ msgid "Could not write to file \"%s\"."
+#~ msgstr "Kan niet in bestand \"%s\" schrijven."
 
 #~ msgid "Internal clock error."
 #~ msgstr "Interne fout met de klok."

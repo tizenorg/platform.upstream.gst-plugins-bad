@@ -69,9 +69,6 @@ struct _GstShmSink
   GstShmSinkAllocator *allocator;
 
   GstAllocationParams params;
-#ifdef GST_TBM_SUPPORT
-  gboolean use_tbm;
-#endif
 };
 
 struct _GstShmSinkClass

@@ -54,6 +54,7 @@
 #include <math.h>
 #include <gst/gst.h>
 #include "MotionCells.h"
+#include <opencv2/imgproc/imgproc_c.h>
 
 MotionCells::MotionCells ()
 {
@@ -75,7 +76,12 @@ MotionCells::MotionCells ()
   m_beta = 0.5;
   m_useAlpha = false;
   m_isVisible = false;
-
+  m_pCells = NULL;
+  m_gridx = 0;
+  m_gridy = 0;
+  m_cellwidth = 0;
+  m_cellheight = 0;
+  m_sensitivity = 0;
 }
 
 MotionCells::~MotionCells ()

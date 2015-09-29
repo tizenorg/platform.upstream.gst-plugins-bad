@@ -26,6 +26,8 @@
 #include <gst/audio/audio.h>
 #include <jni.h>
 
+#include "gstjniutils.h"
+
 G_BEGIN_DECLS
 
 typedef struct _GstAmcCodecInfo GstAmcCodecInfo;
@@ -33,7 +35,6 @@ typedef struct _GstAmcCodecType GstAmcCodecType;
 typedef struct _GstAmcCodec GstAmcCodec;
 typedef struct _GstAmcBufferInfo GstAmcBufferInfo;
 typedef struct _GstAmcFormat GstAmcFormat;
-typedef struct _GstAmcBuffer GstAmcBuffer;
 typedef struct _GstAmcColorFormatInfo GstAmcColorFormatInfo;
 
 struct _GstAmcCodecType {
@@ -56,12 +57,6 @@ struct _GstAmcCodecInfo {
   gint n_supported_types;
 };
 
-struct _GstAmcBuffer {
-  jobject object; /* global reference */
-  guint8 *data;
-  gsize size;
-};
-
 struct _GstAmcFormat {
   /* < private > */
   jobject object; /* global reference */
@@ -70,6 +65,9 @@ struct _GstAmcFormat {
 struct _GstAmcCodec {
   /* < private > */
   jobject object; /* global reference */
+
+  GstAmcBuffer *input_buffers, *output_buffers;
+  gsize n_input_buffers, n_output_buffers;
 };
 
 struct _GstAmcBufferInfo {
@@ -92,9 +90,8 @@ gboolean gst_amc_codec_stop (GstAmcCodec * codec, GError **err);
 gboolean gst_amc_codec_flush (GstAmcCodec * codec, GError **err);
 gboolean gst_amc_codec_release (GstAmcCodec * codec, GError **err);
 
-GstAmcBuffer * gst_amc_codec_get_output_buffers (GstAmcCodec * codec, gsize * n_buffers, GError **err);
-GstAmcBuffer * gst_amc_codec_get_input_buffers (GstAmcCodec * codec, gsize * n_buffers, GError **err);
-void gst_amc_codec_free_buffers (GstAmcBuffer * buffers, gsize n_buffers);
+GstAmcBuffer * gst_amc_codec_get_output_buffer (GstAmcCodec * codec, gint index, GError **err);
+GstAmcBuffer * gst_amc_codec_get_input_buffer (GstAmcCodec * codec, gint index, GError **err);
 
 gint gst_amc_codec_dequeue_input_buffer (GstAmcCodec * codec, gint64 timeoutUs, GError **err);
 gint gst_amc_codec_dequeue_output_buffer (GstAmcCodec * codec, GstAmcBufferInfo *info, gint64 timeoutUs, GError **err);
@@ -112,13 +109,13 @@ gchar * gst_amc_format_to_string (GstAmcFormat * format, GError **err);
 gboolean gst_amc_format_contains_key (GstAmcFormat *format, const gchar *key, GError **err);
 
 gboolean gst_amc_format_get_float (GstAmcFormat *format, const gchar *key, gfloat *value, GError **err);
-void gst_amc_format_set_float (GstAmcFormat *format, const gchar *key, gfloat value, GError **err);
+gboolean gst_amc_format_set_float (GstAmcFormat *format, const gchar *key, gfloat value, GError **err);
 gboolean gst_amc_format_get_int (GstAmcFormat *format, const gchar *key, gint *value, GError **err);
-void gst_amc_format_set_int (GstAmcFormat *format, const gchar *key, gint value, GError **err);
+gboolean gst_amc_format_set_int (GstAmcFormat *format, const gchar *key, gint value, GError **err);
 gboolean gst_amc_format_get_string (GstAmcFormat *format, const gchar *key, gchar **value, GError **err);
-void gst_amc_format_set_string (GstAmcFormat *format, const gchar *key, const gchar *value, GError **err);
+gboolean gst_amc_format_set_string (GstAmcFormat *format, const gchar *key, const gchar *value, GError **err);
 gboolean gst_amc_format_get_buffer (GstAmcFormat *format, const gchar *key, guint8 **data, gsize *size, GError **err);
-void gst_amc_format_set_buffer (GstAmcFormat *format, const gchar *key, guint8 *data, gsize size, GError **err);
+gboolean gst_amc_format_set_buffer (GstAmcFormat *format, const gchar *key, guint8 *data, gsize size, GError **err);
 
 GstVideoFormat gst_amc_color_format_to_video_format (const GstAmcCodecInfo * codec_info, const gchar * mime, gint color_format);
 gint gst_amc_video_format_to_color_format (const GstAmcCodecInfo * codec_info, const gchar * mime, GstVideoFormat video_format);
@@ -150,12 +147,16 @@ const gchar * gst_amc_avc_profile_to_string (gint profile, const gchar **alterna
 gint gst_amc_avc_profile_from_string (const gchar *profile);
 const gchar * gst_amc_avc_level_to_string (gint level);
 gint gst_amc_avc_level_from_string (const gchar *level);
+const gchar * gst_amc_hevc_profile_to_string (gint profile);
+gint gst_amc_hevc_profile_from_string (const gchar *profile);
+const gchar * gst_amc_hevc_tier_level_to_string (gint tier_level, const gchar ** tier);
+gint gst_amc_hevc_tier_level_from_string (const gchar * tier, const gchar *level);
 gint gst_amc_h263_profile_to_gst_id (gint profile);
 gint gst_amc_h263_profile_from_gst_id (gint profile);
 gint gst_amc_h263_level_to_gst_id (gint level);
 gint gst_amc_h263_level_from_gst_id (gint level);
 const gchar * gst_amc_mpeg4_profile_to_string (gint profile);
-gint gst_amc_avc_mpeg4_profile_from_string (const gchar *profile);
+gint gst_amc_mpeg4_profile_from_string (const gchar *profile);
 const gchar * gst_amc_mpeg4_level_to_string (gint level);
 gint gst_amc_mpeg4_level_from_string (const gchar *level);
 const gchar * gst_amc_aac_profile_to_string (gint profile);
