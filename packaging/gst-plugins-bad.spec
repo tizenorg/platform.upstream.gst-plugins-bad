@@ -32,11 +32,8 @@ BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 BuildRequires:  pkgconfig(libdrm)
 BuildRequires:  pkgconfig(libtbm)
-BuildRequires:	pkgconfig(mm-common)
-#BuildRequires:  mesa-libGLESv2
-#BuildRequires:  mesa-libEGL
+BuildRequires:  pkgconfig(mm-common)
 %if %{with wayland}
-#BuildRequires:  opengl-es-devel
 BuildRequires:  pkgconfig(gles20)
 BuildRequires:  pkgconfig(wayland-egl) >= 9.0
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
@@ -94,8 +91,7 @@ export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEAD
     --disable-stereo\
     --disable-videosignal\
     --disable-vmnc\
-    --disable-gtk-doc\
-    --disable-warnings-as-errors
+    --disable-gtk-doc
 %__make %{?_smp_mflags} V=1
 
 %install
@@ -176,6 +172,14 @@ rm -rf %{_builddir}
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstcompositor.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstdtls.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstfragmented.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstopengl.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstrtpbad.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstrtponvif.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstvcdsrc.so
+
 
 %if %{with wayland}
 %{_libdir}/libgstwayland-%{gst_branch}.so.0*
@@ -191,32 +195,10 @@ rm -rf %{_builddir}
 %{_libdir}/libgstbadbase-%{gst_branch}.so.0*
 %{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
 %{_libdir}/debug/usr/lib/gstreamer-%{gst_branch}/*.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstdtls.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstfragmented.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstopengl.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstrtpbad.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstrtponvif.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstvcdsrc.so.debug
-#/usr/lib/debug/usr/lib/gstreamer-1.0/libgstwaylandsink.so.debug
-#/usr/lib/debug/usr/lib/libgstadaptivedemux-1.0.so.0.590.0.debug
-#/usr/lib/debug/usr/lib/libgstgl-1.0.so.0.590.0.debug
-#/usr/lib/debug/usr/lib/libgstwayland-1.0.so.0.590.0.debug
-/usr/lib/gstreamer-1.0/include/gst/gl/gstglconfig.h
-/usr/lib/gstreamer-1.0/libgstcompositor.so
-/usr/lib/gstreamer-1.0/libgstdtls.so
-/usr/lib/gstreamer-1.0/libgstfragmented.so
-/usr/lib/gstreamer-1.0/libgstopengl.so
-/usr/lib/gstreamer-1.0/libgstrtpbad.so
-/usr/lib/gstreamer-1.0/libgstrtponvif.so
-/usr/lib/gstreamer-1.0/libgstvcdsrc.so
-#/usr/lib/gstreamer-1.0/libgstwaylandsink.so
-/usr/lib/libgstadaptivedemux-1.0.so.0
-/usr/lib/libgstadaptivedemux-1.0.so.0.590.0
-/usr/lib/libgstgl-1.0.so.0
-/usr/lib/libgstgl-1.0.so.0.590.0
-#/usr/lib/libgstwayland-1.0.so.0
-#/usr/lib/libgstwayland-1.0.so.0.590.0
-/usr/lib/pkgconfig/gstreamer-gl-1.0.pc
+#%{_libdir}/debug/usr/lib/*.so.debug
+%{_libdir}/libgstadaptivedemux-%{gst_branch}.so.0*
+%{_libdir}/libgstgl-%{gst_branch}.so.0*
+
 /usr/share/gstreamer-1.0/presets/GstFreeverb.prs
 
 
@@ -229,6 +211,8 @@ rm -rf %{_builddir}
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
+%{_libdir}/pkgconfig/gstreamer-gl-%{gst_branch}.pc
+%{_libdir}/gstreamer-%{gst_branch}/include/gst/gl/gstglconfig.h
 %if %{with wayland}
 #%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
 #%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
