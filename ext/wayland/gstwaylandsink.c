@@ -1066,8 +1066,10 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
           return FALSE;
         }
         structure = gst_buffer_pool_get_config (newpool);
-        gst_buffer_pool_config_set_params (structure, sink->caps,
-            sink->video_info.size, 2, 0);
+        /*When the buffer is released, Core compare size with buffer size,
+           wl_buffer is not created if the size is same. It is a very critical problem
+           So we set 0 to size */
+        gst_buffer_pool_config_set_params (structure, sink->caps, 0, 2, 0);
         gst_buffer_pool_config_set_allocator (structure, NULL, &params);
         if (!gst_buffer_pool_set_config (newpool, structure)) {
           GST_DEBUG_OBJECT (bsink, "failed setting config");
