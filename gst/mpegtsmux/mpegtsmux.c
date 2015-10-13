@@ -599,9 +599,11 @@ mpegtsmux_create_stream (MpegTsMux * mux, MpegTsPadData * ts_data)
       GST_PTR_FORMAT, ts_data->pid, caps);
 
   s = gst_caps_get_structure (caps, 0);
-  g_return_val_if_fail (s != NULL, FALSE);
+  g_return_val_if_fail (s != NULL, GST_FLOW_ERROR);
 
   mt = gst_structure_get_name (s);
+  g_return_val_if_fail (mt != NULL, GST_FLOW_ERROR);
+
   value = gst_structure_get_value (s, "codec_data");
   if (value != NULL)
     codec_data = gst_value_get_buffer (value);

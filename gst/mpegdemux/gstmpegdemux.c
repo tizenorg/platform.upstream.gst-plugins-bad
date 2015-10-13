@@ -806,7 +806,7 @@ gst_flups_demux_handle_dvd_event (GstFluPSDemux * demux, GstEvent * event)
 
       g_snprintf (cur_stream_name, 32, "audio-%d-language", i);
       lang_code = gst_structure_get_string (structure, cur_stream_name);
-      if (lang_code) {
+      if (lang_code && temp) {
         GstTagList *list = temp->pending_tags;
 
         if (!list)
@@ -837,6 +837,10 @@ gst_flups_demux_handle_dvd_event (GstFluPSDemux * demux, GstEvent * event)
       /* Retrieve the subpicture stream to force pad creation */
       temp = gst_flups_demux_get_stream (demux, 0x20 + stream_id,
           ST_PS_DVD_SUBPICTURE);
+      if(temp == NULL) {
+        GST_ERROR_OBJECT (demux, "gst_flups_demux_get_stream fail");
+        continue;
+      }
 
       g_snprintf (cur_stream_name, 32, "subpicture-%d-language", i);
       lang_code = gst_structure_get_string (structure, cur_stream_name);
