@@ -28,8 +28,6 @@
 
 #include "gstglfilter.h"
 
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_PLATFORM_EGL
 #include "egl/gsteglimagememory.h"
 #endif
@@ -180,7 +178,6 @@ gst_gl_filter_gl_start (GstGLBaseFilter * base_filter)
   GstGLFilterClass *filter_class = GST_GL_FILTER_GET_CLASS (filter);
   GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
   gint out_width, out_height;
-  GError *error = NULL;
 
   out_width = GST_VIDEO_INFO_WIDTH (&filter->out_info);
   out_height = GST_VIDEO_INFO_HEIGHT (&filter->out_info);
@@ -207,7 +204,7 @@ gst_gl_filter_gl_start (GstGLBaseFilter * base_filter)
 
 context_error:
   {
-    GST_ELEMENT_ERROR (filter, RESOURCE, NOT_FOUND, ("%s", error->message),
+    GST_ELEMENT_ERROR (filter, RESOURCE, NOT_FOUND, ("Could not generate FBO"),
         (NULL));
     return FALSE;
   }
@@ -1139,8 +1136,8 @@ gst_gl_filter_draw_texture (GstGLFilter * filter, GLuint texture,
           GL_STATIC_DRAW);
 
       gl->GenBuffers (1, &filter->vbo_indices);
-      gl->BindBuffer (GL_ARRAY_BUFFER, filter->vbo_indices);
-      gl->BufferData (GL_ARRAY_BUFFER, sizeof (indices), indices,
+      gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, filter->vbo_indices);
+      gl->BufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (indices), indices,
           GL_STATIC_DRAW);
 
       if (gl->GenVertexArrays) {

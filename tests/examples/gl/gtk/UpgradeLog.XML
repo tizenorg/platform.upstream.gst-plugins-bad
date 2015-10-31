@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="gtk">
+</Property><Property Name="Solution File" Value="D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\gtk.sln">
+</Property><Property Name="Date" Value="Sunday, November 01, 2015">
+</Property><Property Name="Time" Value="14:27 PM">
+</Property></Properties><Event ErrorLevel="0" Project="" Source="gtk.sln" Description="File successfully backed up as D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\gtk.sln.old">
+</Event><Event ErrorLevel="0" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\filtervideooverlay\filtervideooverlay.vcproj'.">
+</Event><Event ErrorLevel="1" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\filtervideooverlay\filtervideooverlay.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="filtervideooverlay" Source="filtervideooverlay\filtervideooverlay.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\gtkvideooverlay\gtkvideooverlay.vcproj'.">
+</Event><Event ErrorLevel="1" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\gtkvideooverlay\gtkvideooverlay.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="gtkvideooverlay" Source="gtkvideooverlay\gtkvideooverlay.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\fxtest\fxtest.vcproj'.">
+</Event><Event ErrorLevel="1" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\fxtest\fxtest.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="fxtest" Source="fxtest\fxtest.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\pixbufdrop\pixbufdrop.vcproj'.">
+</Event><Event ErrorLevel="1" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\pixbufdrop\pixbufdrop.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="pixbufdrop" Source="pixbufdrop\pixbufdrop.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\filternovideooverlay\filternovideooverlay.vcproj'.">
+</Event><Event ErrorLevel="1" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\filternovideooverlay\filternovideooverlay.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="filternovideooverlay" Source="filternovideooverlay\filternovideooverlay.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\switchvideooverlay\switchvideooverlay.vcproj'.">
+</Event><Event ErrorLevel="1" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\switchvideooverlay\switchvideooverlay.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="switchvideooverlay" Source="switchvideooverlay\switchvideooverlay.vcproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="" Source="gtk.sln" Description="Solution converted successfully">
+</Event><Event ErrorLevel="3" Project="" Source="gtk.sln" Description="Converted">
+</Event></UpgradeLog>

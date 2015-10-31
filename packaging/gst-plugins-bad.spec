@@ -3,7 +3,7 @@
 %define gst_branch 1.0
 
 Name:           gst-plugins-bad
-Version:        1.5.90
+Version:        1.6.0
 Release:        1
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        GPL-2.0+ and LGPL-2.1+
@@ -211,9 +211,9 @@ rm -rf %{_builddir}
 /usr/lib/gstreamer-1.0/libgstvcdsrc.so
 #/usr/lib/gstreamer-1.0/libgstwaylandsink.so
 /usr/lib/libgstadaptivedemux-1.0.so.0
-/usr/lib/libgstadaptivedemux-1.0.so.0.590.0
+/usr/lib/libgstadaptivedemux-1.0.so.0.600.0
 /usr/lib/libgstgl-1.0.so.0
-/usr/lib/libgstgl-1.0.so.0.590.0
+/usr/lib/libgstgl-1.0.so.0.600.0
 #/usr/lib/libgstwayland-1.0.so.0
 #/usr/lib/libgstwayland-1.0.so.0.590.0
 /usr/lib/pkgconfig/gstreamer-gl-1.0.pc

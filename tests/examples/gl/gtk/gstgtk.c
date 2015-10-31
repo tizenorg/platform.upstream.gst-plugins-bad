@@ -23,6 +23,7 @@
 
 #include <gst/gl/gl.h>
 #include "gstgtk.h"
+//#include <gstglconfig.h>
 
 #if GST_GL_HAVE_WINDOW_WIN32 && defined(GDK_WINDOWING_WIN32)
 #include <gdk/gdkwin32.h>

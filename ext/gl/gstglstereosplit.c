@@ -38,8 +38,6 @@
 
 #include "gstglstereosplit.h"
 
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_PLATFORM_EGL
 #include <gst/gl/egl/gsteglimagememory.h>
 #endif
@@ -589,6 +587,7 @@ context_error:
   {
     GST_ELEMENT_ERROR (self, RESOURCE, NOT_FOUND, ("%s", error->message),
         (NULL));
+    g_clear_error (&error);
     return FALSE;
   }
 }

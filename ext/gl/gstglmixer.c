@@ -28,8 +28,6 @@
 
 #include "gstglmixer.h"
 
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_PLATFORM_EGL
 #include <gst/gl/egl/gsteglimagememory.h>
 #endif

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="gtk">
+</Property><Property Name="Solution File" Value="D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\gtk.sln">
+</Property><Property Name="Date" Value="Sunday, November 01, 2015">
+</Property><Property Name="Time" Value="14:36:06 PM">
+</Property><Property Name="Log Number" Value="2">
+</Property></Properties><Event ErrorLevel="0" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="Converting project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\3dvideo\3dvideo.vcproj'.">
+</Event><Event ErrorLevel="1" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="VCWebServiceProxyGeneratorTool is no longer supported. The tool has been removed from your project settings.">
+</Event><Event ErrorLevel="1" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="1" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="Attribute 'Detect64BitPortabilityProblems' of 'VCCLCompilerTool' is not supported in this version and has been removed during conversion.">
+</Event><Event ErrorLevel="0" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="Done converting to new project file 'D:\OpenSource\GStreamer\1.6\gst-plugins-bad\tests\examples\gl\gtk\3dvideo\3dvideo.vcxproj'.">
+</Event><Event ErrorLevel="3" Project="3dvideo" Source="3dvideo\3dvideo.vcproj" Description="Converted">
+</Event></UpgradeLog>

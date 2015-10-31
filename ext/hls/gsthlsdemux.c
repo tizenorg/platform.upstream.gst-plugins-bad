@@ -858,7 +858,7 @@ retry:
       TRUE, TRUE, TRUE, err);
   g_free (main_uri);
   if (download == NULL) {
-    if (update && !main_checked
+    if (!adaptive_demux->cancelled && update && !main_checked
         && gst_m3u8_client_has_variant_playlist (demux->client)
         && gst_m3u8_client_has_main (demux->client)) {
       GError *err2 = NULL;
@@ -1059,7 +1059,7 @@ retry_failover_protection:
     main_uri = gst_m3u8_client_get_uri (demux->client);
     gst_element_post_message (GST_ELEMENT_CAST (demux),
         gst_message_new_element (GST_OBJECT_CAST (demux),
-            gst_structure_new (STATISTICS_MESSAGE_NAME,
+            gst_structure_new (GST_ADAPTIVE_DEMUX_STATISTICS_MESSAGE_NAME,
                 "manifest-uri", G_TYPE_STRING,
                 main_uri, "uri", G_TYPE_STRING,
                 uri, "bitrate", G_TYPE_INT, new_bandwidth, NULL)));

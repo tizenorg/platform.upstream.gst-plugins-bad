@@ -83,8 +83,7 @@ struct _GstFaceBlur
   gint min_size_height;
 
   IplImage *cvGray;
-  CvHaarClassifierCascade *cvCascade;
-  CvMemStorage *cvStorage;
+  cv::CascadeClassifier *cvCascade;
 };
 
 struct _GstFaceBlurClass

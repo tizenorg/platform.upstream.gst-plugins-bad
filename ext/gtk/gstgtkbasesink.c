@@ -28,6 +28,7 @@
 #endif
 
 #include "gstgtkbasesink.h"
+#include "gstgtkutils.h"
 
 GST_DEBUG_CATEGORY (gst_debug_gtk_base_sink);
 #define GST_CAT_DEFAULT gst_debug_gtk_base_sink
@@ -44,6 +45,7 @@ static void gst_gtk_base_sink_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * param_spec);
 
 static gboolean gst_gtk_base_sink_start (GstBaseSink * bsink);
+static gboolean gst_gtk_base_sink_stop (GstBaseSink * bsink);
 
 static GstStateChangeReturn
 gst_gtk_base_sink_change_state (GstElement * element,
@@ -75,6 +77,7 @@ G_DEFINE_ABSTRACT_TYPE_WITH_CODE (GstGtkBaseSink, gst_gtk_base_sink,
         gst_gtk_base_sink_navigation_interface_init);
     GST_DEBUG_CATEGORY_INIT (gst_debug_gtk_base_sink,
         "gtkbasesink", 0, "Gtk Video Sink base class"));
+
 
 static void
 gst_gtk_base_sink_class_init (GstGtkBaseSinkClass * klass)
@@ -121,6 +124,7 @@ gst_gtk_base_sink_class_init (GstGtkBaseSinkClass * klass)
   gstbasesink_class->set_caps = gst_gtk_base_sink_set_caps;
   gstbasesink_class->get_times = gst_gtk_base_sink_get_times;
   gstbasesink_class->start = gst_gtk_base_sink_start;
+  gstbasesink_class->stop = gst_gtk_base_sink_stop;
 
   gstvideosink_class->show_frame = gst_gtk_base_sink_show_frame;
 }
@@ -148,7 +152,12 @@ static void
 widget_destroy_cb (GtkWidget * widget, GstGtkBaseSink * gtk_sink)
 {
   GST_OBJECT_LOCK (gtk_sink);
-  g_clear_object (&gtk_sink->widget);
+  if (widget == GTK_WIDGET (gtk_sink->widget))
+    g_clear_object (&gtk_sink->widget);
+  else if (widget == gtk_sink->window)
+    gtk_sink->window = NULL;
+  else
+    g_assert_not_reached ();
   GST_OBJECT_UNLOCK (gtk_sink);
 }
 
@@ -200,8 +209,22 @@ gst_gtk_base_sink_get_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_WIDGET:
-      g_value_set_object (value, gst_gtk_base_sink_get_widget (gtk_sink));
+    {
+      GObject *widget = NULL;
+
+      GST_OBJECT_LOCK (gtk_sink);
+      if (gtk_sink->widget != NULL)
+        widget = G_OBJECT (gtk_sink->widget);
+      GST_OBJECT_UNLOCK (gtk_sink);
+
+      if (!widget)
+        widget =
+            gst_gtk_invoke_on_main ((GThreadFunc) gst_gtk_base_sink_get_widget,
+            gtk_sink);
+
+      g_value_set_object (value, widget);
       break;
+    }
     case PROP_FORCE_ASPECT_RATIO:
       g_value_set_boolean (value, gtk_sink->force_aspect_ratio);
       break;
@@ -253,10 +276,12 @@ gst_gtk_base_sink_navigation_send_event (GstNavigation * navigation,
 
   GST_TRACE_OBJECT (sink, "navigation event %" GST_PTR_FORMAT, structure);
 
-  if (GST_IS_PAD (pad) && GST_IS_EVENT (event))
-    gst_pad_send_event (pad, event);
+  if (GST_IS_PAD (pad)) {
+    if (GST_IS_EVENT (event))
+      gst_pad_send_event (pad, event);
 
-  gst_object_unref (pad);
+    gst_object_unref (pad);
+  }
 }
 
 static void
@@ -266,7 +291,7 @@ gst_gtk_base_sink_navigation_interface_init (GstNavigationInterface * iface)
 }
 
 static gboolean
-gst_gtk_base_sink_start (GstBaseSink * bsink)
+gst_gtk_base_sink_start_on_main (GstBaseSink * bsink)
 {
   GstGtkBaseSink *gst_sink = GST_GTK_BASE_SINK (bsink);
   GstGtkBaseSinkClass *klass = GST_GTK_BASE_SINK_GET_CLASS (bsink);
@@ -279,21 +304,60 @@ gst_gtk_base_sink_start (GstBaseSink * bsink)
 
   toplevel = gtk_widget_get_toplevel (GTK_WIDGET (gst_sink->widget));
   if (!gtk_widget_is_toplevel (toplevel)) {
-    GtkWidget *window;
-
     /* sanity check */
     g_assert (klass->window_title);
 
     /* User did not add widget its own UI, let's popup a new GtkWindow to
      * make gst-launch-1.0 work. */
-    window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_default_size (GTK_WINDOW (window), 640, 480);
-    gtk_window_set_title (GTK_WINDOW (window), klass->window_title);
-    gtk_container_add (GTK_CONTAINER (window), toplevel);
-    gtk_widget_show_all (window);
+    gst_sink->window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_default_size (GTK_WINDOW (gst_sink->window), 640, 480);
+    gtk_window_set_title (GTK_WINDOW (gst_sink->window), klass->window_title);
+    gtk_container_add (GTK_CONTAINER (gst_sink->window), toplevel);
+    g_signal_connect (gst_sink->window, "destroy",
+        G_CALLBACK (widget_destroy_cb), gst_sink);
   }
 
   return TRUE;
+}
+
+static gboolean
+gst_gtk_base_sink_start (GstBaseSink * bsink)
+{
+  return ! !gst_gtk_invoke_on_main ((GThreadFunc)
+      gst_gtk_base_sink_start_on_main, bsink);
+}
+
+static gboolean
+gst_gtk_base_sink_stop_on_main (GstBaseSink * bsink)
+{
+  GstGtkBaseSink *gst_sink = GST_GTK_BASE_SINK (bsink);
+
+  if (gst_sink->window) {
+    gtk_widget_destroy (gst_sink->window);
+    gst_sink->window = NULL;
+    gst_sink->widget = NULL;
+  }
+
+  return TRUE;
+}
+
+static gboolean
+gst_gtk_base_sink_stop (GstBaseSink * bsink)
+{
+  GstGtkBaseSink *gst_sink = GST_GTK_BASE_SINK (bsink);
+
+  if (gst_sink->window)
+    return ! !gst_gtk_invoke_on_main ((GThreadFunc)
+        gst_gtk_base_sink_stop_on_main, bsink);
+
+  return TRUE;
+}
+
+static void
+gst_gtk_widget_show_all_and_unref (GtkWidget * widget)
+{
+  gtk_widget_show_all (widget);
+  g_object_unref (widget);
 }
 
 static GstStateChangeReturn
@@ -311,6 +375,21 @@ gst_gtk_base_sink_change_state (GstElement * element, GstStateChange transition)
     return ret;
 
   switch (transition) {
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+    {
+      GtkWindow *window = NULL;
+
+      GST_OBJECT_LOCK (gtk_sink);
+      if (gtk_sink->window)
+        window = g_object_ref (gtk_sink->window);
+      GST_OBJECT_UNLOCK (gtk_sink);
+
+      if (window)
+        gst_gtk_invoke_on_main ((GThreadFunc) gst_gtk_widget_show_all_and_unref,
+            window);
+
+      break;
+    }
     case GST_STATE_CHANGE_PAUSED_TO_READY:
       GST_OBJECT_LOCK (gtk_sink);
       if (gtk_sink->widget)
@@ -366,9 +445,10 @@ gst_gtk_base_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     return FALSE;
   }
 
-  if (!gtk_gst_base_widget_set_format (gtk_sink->widget, &gtk_sink->v_info))
+  if (!gtk_gst_base_widget_set_format (gtk_sink->widget, &gtk_sink->v_info)) {
+    GST_OBJECT_UNLOCK (gtk_sink);
     return FALSE;
-
+  }
   GST_OBJECT_UNLOCK (gtk_sink);
 
   return TRUE;
