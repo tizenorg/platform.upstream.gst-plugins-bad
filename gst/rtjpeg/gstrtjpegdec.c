@@ -32,8 +32,7 @@ enum
 
 enum
 {
-  ARG_0,
-  ARG_QUALITY
+  PROP_0,
 };
 
 

@@ -27,8 +27,6 @@
 #include "gl.h"
 #include "gstglupload.h"
 
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_PLATFORM_EGL
 #include "egl/gsteglimagememory.h"
 #endif

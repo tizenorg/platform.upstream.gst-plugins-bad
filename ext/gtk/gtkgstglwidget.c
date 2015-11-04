@@ -25,15 +25,16 @@
 #include <stdio.h>
 
 #include "gtkgstglwidget.h"
+#include "gstgtkutils.h"
 #include <gst/video/video.h>
 
-#if GST_GL_HAVE_WINDOW_X11 && defined (GDK_WINDOWING_X11)
+#if GST_GL_HAVE_WINDOW_X11 && GST_GL_HAVE_PLATFORM_GLX && defined (GDK_WINDOWING_X11)
 #include <gdk/gdkx.h>
 #include <gst/gl/x11/gstgldisplay_x11.h>
 #include <gst/gl/x11/gstglcontext_glx.h>
 #endif
 
-#if GST_GL_HAVE_WINDOW_WAYLAND && defined (GDK_WINDOWING_WAYLAND)
+#if GST_GL_HAVE_WINDOW_WAYLAND && GST_GL_HAVE_PLATFORM_EGL && defined (GDK_WINDOWING_WAYLAND)
 #include <gdk/gdkwayland.h>
 #include <gst/gl/wayland/gstgldisplay_wayland.h>
 #endif
@@ -202,10 +203,12 @@ _redraw_texture (GtkGstGLWidget * gst_widget, guint tex)
 }
 
 static inline void
-_draw_black (void)
+_draw_black (GstGLContext * context)
 {
-  glClearColor (0.0, 0.0, 0.0, 0.0);
-  glClear (GL_COLOR_BUFFER_BIT);
+  const GstGLFuncs *gl = context->gl_vtable;
+
+  gl->ClearColor (0.0, 0.0, 0.0, 0.0);
+  gl->Clear (GL_COLOR_BUFFER_BIT);
 }
 
 static gboolean
@@ -225,7 +228,7 @@ gtk_gst_gl_widget_render (GtkGLArea * widget, GdkGLContext * context)
     gtk_gst_gl_widget_init_redisplay (GTK_GST_GL_WIDGET (widget));
 
   if (!priv->initted || !base_widget->negotiated) {
-    _draw_black ();
+    _draw_black (priv->other_context);
     goto done;
   }
 
@@ -237,7 +240,7 @@ gtk_gst_gl_widget_render (GtkGLArea * widget, GdkGLContext * context)
 
     if (!gst_video_frame_map (&gl_frame, &base_widget->v_info, buffer,
             GST_MAP_READ | GST_MAP_GL)) {
-      _draw_black ();
+      _draw_black (priv->other_context);
       goto done;
     }
 
@@ -274,52 +277,6 @@ done:
 
   GTK_GST_BASE_WIDGET_UNLOCK (widget);
   return FALSE;
-}
-
-typedef void (*ThreadFunc) (gpointer data);
-
-struct invoke_context
-{
-  ThreadFunc func;
-  gpointer data;
-  GMutex lock;
-  GCond cond;
-  gboolean fired;
-};
-
-static gboolean
-_invoke_func (struct invoke_context *info)
-{
-  g_mutex_lock (&info->lock);
-  info->func (info->data);
-  info->fired = TRUE;
-  g_cond_signal (&info->cond);
-  g_mutex_unlock (&info->lock);
-
-  return G_SOURCE_REMOVE;
-}
-
-static void
-_invoke_on_main (ThreadFunc func, gpointer data)
-{
-  GMainContext *main_context = g_main_context_default ();
-  struct invoke_context info;
-
-  g_mutex_init (&info.lock);
-  g_cond_init (&info.cond);
-  info.fired = FALSE;
-  info.func = func;
-  info.data = data;
-
-  g_main_context_invoke (main_context, (GSourceFunc) _invoke_func, &info);
-
-  g_mutex_lock (&info.lock);
-  while (!info.fired)
-    g_cond_wait (&info.cond, &info.lock);
-  g_mutex_unlock (&info.lock);
-
-  g_mutex_clear (&info.lock);
-  g_cond_clear (&info.cond);
 }
 
 static void
@@ -378,7 +335,7 @@ gtk_gst_gl_widget_finalize (GObject * object)
   GtkGstBaseWidget *base_widget = GTK_GST_BASE_WIDGET (object);
 
   if (priv->other_context)
-    _invoke_on_main ((ThreadFunc) _reset_gl, base_widget);
+    gst_gtk_invoke_on_main ((GThreadFunc) _reset_gl, base_widget);
 
   if (priv->context)
     gst_object_unref (priv->context);
@@ -416,13 +373,13 @@ gtk_gst_gl_widget_init (GtkGstGLWidget * gst_widget)
 
   display = gdk_display_get_default ();
 
-#if GST_GL_HAVE_WINDOW_X11 && defined (GDK_WINDOWING_X11)
+#if GST_GL_HAVE_WINDOW_X11 && GST_GL_HAVE_PLATFORM_GLX && defined (GDK_WINDOWING_X11)
   if (GDK_IS_X11_DISPLAY (display))
     priv->display = (GstGLDisplay *)
         gst_gl_display_x11_new_with_display (gdk_x11_display_get_xdisplay
         (display));
 #endif
-#if GST_GL_HAVE_WINDOW_WAYLAND && defined (GDK_WINDOWING_WAYLAND)
+#if GST_GL_HAVE_WINDOW_WAYLAND && GST_GL_HAVE_PLATFORM_EGL && defined (GDK_WINDOWING_WAYLAND)
   if (GDK_IS_WAYLAND_DISPLAY (display)) {
     struct wl_display *wayland_display =
         gdk_wayland_display_get_wl_display (display);
@@ -458,6 +415,7 @@ _get_gl_context (GtkGstGLWidget * gst_widget)
 
     GST_ERROR_OBJECT (gst_widget, "Error creating GdkGLContext : %s",
         error ? error->message : "No error set by Gdk");
+    g_clear_error (&error);
     g_assert_not_reached ();
     return;
   }
@@ -466,7 +424,7 @@ _get_gl_context (GtkGstGLWidget * gst_widget)
 
   gdk_gl_context_make_current (priv->gdk_context);
 
-#if GST_GL_HAVE_WINDOW_X11 && defined (GDK_WINDOWING_X11)
+#if GST_GL_HAVE_WINDOW_X11 && GST_GL_HAVE_PLATFORM_GLX && defined (GDK_WINDOWING_X11)
   if (GST_IS_GL_DISPLAY_X11 (priv->display)) {
     platform = GST_GL_PLATFORM_GLX;
     gl_api = gst_gl_context_get_current_gl_api (platform, NULL, NULL);
@@ -477,7 +435,7 @@ _get_gl_context (GtkGstGLWidget * gst_widget)
           platform, gl_api);
   }
 #endif
-#if GST_GL_HAVE_WINDOW_WAYLAND && defined (GDK_WINDOWING_WAYLAND)
+#if GST_GL_HAVE_WINDOW_WAYLAND && GST_GL_HAVE_PLATFORM_EGL && defined (GDK_WINDOWING_WAYLAND)
   if (GST_IS_GL_DISPLAY_WAYLAND (priv->display)) {
     platform = GST_GL_PLATFORM_EGL;
     gl_api = gst_gl_context_get_current_gl_api (platform, NULL, NULL);
@@ -498,7 +456,8 @@ _get_gl_context (GtkGstGLWidget * gst_widget)
 
     gst_gl_context_activate (priv->other_context, TRUE);
     if (!gst_gl_context_fill_info (priv->other_context, &error)) {
-      GST_ERROR ("failed to retreive gdk context info: %s", error->message);
+      GST_ERROR ("failed to retrieve gdk context info: %s", error->message);
+      g_clear_error (&error);
       g_object_unref (priv->other_context);
       priv->other_context = NULL;
     } else {
@@ -530,7 +489,7 @@ gtk_gst_gl_widget_init_winsys (GtkGstGLWidget * gst_widget)
 
   if (!priv->other_context) {
     GTK_GST_BASE_WIDGET_UNLOCK (gst_widget);
-    _invoke_on_main ((ThreadFunc) _get_gl_context, gst_widget);
+    gst_gtk_invoke_on_main ((GThreadFunc) _get_gl_context, gst_widget);
     GTK_GST_BASE_WIDGET_LOCK (gst_widget);
   }
 

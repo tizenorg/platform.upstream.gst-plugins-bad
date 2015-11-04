@@ -49,8 +49,6 @@
 #define GL_NUM_EXTENSIONS 0x0000821d
 #endif
 
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_PLATFORM_GLX
 #include "x11/gstglcontext_glx.h"
 #endif
@@ -509,7 +507,7 @@ gst_gl_context_get_proc_address_with_platform (GstGLPlatform context_type,
 
 /**
  * gst_gl_context_get_current_gl_api:
- * @platform: the #GstGLPlatform to retreive the API for
+ * @platform: the #GstGLPlatform to retrieve the API for
  * @major: (out): (allow-none): the major version
  * @minor: (out): (allow-none): the minor version
  *
@@ -1120,10 +1118,15 @@ _create_context_info (GstGLContext * context, GstGLAPI gl_api, gint * gl_major,
 
   gl = context->gl_vtable;
 
-  if (!gl->GetString || !gl->GetString (GL_VERSION)
-      || !gl->GetString (GL_SHADING_LANGUAGE_VERSION)) {
+  if (!gl->GetString || !gl->GetString (GL_VERSION)) {
     g_set_error (error, GST_GL_CONTEXT_ERROR, GST_GL_CONTEXT_ERROR_FAILED,
         "glGetString not defined or returned invalid value");
+    return FALSE;
+  }
+
+  if (!gl->GetString (GL_SHADING_LANGUAGE_VERSION)) {
+    g_set_error (error, GST_GL_CONTEXT_ERROR, GST_GL_CONTEXT_ERROR_FAILED,
+        "No GL shader support available");
     return FALSE;
   }
 

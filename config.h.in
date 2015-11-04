@@ -498,6 +498,9 @@
 /* Define to enable Qt elements (used by qt). */
 #undef HAVE_QT
 
+/* Define if Qt Wayland integration is installed */
+#undef HAVE_QT_WAYLAND
+
 /* Define if Qt X11 integration is installed */
 #undef HAVE_QT_X11
 

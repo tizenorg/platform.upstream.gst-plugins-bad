@@ -28,6 +28,7 @@
 #define __GST_MPDPARSER_H__
 
 #include <gst/gst.h>
+#include <gst/uridownloader/gsturidownloader.h>
 
 G_BEGIN_DECLS
 
@@ -93,6 +94,12 @@ typedef enum
 
 typedef enum
 {
+  GST_XLINK_ACTUATE_ON_REQUEST,
+  GST_XLINK_ACTUATE_ON_LOAD
+} GstXLinkActuate;
+
+typedef enum
+{
   GST_MPD_UTCTIMING_TYPE_UNKNOWN     = 0x00,
   GST_MPD_UTCTIMING_TYPE_NTP         = 0x01,
   GST_MPD_UTCTIMING_TYPE_SNTP        = 0x02,
@@ -138,7 +145,7 @@ struct _GstSNode
 {
   guint64 t;
   guint64 d;
-  guint r;
+  gint r;
 };
 
 struct _GstSegmentTimelineNode
@@ -183,6 +190,9 @@ struct _GstSegmentListNode
   GstMultSegmentBaseType *MultSegBaseType;
   /* list of SegmentURL nodes */
   GList *SegmentURL;
+
+  gchar *xlink_href;
+  GstXLinkActuate actuate;
 };
 
 struct _GstSegmentTemplateNode
@@ -322,6 +332,9 @@ struct _GstAdaptationSetNode
   GList *Representations;
   /* list of ContentComponent nodes */
   GList *ContentComponents;
+
+  gchar *xlink_href;
+  GstXLinkActuate actuate;
 };
 
 struct _GstSubsetNode
@@ -348,6 +361,9 @@ struct _GstPeriodNode
   GList *Subsets;
   /* list of BaseURL nodes */
   GList *BaseURLs;
+
+  gchar *xlink_href;
+  GstXLinkActuate actuate;
 };
 
 struct _GstProgramInformationNode
@@ -499,6 +515,8 @@ struct _GstMpdClient
 
   /* profiles */
   gboolean profile_isoff_ondemand;
+
+  GstUriDownloader * downloader;
 };
 
 /* Basic initialization/deinitialization functions */
@@ -507,11 +525,13 @@ void gst_active_streams_free (GstMpdClient * client);
 void gst_mpd_client_free (GstMpdClient * client);
 void gst_media_fragment_info_clear (GstMediaFragmentInfo * fragment);
 
+void gst_mpd_client_set_uri_downloader (GstMpdClient * client, GstUriDownloader * download);
+
 /* MPD file parsing */
 gboolean gst_mpd_parse (GstMpdClient *client, const gchar *data, gint size);
 
 /* Streaming management */
-gboolean gst_mpd_client_setup_media_presentation (GstMpdClient *client);
+gboolean gst_mpd_client_setup_media_presentation (GstMpdClient *client, GstClockTime time, gint period_index, const gchar *period_id);
 gboolean gst_mpd_client_setup_streaming (GstMpdClient * client, GstAdaptationSetNode * adapt_set);
 gboolean gst_mpd_client_setup_representation (GstMpdClient *client, GstActiveStream *stream, GstRepresentationNode *representation);
 GstClockTime gst_mpd_client_get_next_fragment_duration (GstMpdClient * client, GstActiveStream * stream);
@@ -527,6 +547,7 @@ gboolean gst_mpd_client_seek_to_time (GstMpdClient * client, GDateTime * time);
 gint gst_mpd_client_check_time_position (GstMpdClient * client, GstActiveStream * stream, GstClockTime ts, gint64 * diff);
 GstClockTime gst_mpd_parser_get_stream_presentation_offset (GstMpdClient *client, guint stream_idx);
 gchar** gst_mpd_client_get_utc_timing_sources (GstMpdClient *client, guint methods, GstMPDUTCTimingType *selected_method);
+GstClockTime gst_mpd_parser_get_period_start_time (GstMpdClient *client);
 
 /* Period selection */
 guint gst_mpd_client_get_period_index_at_time (GstMpdClient * client, GstDateTime * time);

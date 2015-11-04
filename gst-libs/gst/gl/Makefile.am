@@ -64,9 +64,7 @@ libgstgl_@GST_API_VERSION@_la_LIBADD = \
 	-lgstvideo-$(GST_API_VERSION) \
 	$(GST_BASE_LIBS) \
 	$(GST_LIBS) \
-	$(GL_LIBS) \
-        $(EGL_LIBS) \
-        $(WAYLAND_EGL_LIBS)
+	$(GL_LIBS)
 
 if HAVE_WINDOW_WIN32
 SUBDIRS += win32
@@ -83,10 +81,10 @@ SUBDIRS += x11
 libgstgl_@GST_API_VERSION@_la_LIBADD += x11/libgstgl-x11.la
 endif
 
-# if HAVE_WINDOW_WAYLAND
+if HAVE_WINDOW_WAYLAND
 SUBDIRS += wayland
 libgstgl_@GST_API_VERSION@_la_LIBADD += wayland/libgstgl-wayland.la
-# endif
+endif
 
 if HAVE_WINDOW_DISPMANX
 SUBDIRS += dispmanx
@@ -103,10 +101,10 @@ SUBDIRS += eagl
 libgstgl_@GST_API_VERSION@_la_LIBADD += eagl/libgstgl-eagl.la
 endif
 
-# if USE_EGL
+if USE_EGL
 SUBDIRS += egl
 libgstgl_@GST_API_VERSION@_la_LIBADD += egl/libgstgl-egl.la
-# endif
+endif
 
 configexecincludedir = $(libdir)/gstreamer-@GST_API_VERSION@/include/gst/gl
 nodist_configexecinclude_HEADERS = $(built_sys_header_configure)
@@ -145,6 +143,7 @@ GstGL-@GST_API_VERSION@.gir: $(INTROSPECTION_SCANNER) libgstgl-@GST_API_VERSION@
 		-I$(top_srcdir)/gst-libs \
 		-I$(top_builddir)/gst-libs \
 		$(GST_PLUGINS_BASE_CFLAGS) \
+		$(GL_CFLAGS) \
 		--add-include-path=`PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)" $(PKG_CONFIG) --variable=girdir gstreamer-@GST_API_VERSION@` \
 		--add-include-path=`PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)" $(PKG_CONFIG) --variable=girdir gstreamer-base-@GST_API_VERSION@` \
 		--library=libgstgl-@GST_API_VERSION@.la \
