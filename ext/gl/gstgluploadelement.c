@@ -34,17 +34,16 @@ GST_DEBUG_CATEGORY_STATIC (gst_gl_upload_element_debug);
 G_DEFINE_TYPE_WITH_CODE (GstGLUploadElement, gst_gl_upload_element,
     GST_TYPE_GL_BASE_FILTER,
     GST_DEBUG_CATEGORY_INIT (gst_gl_upload_element_debug, "gluploadelement", 0,
-        "glupload Element");
-    );
+        "glupload Element"););
 
 static gboolean gst_gl_upload_element_get_unit_size (GstBaseTransform * trans,
     GstCaps * caps, gsize * size);
-static gboolean gst_gl_upload_element_query (GstBaseTransform * bt,
-    GstPadDirection direction, GstQuery * query);
 static GstCaps *_gst_gl_upload_element_transform_caps (GstBaseTransform * bt,
     GstPadDirection direction, GstCaps * caps, GstCaps * filter);
 static gboolean _gst_gl_upload_element_set_caps (GstBaseTransform * bt,
     GstCaps * in_caps, GstCaps * out_caps);
+static gboolean gst_gl_upload_element_filter_meta (GstBaseTransform * trans,
+    GstQuery * query, GType api, const GstStructure * params);
 static gboolean _gst_gl_upload_element_propose_allocation (GstBaseTransform *
     bt, GstQuery * decide_query, GstQuery * query);
 static gboolean _gst_gl_upload_element_decide_allocation (GstBaseTransform *
@@ -69,9 +68,9 @@ gst_gl_upload_element_class_init (GstGLUploadElementClass * klass)
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstCaps *upload_caps;
 
-  bt_class->query = gst_gl_upload_element_query;
   bt_class->transform_caps = _gst_gl_upload_element_transform_caps;
   bt_class->set_caps = _gst_gl_upload_element_set_caps;
+  bt_class->filter_meta = gst_gl_upload_element_filter_meta;
   bt_class->propose_allocation = _gst_gl_upload_element_propose_allocation;
   bt_class->decide_allocation = _gst_gl_upload_element_decide_allocation;
   bt_class->get_unit_size = gst_gl_upload_element_get_unit_size;
@@ -140,36 +139,28 @@ _gst_gl_upload_element_transform_caps (GstBaseTransform * bt,
 }
 
 static gboolean
+gst_gl_upload_element_filter_meta (GstBaseTransform * trans, GstQuery * query,
+    GType api, const GstStructure * params)
+{
+  /* propose all metadata upstream */
+  return TRUE;
+}
+
+static gboolean
 _gst_gl_upload_element_propose_allocation (GstBaseTransform * bt,
     GstQuery * decide_query, GstQuery * query)
 {
-  guint alloc_index;
-  gboolean alloc_has_overlay_meta;
   GstGLUploadElement *upload = GST_GL_UPLOAD_ELEMENT (bt);
+  gboolean ret;
 
   if (!upload->upload)
     return FALSE;
 
-  alloc_has_overlay_meta =
-      gst_query_find_allocation_meta (decide_query,
-      GST_VIDEO_OVERLAY_COMPOSITION_META_API_TYPE, &alloc_index);
-
-  if (alloc_has_overlay_meta) {
-    const GstStructure *params;
-    GST_DEBUG ("adding allocation meta in upload for textoverlay");
-
-    /* read window size from decide_query */
-    gst_query_parse_nth_allocation_meta (decide_query, alloc_index, &params);
-
-    /* it does not matter if params are NULL (no known window size), forward
-     * the meta in any case */
-    gst_query_add_allocation_meta (query,
-        GST_VIDEO_OVERLAY_COMPOSITION_META_API_TYPE, params);
-  }
-
+  ret = GST_BASE_TRANSFORM_CLASS (parent_class)->propose_allocation (bt,
+      decide_query, query);
   gst_gl_upload_propose_allocation (upload->upload, decide_query, query);
 
-  return TRUE;
+  return ret;
 }
 
 static gboolean
@@ -204,30 +195,10 @@ _gst_gl_upload_element_set_caps (GstBaseTransform * bt, GstCaps * in_caps,
   gst_caps_replace (&upload->in_caps, in_caps);
   gst_caps_replace (&upload->out_caps, out_caps);
 
-  if (upload->upload) {
-    gst_gl_upload_release_buffer (upload->upload);
+  if (upload->upload)
     return gst_gl_upload_set_caps (upload->upload, in_caps, out_caps);
-  }
 
   return TRUE;
-}
-
-static gboolean
-gst_gl_upload_element_query (GstBaseTransform * bt, GstPadDirection direction,
-    GstQuery * query)
-{
-  GstGLUploadElement *upload = GST_GL_UPLOAD_ELEMENT (bt);
-
-  switch (GST_QUERY_TYPE (query)) {
-    case GST_QUERY_DRAIN:
-      if (upload->upload)
-        gst_gl_upload_release_buffer (upload->upload);
-      break;
-    default:
-      break;
-  }
-
-  return GST_BASE_TRANSFORM_CLASS (parent_class)->query (bt, direction, query);
 }
 
 GstFlowReturn
@@ -236,6 +207,9 @@ gst_gl_upload_element_prepare_output_buffer (GstBaseTransform * bt,
 {
   GstGLUploadElement *upload = GST_GL_UPLOAD_ELEMENT (bt);
   GstGLUploadReturn ret;
+  GstBaseTransformClass *bclass;
+
+  bclass = GST_BASE_TRANSFORM_GET_CLASS (bt);
 
   if (gst_base_transform_is_passthrough (bt)) {
     *outbuf = buffer;
@@ -246,12 +220,24 @@ gst_gl_upload_element_prepare_output_buffer (GstBaseTransform * bt,
     return GST_FLOW_NOT_NEGOTIATED;
 
   ret = gst_gl_upload_perform_with_buffer (upload->upload, buffer, outbuf);
+  /* FIXME Having to release after perform is an aberation */
+  gst_gl_upload_release_buffer (upload->upload);
+
+  if (ret != GST_GL_UPLOAD_DONE || *outbuf == NULL) {
+    GST_ELEMENT_ERROR (bt, RESOURCE, NOT_FOUND, ("%s",
+            "Failed to upload buffer"), (NULL));
+    if (*outbuf)
+      gst_buffer_unref (*outbuf);
+    return GST_FLOW_ERROR;
+  }
 
   /* basetransform doesn't unref if they're the same */
   if (buffer == *outbuf)
     gst_buffer_unref (*outbuf);
+  else
+    bclass->copy_metadata (bt, buffer, *outbuf);
 
-  return ret == GST_GL_UPLOAD_DONE ? GST_FLOW_OK : GST_FLOW_ERROR;
+  return GST_FLOW_OK;
 }
 
 static GstFlowReturn

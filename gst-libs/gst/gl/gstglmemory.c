@@ -592,7 +592,7 @@ _gl_mem_create (GstGLMemory * gl_mem, GError ** error)
       gst_gl_sized_gl_format_from_gl_format_type (context, tex_format,
       tex_type);
 
-  if (!gl_mem->tex_id) {
+  if (!gl_mem->texture_wrapped) {
     gl_mem->tex_id =
         _new_texture (context, gl_mem->tex_target, internal_format, tex_format,
         tex_type, gl_mem->tex_width, GL_MEM_HEIGHT (gl_mem));
@@ -630,6 +630,21 @@ _gl_mem_init (GstGLMemory * mem, GstAllocator * allocator, GstMemory * parent,
     mem->valign = *valign;
   else
     gst_video_alignment_reset (&mem->valign);
+
+  /* double-check alignment requirements (caller should've taken care of this) */
+  if (params) {
+    guint max_align, n;
+
+    max_align = gst_memory_alignment;
+    max_align |= params->align;
+    for (n = 0; n < GST_VIDEO_MAX_PLANES; ++n)
+      max_align |= mem->valign.stride_align[n];
+
+    if (params->align < max_align && max_align > gst_memory_alignment) {
+      GST_WARNING ("allocation params alignment %" G_GSIZE_FORMAT " is smaller "
+          "than the max required video alignment %u", params->align, max_align);
+    }
+  }
 
   size = gst_gl_get_plane_data_size (info, valign, plane);
 
@@ -1272,12 +1287,12 @@ gst_gl_memory_wrapped_texture (GstGLContext * context,
   mem = g_slice_new0 (GstGLMemory);
 
   mem->tex_id = texture_id;
+  mem->texture_wrapped = TRUE;
 
   _gl_mem_init (mem, _gl_allocator, NULL, context, NULL, info, valign, plane,
       user_data, notify);
 
   mem->tex_target = texture_target;
-  mem->texture_wrapped = TRUE;
 
   mem = (GstGLMemory *) gst_gl_base_buffer_alloc_data ((GstGLBaseBuffer *) mem);
   GST_MINI_OBJECT_FLAG_SET (mem, GST_GL_BASE_BUFFER_FLAG_NEED_DOWNLOAD);

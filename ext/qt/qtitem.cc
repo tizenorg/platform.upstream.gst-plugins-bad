@@ -31,13 +31,13 @@
 #include "qtitem.h"
 #include "gstqsgtexture.h"
 
-#if GST_GL_HAVE_WINDOW_X11 && defined (HAVE_QT_X11)
+#if GST_GL_HAVE_WINDOW_X11 && GST_GL_HAVE_PLATFORM_GLX && defined (HAVE_QT_X11)
 #include <QX11Info>
 #include <gst/gl/x11/gstgldisplay_x11.h>
 #include <gst/gl/x11/gstglcontext_glx.h>
 #endif
 
-#if GST_GL_HAVE_WINDOW_WAYLAND
+#if GST_GL_HAVE_WINDOW_WAYLAND && GST_GL_HAVE_PLATFORM_EGL && defined (HAVE_QT_WAYLAND)
 #include <gst/gl/wayland/gstgldisplay_wayland.h>
 #endif
 
@@ -273,7 +273,7 @@ QtGLVideoItem::onSceneGraphInitialized ()
           platform, gl_api);
   }
 #endif
-#if GST_GL_HAVE_WINDOW_WAYLAND
+#if GST_GL_HAVE_WINDOW_WAYLAND && defined (HAVE_QT_WAYLAND)
   if (GST_IS_GL_DISPLAY_WAYLAND (this->priv->display)) {
     platform = GST_GL_PLATFORM_EGL;
     gl_api = gst_gl_context_get_current_gl_api (platform, NULL, NULL);
@@ -294,7 +294,7 @@ QtGLVideoItem::onSceneGraphInitialized ()
 
     gst_gl_context_activate (this->priv->other_context, TRUE);
     if (!gst_gl_context_fill_info (this->priv->other_context, &error)) {
-      GST_ERROR ("%p failed to retreive qt context info: %s", this, error->message);
+      GST_ERROR ("%p failed to retrieve qt context info: %s", this, error->message);
       g_object_unref (this->priv->other_context);
       this->priv->other_context = NULL;
     } else {
@@ -328,14 +328,14 @@ qt_item_init_winsys (QtGLVideoItem * widget)
   }
 
   if (!GST_IS_GL_DISPLAY (widget->priv->display)) {
-    GST_ERROR ("%p failed to retreive display connection %" GST_PTR_FORMAT,
+    GST_ERROR ("%p failed to retrieve display connection %" GST_PTR_FORMAT,
         widget, widget->priv->display);
     g_mutex_unlock (&widget->priv->lock);
     return FALSE;
   }
 
   if (!GST_GL_IS_CONTEXT (widget->priv->other_context)) {
-    GST_ERROR ("%p failed to retreive wrapped context %" GST_PTR_FORMAT, widget,
+    GST_ERROR ("%p failed to retrieve wrapped context %" GST_PTR_FORMAT, widget,
         widget->priv->other_context);
     g_mutex_unlock (&widget->priv->lock);
     return FALSE;

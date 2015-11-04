@@ -90,6 +90,8 @@ struct _GstGLWindow {
   gpointer              resize_data;
   GDestroyNotify        resize_notify;
 
+  gboolean              queue_resize;
+
   /*< private >*/
   GMainContext *navigation_context;
   GMainLoop *navigation_loop;
@@ -138,11 +140,11 @@ struct _GstGLWindowClass {
 
   gboolean (*open)               (GstGLWindow *window, GError **error);
   void     (*close)              (GstGLWindow *window);
-  void     (*get_surface_dimensions)  (GstGLWindow *window, guint *width, guint *height);
   void     (*handle_events)      (GstGLWindow *window, gboolean handle_events);
   void     (*set_preferred_size) (GstGLWindow *window, gint width, gint height);
   void     (*show)               (GstGLWindow *window);
   gboolean (*set_render_rectangle)(GstGLWindow *window, gint x, gint y, gint width, gint height);
+  void     (*queue_resize)       (GstGLWindow *window);
 
   /*< private >*/
   gpointer _reserved[GST_PADDING];
@@ -213,6 +215,7 @@ void     gst_gl_window_send_mouse_event     (GstGLWindow * window,
                                              double posy);
 
 /* surfaces/rendering */
+void     gst_gl_window_queue_resize         (GstGLWindow *window);
 void     gst_gl_window_draw_unlocked        (GstGLWindow *window);
 void     gst_gl_window_draw                 (GstGLWindow *window);
 void     gst_gl_window_show                 (GstGLWindow *window);
@@ -228,6 +231,9 @@ gboolean gst_gl_window_set_render_rectangle   (GstGLWindow * window,
                                                gint width,
                                                gint height);
 
+/* subclass usage only */
+void     gst_gl_window_resize               (GstGLWindow *window, guint width, guint height);
+
 GstGLContext * gst_gl_window_get_context    (GstGLWindow *window);
 guintptr       gst_gl_window_get_display    (GstGLWindow *window);
 
@@ -235,8 +241,4 @@ GST_DEBUG_CATEGORY_EXTERN (gst_gl_window_debug);
 
 G_END_DECLS
 
-#ifdef GST_GL_HAVE_WINDOW_WAYLAND
-#undef GST_GL_HAVE_WINDOW_WAYLAND
-#define GST_GL_HAVE_WINDOW_WAYLAND 1
-#endif
 #endif /* __GST_GL_WINDOW_H__ */

@@ -37,7 +37,7 @@ public:
     void stop();
     void unconfigure() const;
     void show();
-    GstElement* getVideoSink() { return m_glupload; } ;
+    GstElement* getVideoSink() { return m_glimagesink; } ;
 
 signals:
     void showRequested();
@@ -49,7 +49,6 @@ private:
     GMainLoop* m_loop;
     GstBus* m_bus;
     GstElement* m_pipeline;
-    GstElement* m_glupload;
     GstElement* m_glimagesink;
     static float m_xrot;
     static float m_yrot;
@@ -59,10 +58,10 @@ private:
     WId winId() const { return m_winId; }
     void doExpose() const;
 
-    static gboolean reshapeCallback (void *sink, guint width, guint height, gpointer data);
-    static gboolean drawCallback (void *sink, guint texture, guint width, guint height, gpointer data);
+    static gboolean reshapeCallback (GstElement *sink, void *context, guint width, guint height, gpointer data);
+    static gboolean drawCallback (GstElement *sink, void *context, GstSample * sample, gpointer data);
     static gboolean bus_call (GstBus *bus, GstMessage *msg, Pipeline* p);
-    static void cb_new_pad (GstElement* decodebin, GstPad* pad, gboolean last, Pipeline* p);
+    static void cb_new_pad (GstElement* decodebin, GstPad* pad, Pipeline* p);
     static gboolean cb_expose (gpointer data);
     static GstBusSyncReply create_window (GstBus* bus, GstMessage* message, const Pipeline* pipeline);
 };

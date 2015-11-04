@@ -3,7 +3,7 @@ AC_PREREQ([2.69])
 dnl initialize autoconf
 dnl when going to/from release please set the nano (fourth number) right !
 dnl releases only do Wall, git and prerelease does Werror too
-AC_INIT([GStreamer Bad Plug-ins],[1.5.90],[http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer],[gst-plugins-bad])
+AC_INIT([GStreamer Bad Plug-ins],[1.6.1],[http://bugzilla.gnome.org/enter_bug.cgi?product=GStreamer],[gst-plugins-bad])
 
 AG_GST_INIT
 
@@ -33,6 +33,9 @@ m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],
   [AM_DEFAULT_VERBOSITY=1
    AC_SUBST(AM_DEFAULT_VERBOSITY)])
 
+dnl PKG_CONFIG_SYSROOT_DIR is a valid environment variable
+m4_pattern_allow(PKG_CONFIG_SYSROOT_DIR)
+
 dnl our libraries and install dirs use GST_API_VERSION in the filename
 dnl to allow side-by-side installation of different API versions
 GST_API_VERSION=1.0
@@ -48,11 +51,11 @@ dnl - interfaces added/removed/changed -> increment CURRENT, REVISION = 0
 dnl - interfaces added -> increment AGE
 dnl - interfaces removed -> AGE = 0
 dnl sets GST_LT_LDFLAGS
-AS_LIBTOOL(GST, 590, 0, 590)
+AS_LIBTOOL(GST, 601, 0, 601)
 
 dnl *** required versions of GStreamer stuff ***
-GST_REQ=1.5.90
-GSTPB_REQ=1.5.90
+GST_REQ=1.6.1
+GSTPB_REQ=1.6.1
 
 dnl *** autotools stuff ****
 
@@ -196,6 +199,7 @@ AG_GST_CHECK_GST($GST_API_VERSION, [$GST_REQ], yes)
 AG_GST_CHECK_GST_BASE($GST_API_VERSION, [$GST_REQ], yes)
 AG_GST_CHECK_GST_CHECK($GST_API_VERSION, [$GST_REQ], no)
 AG_GST_CHECK_GST_CONTROLLER($GST_API_VERSION, [$GST_REQ], yes)
+AG_GST_CHECK_GST_NET($GST_API_VERSION, [$GST_REQ], yes)
 AM_CONDITIONAL(HAVE_GST_CHECK, test "x$HAVE_GST_CHECK" = "xyes")
 
 AG_GST_CHECK_GST_PLUGINS_BASE($GST_API_VERSION, [$GSTPB_REQ], yes)
@@ -651,7 +655,7 @@ save_LIBS="$LIBS"
 HAVE_GL=no
 HAVE_GLES2=no
 HAVE_WAYLAND_EGL=no
-HAVE_EGL=no
+
 HAVE_EGL_RPI=no
 
 case $host in
@@ -664,40 +668,7 @@ case $host in
       HAVE_GL=yes
     fi
   ;;
-  *-tizen* )
-    AC_MSG_WARN([SRID: Compiling for Tizen])
-    LIBS="$LIBS -lGLESv2"
-    AC_CHECK_LIB([EGL], [eglGetProcAddress],
-    [
-       LIBS="$LIBS -lEGL"
-       AC_CHECK_HEADER([EGL/egl.h],
-       [
-          AC_CHECK_LIB([GLESv2], [glEnable],
-          [
-             AC_CHECK_HEADER([GLES2/gl2.h],
-             [
-                HAVE_EGL=yes
-                HAVE_GLES2=yes
-                EGL_LIBS="-lEGL"
-                EGL_CFLAGS=""
-                AC_DEFINE(USE_EGL, [1], [SRID: Use Egl platform])
-             ])
-          ])
-       ])
-     ])
-    PKG_CHECK_MODULES(WAYLAND_EGL, wayland-client >= 1.0 wayland-cursor >= 1.0 wayland-egl >= 9.0, HAVE_WAYLAND_EGL=yes, HAVE_WAYLAND_EGL=no)
-    if test "x$HAVE_WAYLAND_EGL" = "xyes"; then
-        WAYLAND_EGL_LIBS="-lEGL -lwayland-egl -lwayland-client -lwayland-cursor"
-        WAYLAND_EGL_CFLAGS=""
-        AC_DEFINE(HAVE_WAYLAND_EGL, [1] , [SRID: Use Wayland EGL])
-    fi
-    AC_SUBST(HAVE_WAYLAND_EGL)
-    AC_SUBST(WAYLAND_EGL_LIBS)
-    AC_SUBST(WAYLANG_EGL_CFLAGS)
-    AM_CONDITIONAL(HAVE_WAYLAND_EGL, test "x$HAVE_WAYLAND_EGL" = "xyes")
-    ;;
   *)
-    AC_MSG_WARN([SRID: Compiling for * host=$host])
     if test "x$NEED_GL" != "xno"; then
       AG_GST_CHECK_LIBHEADER(GL, GL, glTexImage2D,, GL/gl.h)
     fi
@@ -771,6 +742,7 @@ case $host in
 
     LIBS=$old_LIBS
     CFLAGS=$old_CFLAGS
+
     PKG_CHECK_MODULES(WAYLAND_EGL, wayland-client >= 1.0 wayland-cursor >= 1.0 wayland-egl >= 9.0, HAVE_WAYLAND_EGL=yes, HAVE_WAYLAND_EGL=no)
   ;;
 esac
@@ -792,7 +764,7 @@ GL_OBJCFLAGS=
 dnl Check for what the user asked for and what we could find
 if test "x$HAVE_EGL" = "xno"; then
   if test "x$NEED_EGL" = "xyes"; then
-    AC_MSG_ERROR([Could not find the required EGL libraries. Have_EGL:$HAVE_EGL, Need_EGL:$NEED_EGL])
+    AC_MSG_ERROR([Could not find the required EGL libraries])
   fi
 fi
 
@@ -964,12 +936,11 @@ case $host in
 
     if test "x$HAVE_WAYLAND_EGL" = "xyes"; then
       if test "x$NEED_EGL" = "xno" -o "x$HAVE_EGL" = "xno"; then
-        AC_MSG_WARN([SRID:EGL is required by the Wayland backend for OpenGL support])
+        AC_MSG_WARN([EGL is required by the Wayland backend for OpenGL support])
       else
         if test "x$NEED_WAYLAND_EGL" != "xno"; then
-          AC_MSG_WARN([SRID: Using Wayland EGL for OpenGL support])
           HAVE_WINDOW_WAYLAND=yes
-          GL_LIBS="$GL_LIBS $EGL_LIBS $WAYLAND_EGL_LIBS"
+          GL_LIBS="$GL_LIBS $WAYLAND_EGL_LIBS"
           GL_CFLAGS="$GL_CFLAGS $WAYLAND_EGL_CFLAGS"
         fi
       fi
@@ -990,7 +961,7 @@ case $host in
     else
       if test "x$NEED_EGL" != "xno"; then
         if test "x$HAVE_WINDOW_WAYLAND" = "xyes" -o "x$HAVE_WINDOW_X11" = "xyes" -o "x$HAVE_WINDOW_DISPMANX" = "xyes"; then
-          GL_LIBS="$GL_LIBS $EGL_LIBS"
+          GL_LIBS="$GL_LIBS -lEGL $EGL_LIBS"
           GL_CFLAGS="$GL_CFLAGS $EGL_CFLAGS"
           USE_EGL=yes
         fi
@@ -1099,19 +1070,19 @@ case $host in
     fi
     ;;
   *)
-    AC_MSG_WARN([Dont know how to check for OpenGL on your platform.])
+    AC_MSG_WARN([Don't know how to check for OpenGL on your platform.])
     ;;
 esac
 
-GL_PLATFORMS=egl
-GL_WINDOWS=wayland
-GL_APIS=glesv2
+GL_PLATFORMS=
+GL_WINDOWS=
+GL_APIS=
 GL_CONFIG_DEFINES=
 
 dnl APIs
 
 GST_GL_HAVE_OPENGL=0
-GST_GL_HAVE_GLES2=1
+GST_GL_HAVE_GLES2=0
 GST_GL_HAVE_GLES3=0
 
 if test "x$USE_OPENGL" = "xyes"; then
@@ -1134,7 +1105,7 @@ dnl WINDOW's
 GST_GL_HAVE_WINDOW_X11=0
 GST_GL_HAVE_WINDOW_COCOA=0
 GST_GL_HAVE_WINDOW_WIN32=0
-GST_GL_HAVE_WINDOW_WAYLAND=1
+GST_GL_HAVE_WINDOW_WAYLAND=0
 GST_GL_HAVE_WINDOW_ANDROID=0
 GST_GL_HAVE_WINDOW_DISPMANX=0
 GST_GL_HAVE_WINDOW_EAGL=0
@@ -1180,14 +1151,12 @@ GL_CONFIG_DEFINES="$GL_CONFIG_DEFINES
 
 dnl PLATFORM's
 
-GST_GL_HAVE_PLATFORM_EGL=1
+GST_GL_HAVE_PLATFORM_EGL=0
 GST_GL_HAVE_PLATFORM_GLX=0
 GST_GL_HAVE_PLATFORM_WGL=0
 GST_GL_HAVE_PLATFORM_CGL=0
 GST_GL_HAVE_PLATFORM_EAGL=0
-dnl Baun added.
-USE_EGL=yes
-dnl Barun end addition...
+
 if test "x$USE_EGL" = "xyes"; then
   GL_PLATFORMS="egl $GL_PLATFORMS"
   GST_GL_HAVE_PLATFORM_EGL=1
@@ -1233,9 +1202,9 @@ if test "x$GL_APIS" = "x" -o "x$GL_PLATFORMS" = "x" -o "x$GL_WINDOWS" = "x"; the
   GL_CFLAGS=
   GL_OBJCFLAGS=
   USE_OPENGL=no
-  USE_GLES2=yes
+  USE_GLES2=no
   USE_GLX=no
-  USE_EGL=yes
+  USE_EGL=no
   USE_WGL=no
   USE_COCOA=no
   USE_EGL_MALI=no
@@ -1245,7 +1214,7 @@ if test "x$GL_APIS" = "x" -o "x$GL_PLATFORMS" = "x" -o "x$GL_WINDOWS" = "x"; the
   HAVE_WINDOW_X11=no
   HAVE_WINDOW_WIN32=no
   HAVE_WINDOW_DISPMANX=no
-  HAVE_WINDOW_WAYLAND=yes
+  HAVE_WINDOW_WAYLAND=no
   HAVE_WINDOW_ANDROID=no
   HAVE_WINDOW_COCOA=no
   HAVE_WINDOW_EAGL=no
@@ -1308,12 +1277,12 @@ if test "x$USE_OPENGL" = "xyes"; then
 "
 fi
 
-GST_GL_HAVE_GLEGLIMAGEOES=1
-GST_GL_HAVE_GLCHAR=1
-GST_GL_HAVE_GLSIZEIPTR=1
-GST_GL_HAVE_GLINTPTR=1
-GST_GL_HAVE_GLSYNC=1
-GST_GL_HAVE_GLUINT64=1
+GST_GL_HAVE_GLEGLIMAGEOES=0
+GST_GL_HAVE_GLCHAR=0
+GST_GL_HAVE_GLSIZEIPTR=0
+GST_GL_HAVE_GLINTPTR=0
+GST_GL_HAVE_GLSYNC=0
+GST_GL_HAVE_GLUINT64=0
 
 old_CFLAGS=$CFLAGS
 CFLAGS="$GL_CFLAGS $CFLAGS"
@@ -1328,10 +1297,10 @@ if test "x$ac_cv_type_GLchar" = "xyes"; then
   GST_GL_HAVE_GLCHAR=1
 fi
 
-dnl AC_CHECK_TYPES(GLsizeiptr, [], [], [[$GL_INCLUDES]])
-dnl if test "x$ac_cv_type_GLsizeiptr" = "xyes"; then
-dnl  GST_GL_HAVE_GLSIZEIPTR=1
-dnl fi
+AC_CHECK_TYPES(GLsizeiptr, [], [], [[$GL_INCLUDES]])
+if test "x$ac_cv_type_GLsizeiptr" = "xyes"; then
+  GST_GL_HAVE_GLSIZEIPTR=1
+fi
 
 AC_CHECK_TYPES(GLintptr, [], [], [[$GL_INCLUDES]])
 if test "x$ac_cv_type_GLintptr" = "xyes"; then
@@ -1364,7 +1333,7 @@ AC_CONFIG_COMMANDS([gst-libs/gst/gl/gstglconfig.h], [
 	cat > $outfile <<\_______EOF
 /* gstglconfig.h
  *
- * This is a generated file.  Please modify `configure.ac`
+ * This is a generated file.  Please modify `configure.ac'
  */
 
 #ifndef __GST_GL_CONFIG_H__
@@ -1409,7 +1378,7 @@ AC_SUBST(LIBPNG_CFLAGS)
 AM_CONDITIONAL(HAVE_PNG, test "x$HAVE_PNG" = "xyes")
 
 dnl libjpeg is optional
-AC_ARG_WITH(jpeg-mmx, [  --with-jpeg-mmx, path to MMXified JPEG library])
+AC_ARG_WITH(jpeg-mmx, [  --with-jpeg-mmx, path to MMX'ified JPEG library])
 OLD_LIBS="$LIBS"
 if test x$with_jpeg_mmx != x; then
   LIBS="$LIBS -L$with_jpeg_mmx"
@@ -1737,7 +1706,6 @@ dnl *** UVC H264 ***
 translit(dnm, m, l) AM_CONDITIONAL(USE_UVCH264, true)
 AG_GST_CHECK_FEATURE(UVCH264, [UVC H264], uvch264, [
   AC_CHECK_HEADER(linux/uvcvideo.h, HAVE_UVCVIDEO_H=yes, HAVE_UVCVIDEO_H=no)
-  AG_GST_PKG_CHECK_MODULES(GST_VIDEO, gstreamer-video-1.0)
   PKG_CHECK_MODULES(G_UDEV, gudev-1.0 , [
           AC_DEFINE([HAVE_GUDEV], 1, [Define if gudev is installed])
           HAVE_GUDEV="yes" ],
@@ -1857,9 +1825,17 @@ translit(dnm, m, l) AM_CONDITIONAL(USE_CURL, true)
 AG_GST_CHECK_FEATURE(CURL, [Curl plugin], curl, [
   PKG_CHECK_MODULES(CURL, libcurl >= 7.35.0, [
     HAVE_CURL="yes"
-    AC_CHECK_HEADERS([unistd.h sys/socket.h sys/types.h netinet/in.h netinet/ip.h netinet/tcp.h fcntl.h], [ ], [
+    AC_CHECK_HEADERS([unistd.h sys/socket.h sys/types.h netinet/in.h netinet/tcp.h fcntl.h], [ ], [
       AC_CHECK_HEADERS([unistd.h sys/types.h winsock2.h ws2tcpip.h fcntl.h], [ ], [HAVE_CURL="no"])
     ])
+    AC_CHECK_HEADERS([netinet/ip.h], [], [HAVE_CURL="no"],
+    [[#ifdef HAVE_SYS_TYPES_H
+     # include <sys/types.h>
+     #endif
+     #ifdef HAVE_NETINET_IN_H
+     # include <netinet/in.h>
+     #endif
+    ]])
     AC_MSG_CHECKING([for socket support needed by curlsink])
     AC_MSG_RESULT($HAVE_CURL)
   ], [
@@ -2187,7 +2163,7 @@ AG_GST_CHECK_FEATURE(SRTP, [srtp library], srtp, [
 dnl *** dtls ***
 translit(dnm, m, l) AM_CONDITIONAL(USE_DTLS, true)
 AG_GST_CHECK_FEATURE(DTLS, [DTLS plugin], dtls, [
-  PKG_CHECK_MODULES(DTLS, [ openssl >= 0.9.5  libcrypto ], [
+  PKG_CHECK_MODULES(DTLS, [ openssl >= 1.0.1  libcrypto ], [
     HAVE_DTLS="yes"
     AC_SUBST(DTLS_CFLAGS)
     AC_SUBST(DTLS_LIBS)
@@ -2522,9 +2498,15 @@ AG_GST_CHECK_FEATURE(OPENCV, [opencv plugins], opencv, [
   AC_SUBST(OPENCV_PREFIX)
   AC_SUBST(OPENCV_CFLAGS)
   AC_SUBST(OPENCV_LIBS)
-  AC_CHECK_FILE([$OPENCV_PREFIX/share/opencv/],
-              [AC_DEFINE_UNQUOTED(OPENCV_PATH_NAME, ["opencv"], [OpenCV path name])],
-              [AC_DEFINE_UNQUOTED(OPENCV_PATH_NAME, ["OpenCV"], [OpenCV path name])])
+  dnl the OpenCV prefix is used at runtime for some object properties, and also
+  dnl used here to detect which directory is the correct one. For the second
+  dnl case, make sure the right sysroot is used, ensuring correct behavior
+  dnl during cross compilation.
+  if test -d "$PKG_CONFIG_SYSROOT_DIR/$OPENCV_PREFIX/share/opencv/"; then
+    AC_DEFINE_UNQUOTED(OPENCV_PATH_NAME, ["opencv"], [OpenCV path name])
+  else
+    AC_DEFINE_UNQUOTED(OPENCV_PATH_NAME, ["OpenCV"], [OpenCV path name])
+  fi
 ])
 
 dnl *** OpenEXR ***
@@ -2636,16 +2618,31 @@ HAVE_GTK3_GL="no"
 translit(dnm, m, l) AM_CONDITIONAL(USE_GTK3, true)
 AG_GST_CHECK_FEATURE(GTK3, [Gtk+ elements], gtk, [
   PKG_CHECK_MODULES(GTK3, gtk+-3.0, [
-      AC_DEFINE([HAVE_GTK3], 1, [Define if Gtk+ 3.0 is installed])
-      HAVE_GTK3="yes"
+    AC_DEFINE([HAVE_GTK3], 1, [Define if Gtk+ 3.0 is installed])
+    HAVE_GTK3="yes"
   ], [
-      HAVE_GTK3="no"
+    HAVE_GTK3="no"
   ])
   PKG_CHECK_MODULES(GTK3_GL, gtk+-3.0 >= 3.15.0, [
+    GDK_WINDOWING="no"
+    if test "x$GST_GL_HAVE_WINDOW_X11" = "x1" -a "x$GST_GL_HAVE_PLATFORM_GLX" = "x1"; then
+      PKG_CHECK_MODULES(GTK3_X11, gtk+-x11-3.0, [
+        GTK3_CFLAGS="$GTK3_CFLAGS $GTK3_X11_CFLAGS"
+        GTK3_LIBS="$GTK3_LIBS $GTK3_X11_LIBS"
+        GDK_WINDOWING="yes"
+      ], [AC_MSG_NOTICE([Could not find Gtk X11 integration])])
+    fi
+    if test "x$GST_GL_HAVE_WINDOW_WAYLAND" = "x1" -a "x$GST_GL_HAVE_PLATFORM_EGL" = "x1"; then
+      PKG_CHECK_MODULES(GTK3_WAYLAND, gtk+-wayland-3.0, [
+        GTK3_CFLAGS="$GTK3_CFLAGS $GTK3_WAYLAND_CFLAGS"
+        GTK3_LIBS="$GTK3_LIBS $GTK3_WAYLAND_LIBS"
+        GDK_WINDOWING="yes"
+      ], [AC_MSG_NOTICE([Could not find Gtk Wayland integration])])
+    fi
+    if test "x$GDK_WINDOWING" = "xyes"; then
       AC_DEFINE([HAVE_GTK3_GL], 1, [Define if Gtk+ 3.0 GL is installed])
-      if test "x$HAVE_GL" = "xyes"; then
-        HAVE_GTK3_GL="yes"
-      fi
+      HAVE_GTK3_GL="yes"
+    fi
   ], [
       HAVE_GTK3_GL="no"
   ])
@@ -2655,7 +2652,7 @@ AM_CONDITIONAL(USE_GTK3_GL, test "x$HAVE_GTK3_GL" = "xyes")
 dnl *** Qt ***
 translit(dnm, m, l) AM_CONDITIONAL(USE_QT, true)
 AG_GST_CHECK_FEATURE(QT, [Qt elements], qt, [
-  PKG_CHECK_MODULES(QT, Qt5Core Qt5Gui Qt5Quick, [
+  PKG_CHECK_MODULES(QT, Qt5Core Qt5Gui Qt5Quick >= 5.4.0, [
       QT_PATH=`$PKG_CONFIG --variable=exec_prefix Qt5Core`
       QT_HOST_PATH=`$PKG_CONFIG --variable=host_bins Qt5Core`
       AC_PATH_PROGS(MOC, [moc-qt5 moc], moc, ["${QT_HOST_PATH}" "${QT_PATH}/bin"])
@@ -2666,13 +2663,30 @@ AG_GST_CHECK_FEATURE(QT, [Qt elements], qt, [
         HAVE_QT="no"
       else
         HAVE_QT="yes"
-        PKG_CHECK_MODULES(QT_X11, Qt5X11Extras, [
-	AC_DEFINE([HAVE_QT_X11], [], [Define if Qt X11 integration is installed])
-	    QT_CFLAGS="$QT_CFLAGS $QT_X11_CFLAGS"
+        HAVE_QT_WINDOWING="no"
+        if test "x$GST_GL_HAVE_WINDOW_X11" = "x1" -a "x$GST_GL_HAVE_PLATFORM_GLX" = "x1"; then
+          PKG_CHECK_MODULES(QT_X11, Qt5X11Extras, [
+            AC_DEFINE([HAVE_QT_X11], [], [Define if Qt X11 integration is installed])
+            QT_CFLAGS="$QT_CFLAGS $QT_X11_CFLAGS"
             QT_LIBS="$QT_LIBS $QT_X11_LIBS"
-            AC_SUBST([QT_CFLAGS])
-            AC_SUBST([QT_LIBS])
-        ], [AC_MSG_NOTICE([Could not find Qt X11 integration])])
+            HAVE_QT_WINDOWING="yes"
+          ], [AC_MSG_NOTICE([Could not find Qt X11 integration])])
+        fi
+        if test "x$GST_GL_HAVE_WINDOW_WAYLAND" = "x1" -a "x$GST_GL_HAVE_PLATFORM_EGL" = "x1"; then
+          PKG_CHECK_MODULES(QT_WAYLAND, Qt5WaylandClient, [
+            AC_DEFINE([HAVE_QT_WAYLAND], [],
+                [Define if Qt Wayland integration is installed])
+            QT_CFLAGS="$QT_CFLAGS $QT_WAYLAND_CFLAGS"
+            QT_LIBS="$QT_LIBS $QT_WAYLAND_LIBS"
+            HAVE_QT_WINDOWING="yes"
+          ], [AC_MSG_NOTICE([Could not find Qt Wayland integration])])
+        fi
+        if test "x$HAVE_QT_WINDOWING" = "xno"; then
+          AC_MSG_WARN([Could not find any Qt Windowing integration])
+          HAVE_QT="no"
+        fi
+        AC_SUBST([QT_CFLAGS])
+        AC_SUBST([QT_LIBS])
       fi
   ], [
       HAVE_QT="no"
