@@ -82,11 +82,11 @@ else
 DTS_DIR=
 endif
 
-#if USE_GL
+if USE_GL
 GL_DIR=gl
-#else
-#GL_DIR=
-#endif
+else
+GL_DIR=
+endif
 
 if USE_GTK3
 GTK3_DIR=gtk

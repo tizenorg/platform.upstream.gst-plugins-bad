@@ -19,8 +19,11 @@
  */
 
 #include <gst/video/videooverlay.h>
+#include <gst/video/video.h>
 #include <GL/gl.h>
 #include "pipeline.h"
+
+#define GST_MAP_GL (GST_MAP_FLAG_LAST << 1)
 
 Pipeline::Pipeline(const WId id, const QString videoLocation):
     m_winId(id),
@@ -28,7 +31,6 @@ Pipeline::Pipeline(const WId id, const QString videoLocation):
     m_loop(NULL),
     m_bus(NULL),
     m_pipeline(NULL),
-    m_glupload(NULL),
     m_glimagesink(NULL)
 {
     create();
@@ -40,7 +42,7 @@ Pipeline::~Pipeline()
 
 void Pipeline::create()
 {
-    qDebug("Loading video: %s", m_videoLocation.toAscii().data());
+    qDebug("Loading video: %s", m_videoLocation.toLatin1().data());
 
     gst_init (NULL, NULL);
 
@@ -51,43 +53,29 @@ void Pipeline::create()
 
     m_bus = gst_pipeline_get_bus (GST_PIPELINE (m_pipeline));
     gst_bus_add_watch (m_bus, (GstBusFunc) bus_call, this);
-    gst_bus_set_sync_handler (m_bus, (GstBusSyncHandler) create_window, this);
+    gst_bus_set_sync_handler (m_bus, (GstBusSyncHandler) create_window, this, NULL);
     gst_object_unref (m_bus);
 
     GstElement* videosrc = gst_element_factory_make ("filesrc", "filesrc0");
     GstElement* decodebin = gst_element_factory_make ("decodebin", "decodebin0");
-    m_glupload  = gst_element_factory_make ("glupload", "glupload0");
     m_glimagesink  = gst_element_factory_make ("glimagesink", "sink0");
     
-    if (!videosrc || !decodebin || !m_glupload || !m_glimagesink )
+    if (!videosrc || !decodebin || !m_glimagesink )
     {
         qDebug ("one element could not be found");
         return;
     }
 
-    GstCaps *outcaps = gst_caps_new_simple("video/x-raw",
-                                           "width", G_TYPE_INT, 800,
-                                           "height", G_TYPE_INT, 600,
-                                           NULL) ;
-
     g_object_set(G_OBJECT(videosrc), "num-buffers", 800, NULL);
-    g_object_set(G_OBJECT(videosrc), "location", m_videoLocation.toAscii().data(), NULL);
-    g_object_set(G_OBJECT(m_glimagesink), "client-reshape-callback", reshapeCallback, NULL);
-    g_object_set(G_OBJECT(m_glimagesink), "client-draw-callback", drawCallback, NULL);
+    g_object_set(G_OBJECT(videosrc), "location", m_videoLocation.toLatin1().data(), NULL);
+    g_signal_connect_object (G_OBJECT(m_glimagesink), "client-reshape", (GCallback) reshapeCallback, NULL, G_CONNECT_AFTER);
+    g_signal_connect_object (G_OBJECT(m_glimagesink), "client-draw", (GCallback) drawCallback, NULL, G_CONNECT_AFTER);
 
-    gst_bin_add_many (GST_BIN (m_pipeline), videosrc, decodebin, m_glupload, m_glimagesink, NULL);
-
-    gboolean link_ok = gst_element_link_filtered(m_glupload, m_glimagesink, outcaps) ;
-    gst_caps_unref(outcaps) ;
-    if(!link_ok)
-    {
-        qDebug("Failed to link glupload to glimagesink!\n") ;
-        return;
-    }
+    gst_bin_add_many (GST_BIN (m_pipeline), videosrc, decodebin, m_glimagesink, NULL);
 
     gst_element_link_pads (videosrc, "src", decodebin, "sink");
 
-    g_signal_connect (decodebin, "new-decoded-pad", G_CALLBACK (cb_new_pad), this);
+    g_signal_connect (decodebin, "pad-added", G_CALLBACK (cb_new_pad), this);
 }
 
 void Pipeline::start()
@@ -156,19 +144,18 @@ void Pipeline::exposeRequested()
 //-----------------------------------------------------------------------
 
 //client reshape callback
-gboolean Pipeline::reshapeCallback (void *sink, guint width, guint height, gpointer data)
+gboolean Pipeline::reshapeCallback (GstElement *sink, void *context, guint width, guint height, gpointer data)
 {
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45, (gfloat)width/(gfloat)height, 0.1, 100);  
     glMatrixMode(GL_MODELVIEW);
 
     return TRUE;
 }
 
 //client draw callback
-gboolean Pipeline::drawCallback (void *sink, guint texture, guint width, guint height, gpointer data)
+gboolean Pipeline::drawCallback (GstElement * gl_sink, void *context, GstSample * sample, gpointer data)
 {
     static GLfloat	xrot = 0;
     static GLfloat	yrot = 0;				
@@ -176,6 +163,21 @@ gboolean Pipeline::drawCallback (void *sink, guint texture, guint width, guint h
     static GTimeVal current_time;
     static glong last_sec = current_time.tv_sec;
     static gint nbFrames = 0;  
+
+    GstVideoFrame v_frame;
+    GstVideoInfo v_info;
+    guint texture = 0;
+    GstBuffer *buf = gst_sample_get_buffer (sample);
+    GstCaps *caps = gst_sample_get_caps (sample);
+
+    gst_video_info_from_caps (&v_info, caps);
+
+    if (!gst_video_frame_map (&v_frame, &v_info, buf, (GstMapFlags) (GST_MAP_READ | GST_MAP_GL))) {
+      g_warning ("Failed to map the video buffer");
+      return TRUE;
+    }
+
+    texture = *(guint *) v_frame.data[0];
 
     g_get_current_time (&current_time);
     nbFrames++ ;
@@ -198,10 +200,10 @@ gboolean Pipeline::drawCallback (void *sink, guint texture, guint width, guint h
     glTexEnvi (GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glMatrixMode(GL_MODELVIEW);
+    glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
 	
-    glTranslatef(0.0f,0.0f,-5.0f);
+    glScalef (0.5, 0.5, 0.5);
 
     glRotatef(xrot,1.0f,0.0f,0.0f);
     glRotatef(yrot,0.0f,1.0f,0.0f);
@@ -209,42 +211,43 @@ gboolean Pipeline::drawCallback (void *sink, guint texture, guint width, guint h
 
     glBegin(GL_QUADS);
 	      // Front Face
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f( 1.0f,  1.0f,  1.0f);
-	      glTexCoord2f((gfloat)width, (gfloat)height); glVertex3f(-1.0f,  1.0f,  1.0f);
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f( 1.0f,  1.0f,  1.0f);
+	      glTexCoord2f(1.0, 1.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
 	      // Back Face
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f(-1.0f,  1.0f, -1.0f);
-	      glTexCoord2f((gfloat)width, (gfloat)height); glVertex3f( 1.0f,  1.0f, -1.0f);
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
+	      glTexCoord2f(1.0, 1.0f); glVertex3f( 1.0f,  1.0f, -1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
 	      // Top Face
-	      glTexCoord2f((gfloat)width, (gfloat)height); glVertex3f(-1.0f,  1.0f, -1.0f);
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
+	      glTexCoord2f(1.0, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f( 1.0f,  1.0f,  1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f( 1.0f,  1.0f, -1.0f);
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f( 1.0f,  1.0f, -1.0f);
 	      // Bottom Face
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f( 1.0f, -1.0f,  1.0f);
-	      glTexCoord2f((gfloat)width,(gfloat)height); glVertex3f(-1.0f, -1.0f,  1.0f);
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
+	      glTexCoord2f(1.0,1.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
 	      // Right face
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f( 1.0f,  1.0f, -1.0f);
-	      glTexCoord2f((gfloat)width, (gfloat)height); glVertex3f( 1.0f,  1.0f,  1.0f);
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f( 1.0f,  1.0f, -1.0f);
+	      glTexCoord2f(1.0, 1.0f); glVertex3f( 1.0f,  1.0f,  1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
 	      // Left Face
-	      glTexCoord2f((gfloat)width, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
+	      glTexCoord2f(1.0, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
 	      glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
-	      glTexCoord2f(0.0f, (gfloat)height); glVertex3f(-1.0f,  1.0f,  1.0f);
-	      glTexCoord2f((gfloat)width, (gfloat)height); glVertex3f(-1.0f,  1.0f, -1.0f);
-    glEnd(); 
+	      glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
+	      glTexCoord2f(1.0, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
+    glEnd();
+
+    gst_video_frame_unmap (&v_frame);
 
 	xrot+=0.03f;
     yrot+=0.02f;
     zrot+=0.04f;
 
-    //return TRUE causes a postRedisplay
     return TRUE;
 }
 
@@ -278,10 +281,10 @@ gboolean Pipeline::bus_call (GstBus *bus, GstMessage *msg, Pipeline* p)
     return TRUE;
 }
 
-void Pipeline::cb_new_pad (GstElement* decodebin, GstPad* pad, gboolean last, Pipeline* p)
+void Pipeline::cb_new_pad (GstElement* decodebin, GstPad* pad, Pipeline* p)
 {
-    GstElement* glupload = p->getVideoSink();
-    GstPad* glpad = gst_element_get_pad (glupload, "sink");
+    GstElement* sink = p->getVideoSink();
+    GstPad* glpad = gst_element_get_static_pad (sink, "sink");
     
     //only link once 
     if (GST_PAD_IS_LINKED (glpad)) 
@@ -290,7 +293,7 @@ void Pipeline::cb_new_pad (GstElement* decodebin, GstPad* pad, gboolean last, Pi
         return;
     }
     
-    GstCaps* caps = gst_pad_get_caps (pad);
+    GstCaps* caps = gst_pad_get_current_caps (pad);
     GstStructure* str = gst_caps_get_structure (caps, 0);
     if (!g_strrstr (gst_structure_get_name (str), "video")) 
     {

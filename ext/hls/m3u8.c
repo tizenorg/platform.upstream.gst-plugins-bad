@@ -601,10 +601,11 @@ gst_m3u8_update (GstM3U8Client * client, GstM3U8 * self, gchar * data,
           } else {
             self->iframe_lists = g_list_append (self->iframe_lists, new_list);
           }
-        } else if (list != NULL) {
-          GST_WARNING ("Found a list without a uri..., dropping");
-          gst_m3u8_free (list);
         } else {
+          if (list != NULL) {
+            GST_WARNING ("Found a list without a uri..., dropping");
+            gst_m3u8_free (list);
+          }
           list = new_list;
         }
       } else if (g_str_has_prefix (data_ext_x, "TARGETDURATION:")) {
@@ -782,6 +783,7 @@ gst_m3u8_client_new (const gchar * uri, const gchar * base_uri)
   client->main = gst_m3u8_new ();
   client->current = NULL;
   client->current_file = NULL;
+  client->current_file_duration = GST_CLOCK_TIME_NONE;
   client->sequence = -1;
   client->sequence_position = 0;
   client->update_failed_count = 0;
@@ -853,17 +855,16 @@ gst_m3u8_client_update (GstM3U8Client * self, gchar * data)
   }
 
   if (m3u8->files && self->sequence == -1) {
-    self->current_file = g_list_first (m3u8->files);
     if (GST_M3U8_CLIENT_IS_LIVE (self)) {
       /* for live streams, start GST_M3U8_LIVE_MIN_FRAGMENT_DISTANCE from
          the end of the playlist. See section 6.3.3 of HLS draft */
       gint pos =
           g_list_length (m3u8->files) - GST_M3U8_LIVE_MIN_FRAGMENT_DISTANCE;
-      self->sequence =
-          GST_M3U8_MEDIA_FILE (g_list_nth_data (m3u8->files,
-              pos >= 0 ? pos : 0))->sequence;
-    } else
-      self->sequence = GST_M3U8_MEDIA_FILE (self->current_file->data)->sequence;
+      self->current_file = g_list_nth (m3u8->files, pos >= 0 ? pos : 0);
+    } else {
+      self->current_file = g_list_first (m3u8->files);
+    }
+    self->sequence = GST_M3U8_MEDIA_FILE (self->current_file->data)->sequence;
     self->sequence_position = 0;
     GST_DEBUG ("Setting first sequence at %u", (guint) self->sequence);
   }
@@ -1040,6 +1041,7 @@ gst_m3u8_client_get_next_fragment (GstM3U8Client * client,
   GST_DEBUG ("Got fragment with sequence %u (client sequence %u)",
       (guint) file->sequence, (guint) client->sequence);
 
+  client->current_file_duration = file->duration;
   if (timestamp)
     *timestamp = client->sequence_position;
 
@@ -1112,14 +1114,8 @@ alternate_advance (GstM3U8Client * client, gboolean forward)
   }
   client->current_file = tmp;
   client->sequence = targetnum;
-  if (forward)
-    client->sequence_position += mf->duration;
-  else {
-    if (client->sequence_position > mf->duration)
-      client->sequence_position -= mf->duration;
-    else
-      client->sequence_position = 0;
-  }
+  client->current_file_duration =
+      GST_M3U8_MEDIA_FILE (client->current_file->data)->duration;
 }
 
 void
@@ -1131,6 +1127,20 @@ gst_m3u8_client_advance_fragment (GstM3U8Client * client, gboolean forward)
   g_return_if_fail (client->current != NULL);
 
   GST_M3U8_CLIENT_LOCK (client);
+  GST_DEBUG ("Sequence position was %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (client->sequence_position));
+  if (GST_CLOCK_TIME_IS_VALID (client->current_file_duration)) {
+    /* Advance our position based on the previous fragment we played */
+    if (forward)
+      client->sequence_position += client->current_file_duration;
+    else if (client->current_file_duration < client->sequence_position)
+      client->sequence_position -= client->current_file_duration;
+    else
+      client->sequence_position = 0;
+    client->current_file_duration = GST_CLOCK_TIME_NONE;
+    GST_DEBUG ("Sequence position now %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (client->sequence_position));
+  }
   if (!client->current_file) {
     GList *l;
 
@@ -1157,8 +1167,6 @@ gst_m3u8_client_advance_fragment (GstM3U8Client * client, gboolean forward)
     } else {
       client->sequence = file->sequence + 1;
     }
-
-    client->sequence_position += file->duration;
   } else {
     client->current_file = client->current_file->prev;
     if (client->current_file) {
@@ -1167,11 +1175,12 @@ gst_m3u8_client_advance_fragment (GstM3U8Client * client, gboolean forward)
     } else {
       client->sequence = file->sequence - 1;
     }
-
-    if (client->sequence_position > file->duration)
-      client->sequence_position -= file->duration;
-    else
-      client->sequence_position = 0;
+  }
+  if (client->current_file) {
+    /* Store duration of the fragment we're using to update the position 
+     * the next time we advance */
+    client->current_file_duration =
+        GST_M3U8_MEDIA_FILE (client->current_file->data)->duration;
   }
   GST_M3U8_CLIENT_UNLOCK (client);
 }

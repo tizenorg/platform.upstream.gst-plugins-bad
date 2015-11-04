@@ -252,7 +252,7 @@ gtk_gst_base_widget_key_event (GtkWidget * widget, GdkEventKey * event)
     g_object_unref (element);
   }
 
-  return TRUE;
+  return FALSE;
 }
 
 static void
@@ -342,7 +342,7 @@ gtk_gst_base_widget_button_event (GtkWidget * widget, GdkEventButton * event)
     g_object_unref (element);
   }
 
-  return TRUE;
+  return FALSE;
 }
 
 static gboolean
@@ -363,7 +363,7 @@ gtk_gst_base_widget_motion_event (GtkWidget * widget, GdkEventMotion * event)
     g_object_unref (element);
   }
 
-  return TRUE;
+  return FALSE;
 }
 
 void
@@ -454,7 +454,7 @@ gtk_gst_base_widget_set_format (GtkGstBaseWidget * widget,
 {
   GTK_GST_BASE_WIDGET_LOCK (widget);
 
-  if (gst_video_info_is_equal (&widget->v_info, v_info)) {
+  if (gst_video_info_is_equal (&widget->pending_v_info, v_info)) {
     GTK_GST_BASE_WIDGET_UNLOCK (widget);
     return TRUE;
   }

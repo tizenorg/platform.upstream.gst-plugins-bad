@@ -56,9 +56,6 @@
 #include "gl.h"
 #include "gstgldisplay.h"
 
-#define GST_GL_HAVE_WINDOW_WAYLAND 1
-#define GST_GL_HAVE_PLATFORM_EGL 1
-
 #if GST_GL_HAVE_WINDOW_COCOA
 #include <gst/gl/cocoa/gstgldisplay_cocoa.h>
 #endif

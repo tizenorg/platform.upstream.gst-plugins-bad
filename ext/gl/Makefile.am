@@ -144,10 +144,7 @@ libgstopengl_la_LIBADD = \
 	$(LIBPNG_LIBS) \
 	$(JPEG_LIBS) \
 	$(LIBM) \
-	$(GRAPHENE_LIBS) \
-        $(EGL_LIBS) \
-        $(WAYLAND_EGL_LIBS)
-
+	$(GRAPHENE_LIBS)
 
 libgstopengl_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 libgstopengl_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS) --tag=CC
