@@ -40,6 +40,11 @@
 
 #include <string.h>
 
+#ifdef GST_TBM_SUPPORT
+#include <mm_types.h>
+#include <tbm_bufmgr.h>
+#endif
+
 /* signals */
 enum
 {
@@ -57,6 +62,9 @@ enum
   PROP_SHM_SIZE,
   PROP_WAIT_FOR_CONNECTION,
   PROP_BUFFER_TIME
+#ifdef GST_TBM_SUPPORT
+  ,PROP_USE_TBM
+#endif
 };
 
 struct GstShmClient
@@ -410,6 +418,14 @@ gst_shm_sink_class_init (GstShmSinkClass * klass)
           "Maximum Size of the shm buffer in nanoseconds (-1 to disable)",
           -1, G_MAXINT64, -1,
           G_PARAM_CONSTRUCT | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#ifdef GST_TBM_SUPPORT
+  g_object_class_install_property (gobject_class, PROP_USE_TBM,
+      g_param_spec_boolean ("use-tbm",
+          "Use of not the tizen buffer",
+          "Flags of using tizen buffer",
+          FALSE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#endif
 
   signals[SIGNAL_CLIENT_CONNECTED] = g_signal_new ("client-connected",
       GST_TYPE_SHM_SINK, G_SIGNAL_RUN_LAST, 0, NULL, NULL,
@@ -500,6 +516,14 @@ gst_shm_sink_set_property (GObject * object, guint prop_id,
       GST_OBJECT_UNLOCK (object);
       g_cond_broadcast (&self->cond);
       break;
+#ifdef GST_TBM_SUPPORT
+    case PROP_USE_TBM:
+      GST_OBJECT_LOCK (object);
+      self->use_tbm = g_value_get_boolean (value);
+      GST_OBJECT_UNLOCK (object);
+      g_cond_broadcast (&self->cond);
+      break;
+#endif
     default:
       break;
   }
@@ -529,6 +553,11 @@ gst_shm_sink_get_property (GObject * object, guint prop_id,
     case PROP_BUFFER_TIME:
       g_value_set_int64 (value, self->buffer_time);
       break;
+#ifdef GST_TBM_SUPPORT
+    case PROP_USE_TBM:
+      g_value_set_boolean (value, self->use_tbm);
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -663,6 +692,11 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   GstFlowReturn ret = GST_FLOW_OK;
   GstMemory *memory = NULL;
   GstBuffer *sendbuf = NULL;
+  gsize buf_size = gst_buffer_get_size(buf);
+#ifdef GST_TBM_SUPPORT
+  unsigned key[MM_VIDEO_BUFFER_PLANE_MAX];
+  gsize key_size = sizeof(key);
+#endif
 
   GST_OBJECT_LOCK (self);
   while (self->wait_for_connection && !self->clients) {
@@ -678,6 +712,50 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   }
 
 
+#ifdef GST_TBM_SUPPORT
+  memory = gst_buffer_peek_memory (buf, 0);
+
+  if (memory->allocator != GST_ALLOCATOR (self->allocator)) {
+    need_new_memory = TRUE;
+    GST_LOG_OBJECT (self, "Memory in buffer %p was not allocated by "
+        "%" GST_PTR_FORMAT ", will memcpy", buf, memory->allocator);
+  }
+  GST_DEBUG_OBJECT(self, "use-tbm %d, #memory in buffer %d", self->use_tbm,
+      gst_buffer_n_memory (buf));
+  if(self->use_tbm && gst_buffer_n_memory (buf) > 1) {
+    /*in case of SN12 or ST12 video  format */
+    MMVideoBuffer *mm_video_buf = NULL;
+
+    memory = gst_buffer_peek_memory (buf, 1);
+    gst_memory_map (memory, &map, GST_MAP_READ);
+    mm_video_buf = (MMVideoBuffer *) map.data;
+
+    if (mm_video_buf == NULL) {
+      GST_ERROR_OBJECT (self, "mm_video_buf is NULL. Skip rendering");
+      gst_memory_unmap (memory, &map);
+      goto flushing;
+    }
+    /* export bo key */
+    if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+      int i;
+      GST_DEBUG_OBJECT (self, "GstBuffer size %d, tbm bo key size %d",
+          buf_size, key_size);
+      buf_size += key_size;
+      for(i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
+        if(mm_video_buf->handle.bo[i]) {
+          key[i] = tbm_bo_export(mm_video_buf->handle.bo[i]);
+          GST_DEBUG_OBJECT (self, "key %d, bo %p", key[i], mm_video_buf->handle.bo[i]);
+        } else
+          key[i] = 0;
+      }
+      gst_memory_unmap (memory, &map);
+    } else {
+      GST_ERROR_OBJECT (self, "Buffer type is not TBM");
+        gst_memory_unmap (memory, &map);
+        goto flushing;
+    }
+  }
+#else
   if (gst_buffer_n_memory (buf) > 1) {
     GST_LOG_OBJECT (self, "Buffer %p has %d GstMemory, we only support a single"
         " one, need to do a memcpy", buf, gst_buffer_n_memory (buf));
@@ -691,22 +769,23 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
           "%" GST_PTR_FORMAT ", will memcpy", buf, memory->allocator);
     }
   }
+#endif
 
   if (need_new_memory) {
-    if (gst_buffer_get_size (buf) > sp_writer_get_max_buf_size (self->pipe)) {
+    if (buf_size > sp_writer_get_max_buf_size (self->pipe)) {
       gsize area_size = sp_writer_get_max_buf_size (self->pipe);
       GST_OBJECT_UNLOCK (self);
       GST_ELEMENT_ERROR (self, RESOURCE, NO_SPACE_LEFT,
           ("Shared memory area is too small"),
           ("Shared memory area of size %" G_GSIZE_FORMAT " is smaller than"
               "buffer of size %" G_GSIZE_FORMAT, area_size,
-              gst_buffer_get_size (buf)));
+              buf_size));
       return GST_FLOW_ERROR;
     }
 
     while ((memory =
             gst_shm_sink_allocator_alloc_locked (self->allocator,
-                gst_buffer_get_size (buf), &self->params)) == NULL) {
+                buf_size, &self->params)) == NULL) {
       g_cond_wait (&self->cond, GST_OBJECT_GET_LOCK (self));
       if (self->unlock)
         goto flushing;
@@ -723,6 +802,10 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
 
     gst_memory_map (memory, &map, GST_MAP_WRITE);
     gst_buffer_extract (buf, 0, map.data, map.size);
+#ifdef GST_TBM_SUPPORT
+    if(self->use_tbm && gst_buffer_n_memory (buf) > 1)
+      memcpy(map.data + map.size - key_size, key, key_size);
+#endif
     gst_memory_unmap (memory, &map);
 
     sendbuf = gst_buffer_new ();

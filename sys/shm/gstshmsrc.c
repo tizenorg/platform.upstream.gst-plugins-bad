@@ -43,6 +43,9 @@
 
 #include <string.h>
 
+#ifdef GST_TBM_SUPPORT
+#include <mm_types.h>
+#endif
 /* signals */
 enum
 {
@@ -56,6 +59,9 @@ enum
   PROP_SOCKET_PATH,
   PROP_IS_LIVE,
   PROP_SHM_AREA_NAME
+#ifdef GST_TBM_SUPPORT
+  ,PROP_USE_TBM
+#endif
 };
 
 struct GstShmBuffer
@@ -137,6 +143,14 @@ gst_shm_src_class_init (GstShmSrcClass * klass)
           "Name of the shared memory area",
           "The name of the shared memory area used to get buffers",
           NULL, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
+#ifdef GST_TBM_SUPPORT
+  g_object_class_install_property (gobject_class, PROP_USE_TBM,
+      g_param_spec_boolean ("use-tbm",
+          "Use of not the tizen buffer",
+          "Flags of using tizen buffer",
+          FALSE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#endif
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&srctemplate));
@@ -155,6 +169,7 @@ gst_shm_src_init (GstShmSrc * self)
 {
   self->poll = gst_poll_new (TRUE);
   gst_poll_fd_init (&self->pollfd);
+  self->h_bufmgr = tbm_bufmgr_init(-1);
 }
 
 static void
@@ -164,6 +179,7 @@ gst_shm_src_finalize (GObject * object)
 
   gst_poll_free (self->poll);
   g_free (self->socket_path);
+  tbm_bufmgr_deinit(self->h_bufmgr);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -191,6 +207,13 @@ gst_shm_src_set_property (GObject * object, guint prop_id,
       gst_base_src_set_live (GST_BASE_SRC (object),
           g_value_get_boolean (value));
       break;
+#ifdef GST_TBM_SUPPORT
+    case PROP_USE_TBM:
+      GST_OBJECT_LOCK (object);
+      self->use_tbm = g_value_get_boolean (value);
+      GST_OBJECT_UNLOCK (object);
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -218,6 +241,11 @@ gst_shm_src_get_property (GObject * object, guint prop_id,
         g_value_set_string (value, sp_get_shm_area_name (self->pipe->pipe));
       GST_OBJECT_UNLOCK (object);
       break;
+#ifdef GST_TBM_SUPPORT
+    case PROP_USE_TBM:
+      g_value_set_boolean (value, self->use_tbm);
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -318,6 +346,25 @@ free_buffer (gpointer data)
   g_slice_free (struct GstShmBuffer, gsb);
 }
 
+#ifdef GST_TBM_SUPPORT
+static void
+free_tbm_buffer (gpointer data)
+{
+  MMVideoBuffer * mm_video_buf = data;
+  int i;
+  GST_LOG ("Freeing tbm buffer %p", data);
+
+  for(i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
+    if(mm_video_buf->handle.bo[i])
+      tbm_bo_unref(mm_video_buf->handle.bo[i]);
+    else
+      break;
+  }
+
+  g_free(mm_video_buf);
+}
+#endif
+
 static GstFlowReturn
 gst_shm_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
 {
@@ -373,6 +420,46 @@ gst_shm_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
 
   *outbuf = gst_buffer_new_wrapped_full (GST_MEMORY_FLAG_READONLY,
       buf, rv, 0, rv, gsb, free_buffer);
+#ifdef GST_TBM_SUPPORT
+  GST_DEBUG_OBJECT(self, "use-tbm %d", self->use_tbm);
+  if (self->use_tbm) {
+    MMVideoBuffer *mm_video_buf = NULL;
+    GstMemory *mem_imgb = NULL;
+    unsigned key[MM_VIDEO_BUFFER_PLANE_MAX];
+    int offset = rv - sizeof(MMVideoBuffer) - sizeof(key);
+    if(offset < 0) {
+      GST_ERROR_OBJECT(self, "offset error %d", offset);
+      return GST_FLOW_ERROR;
+    }
+
+    mm_video_buf = g_malloc0(sizeof(MMVideoBuffer));
+    mem_imgb = gst_memory_new_wrapped(0, mm_video_buf, sizeof(MMVideoBuffer), 0,
+        sizeof(MMVideoBuffer), mm_video_buf, free_tbm_buffer);
+    gst_buffer_append_memory(*outbuf, mem_imgb);
+
+    memcpy(mm_video_buf, buf + offset, sizeof(MMVideoBuffer));
+    memcpy(key, buf + rv - sizeof(key), sizeof(key));
+    if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+      int i;
+      GST_DEBUG_OBJECT(self, "width %d, height %d", mm_video_buf->width[0],
+          mm_video_buf->height[0]);
+
+      memset(mm_video_buf->handle.bo, 0, sizeof(void *) * MM_VIDEO_BUFFER_PLANE_MAX);
+      for(i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
+        GST_DEBUG_OBJECT(self, "%d tbm bo key %d", i, key[i]);
+        if(key[i] > 0)
+          mm_video_buf->handle.bo[i] = tbm_bo_import(self->h_bufmgr, key[i]);
+        else
+          break;
+      }
+      GST_DEBUG_OBJECT (self, "TBM bo %p %p", mm_video_buf->handle.bo[0],
+          mm_video_buf->handle.bo[1]);
+    } else {
+      GST_WARNING_OBJECT(self, "invaild type %d", mm_video_buf->type);
+      return GST_FLOW_ERROR;
+    }
+  }
+#endif
 
   return GST_FLOW_OK;
 }
