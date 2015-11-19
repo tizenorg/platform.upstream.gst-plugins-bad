@@ -1931,12 +1931,23 @@ AG_GST_CHECK_FEATURE(DIRECTFB, [directfb], dfbvideosink , [
 dnl **** Wayland ****
 translit(dnm, m, l) AM_CONDITIONAL(USE_WAYLAND, true)
 AG_GST_CHECK_FEATURE(WAYLAND, [wayland sink], wayland , [
-  PKG_CHECK_MODULES(WAYLAND, wayland-client >= 1.4.0 wayland-scanner, [
+  PKG_CHECK_MODULES(WAYLAND, wayland-client >= 1.4.0 wayland-scanner wayland-tbm-client tizen-extension-client, [
     HAVE_WAYLAND="yes" ], [ HAVE_WAYLAND="no"
   ])
 ])
 
 AC_PATH_PROG([wayland_scanner], [wayland-scanner])
+
+PKG_CHECK_MODULES(DRM, libdrm)
+AC_SUBST(DRM_CFLAGS)
+AC_SUBST(DRM_LIBS)
+
+PKG_CHECK_MODULES(TBM, libtbm)
+AC_SUBST(TBM_CFLAGS)
+AC_SUBST(TBM_LIBS)
+
+PKG_CHECK_MODULES(MMCOMMON, mm-common)
+AC_SUBST(MMCOMMON_CFLAGS)
 
 dnl **** WebP ****
 translit(dnm, m, l) AM_CONDITIONAL(USE_WEBP, true)
