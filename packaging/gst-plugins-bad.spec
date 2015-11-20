@@ -10,6 +10,7 @@ License:        GPL-2.0+ and LGPL-2.1+
 Group:          Multimedia/Framework
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
+Source100:      common.tar.gz
 BuildRequires:  gettext-tools
 BuildRequires:  SDL-devel
 BuildRequires:  autoconf
@@ -73,6 +74,7 @@ processing capabilities can be added simply by installing new plug-ins.
 
 %prep
 %setup -q -n %{name}-%{version}
+%setup -q -T -D -a 100
 
 %build
 export V=1
