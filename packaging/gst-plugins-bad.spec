@@ -41,6 +41,7 @@ BuildRequires:  pkgconfig(gles20)
 BuildRequires:  pkgconfig(wayland-egl) >= 9.0
 BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 BuildRequires:  pkgconfig(wayland-cursor) >= 1.0.0
+BuildRequires:  pkgconfig(wayland-tbm-client)
 BuildRequires:  pkgconfig(tizen-extension-client)
 %endif
 %if %{with x}
@@ -107,8 +108,7 @@ mv %{name}-%{gst_branch}.lang %{name}.lang
 
 
 %clean
-rm -rf %{_builddir}
-
+rm -rf $RPM_BUILD_ROOT
 
 %post -p /sbin/ldconfig
 
@@ -219,7 +219,7 @@ rm -rf %{_builddir}
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
 %if %{with wayland}
-#%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
-#%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
+%{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
+%{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
 %endif
 

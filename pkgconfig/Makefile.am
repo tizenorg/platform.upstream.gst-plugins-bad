@@ -17,6 +17,11 @@ pcverfiles += gstreamer-gl-@GST_API_VERSION@.pc
 pcverfiles_uninstalled += gstreamer-gl-@GST_API_VERSION@-uninstalled.pc
 endif
 
+if USE_WAYLAND
+pcverfiles += gstreamer-wayland-@GST_API_VERSION@.pc
+pcverfiles_uninstalled += gstreamer-wayland-@GST_API_VERSION@-uninstalled.pc
+endif
+
 all-local: $(pcverfiles) $(pcverfiles_uninstalled)
 
 cp_verbose = $(cp_verbose_$(V))
@@ -39,6 +44,9 @@ pcinfiles = \
            gstreamer-gl.pc.in gstreamer-gl-uninstalled.pc.in \
            gstreamer-insertbin.pc.in gstreamer-insertbin-uninstalled.pc.in \
            gstreamer-mpegts.pc.in gstreamer-mpegts-uninstalled.pc.in
+if USE_WAYLAND
+pcinfiles += gstreamer-wayland.pc.in gstreamer-wayland-uninstalled.pc.in
+endif
 
 DISTCLEANFILES = $(pcinfiles:.in=)
 EXTRA_DIST = $(pcinfiles)
