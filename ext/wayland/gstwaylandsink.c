@@ -36,13 +36,21 @@
  * ]| test the video rendering in wayland
  * </refsect2>
  */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
 
 #include "gstwaylandsink.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <mm_types.h>
+#else
 #include "wlvideoformat.h"
+#endif
 #include "wlbuffer.h"
 #include "wlshmallocator.h"
 
@@ -60,8 +68,12 @@ enum
 enum
 {
   PROP_0,
-  PROP_DISPLAY
+  PROP_DISPLAY,
+#ifdef GST_WLSINK_ENHANCEMENT
+  PROP_ENABLE_TBM
+#endif
 };
+int dump__cnt = 0;
 
 GST_DEBUG_CATEGORY (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
@@ -72,6 +84,9 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE
         ("{ BGRx, BGRA, RGBx, xBGR, xRGB, RGBA, ABGR, ARGB, RGB, BGR, "
             "RGB16, BGR16, YUY2, YVYU, UYVY, AYUV, NV12, NV21, NV16, "
+#ifdef GST_WLSINK_ENHANCEMENT
+            "SN12, ST12, "
+#endif
             "YUV9, YVU9, Y41B, I420, YV12, Y42B, v308 }"))
     );
 
@@ -121,6 +136,7 @@ G_DEFINE_TYPE_WITH_CODE (GstWaylandSink, gst_wayland_sink, GST_TYPE_VIDEO_SINK,
 static void
 gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
 {
+  FUNCTION;
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
   GstBaseSinkClass *gstbasesink_class;
@@ -158,11 +174,19 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
       g_param_spec_string ("display", "Wayland Display name", "Wayland "
           "display name to connect to, if not supplied via the GstContext",
           NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+#ifdef GST_WLSINK_ENHANCEMENT
+//  g_object_class_install_property (gobject_class, PROP_ENABLE_TBM,
+//      g_param_spec_boolean ("enable-tbm", "Use Tizen buffer memory",
+//              "When enabled, Memory is alloced by TBM insted of SHM", TRUE,
+//              G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+#endif
 }
 
 static void
 gst_wayland_sink_init (GstWaylandSink * sink)
 {
+  FUNCTION;
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
 }
@@ -171,6 +195,7 @@ static void
 gst_wayland_sink_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
 
   switch (prop_id) {
@@ -179,6 +204,9 @@ gst_wayland_sink_get_property (GObject * object,
       g_value_set_string (value, sink->display_name);
       GST_OBJECT_UNLOCK (sink);
       break;
+//    case PROP_ENABLE_TBM:
+      //     g_value_set_string (value, sink->use_tbm);
+//        break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -189,6 +217,7 @@ static void
 gst_wayland_sink_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
 
   switch (prop_id) {
@@ -206,6 +235,7 @@ gst_wayland_sink_set_property (GObject * object,
 static void
 gst_wayland_sink_finalize (GObject * object)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
 
   GST_DEBUG_OBJECT (sink, "Finalizing the sink..");
@@ -233,6 +263,7 @@ static void
 gst_wayland_sink_set_display_from_context (GstWaylandSink * sink,
     GstContext * context)
 {
+  FUNCTION;
   struct wl_display *display;
   GError *error = NULL;
 
@@ -250,6 +281,7 @@ gst_wayland_sink_set_display_from_context (GstWaylandSink * sink,
 static gboolean
 gst_wayland_sink_find_display (GstWaylandSink * sink)
 {
+  FUNCTION;
   GstQuery *query;
   GstMessage *msg;
   GstContext *context = NULL;
@@ -303,6 +335,7 @@ gst_wayland_sink_find_display (GstWaylandSink * sink)
 static GstStateChangeReturn
 gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (element);
   GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
 
@@ -359,6 +392,7 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
 static void
 gst_wayland_sink_set_context (GstElement * element, GstContext * context)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (element);
 
   if (gst_context_has_context_type (context,
@@ -366,8 +400,13 @@ gst_wayland_sink_set_context (GstElement * element, GstContext * context)
     g_mutex_lock (&sink->display_lock);
     if (G_LIKELY (!sink->display))
       gst_wayland_sink_set_display_from_context (sink, context);
-    else
+    else {
       GST_WARNING_OBJECT (element, "changing display handle is not supported");
+#ifdef GST_WLSINK_ENHANCEMENT
+      g_mutex_unlock (&sink->display_lock);
+      return;
+#endif
+    }
     g_mutex_unlock (&sink->display_lock);
   }
 
@@ -378,6 +417,7 @@ gst_wayland_sink_set_context (GstElement * element, GstContext * context)
 static GstCaps *
 gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 {
+  FUNCTION;
   GstWaylandSink *sink;
   GstCaps *caps;
 
@@ -392,16 +432,33 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
     GValue value = G_VALUE_INIT;
     GArray *formats;
     gint i;
+#ifdef GST_WLSINK_ENHANCEMENT
+    uint32_t fmt;
+#else
     enum wl_shm_format fmt;
-
+#endif
     g_value_init (&list, GST_TYPE_LIST);
     g_value_init (&value, G_TYPE_STRING);
 
     formats = sink->display->formats;
     for (i = 0; i < formats->len; i++) {
+#ifdef GST_WLSINK_ENHANCEMENT
+      fmt = g_array_index (formats, uint32_t, i);
+      g_value_set_string (&value, gst_wl_tbm_format_to_string (fmt));
+      gst_value_list_append_value (&list, &value);
+      /* TBM doesn't support SN12. So we add SN12 manually as supported format.
+       * SN12 is exactly same with NV12.
+       */
+      if (fmt == TBM_FORMAT_NV12) {
+        g_value_set_string (&value,
+            gst_video_format_to_string (GST_VIDEO_FORMAT_SN12));
+        gst_value_list_append_value (&list, &value);
+      }
+#else
       fmt = g_array_index (formats, uint32_t, i);
       g_value_set_string (&value, gst_wl_shm_format_to_string (fmt));
       gst_value_list_append_value (&list, &value);
+#endif
     }
 
     caps = gst_caps_make_writable (caps);
@@ -427,10 +484,15 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 static gboolean
 gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 {
+  FUNCTION;
   GstWaylandSink *sink;
   GstBufferPool *newpool;
   GstVideoInfo info;
+#ifdef GST_WLSINK_ENHANCEMENT
+  uint32_t format;
+#else
   enum wl_shm_format format;
+#endif
   GArray *formats;
   gint i;
   GstStructure *structure;
@@ -442,8 +504,12 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   /* extract info from caps */
   if (!gst_video_info_from_caps (&info, caps))
     goto invalid_format;
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  sink->caps = gst_caps_copy (caps);
+  format = gst_video_format_to_wl_tbm_format (GST_VIDEO_INFO_FORMAT (&info));
+#else
   format = gst_video_format_to_wl_shm_format (GST_VIDEO_INFO_FORMAT (&info));
+#endif
   if ((gint) format == -1)
     goto invalid_format;
 
@@ -457,25 +523,43 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   if (i >= formats->len)
     goto unsupported_format;
 
-  /* create a new pool for the new configuration */
-  newpool = gst_video_buffer_pool_new ();
-  if (!newpool)
-    goto pool_failed;
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_SN12 ||
+      GST_VIDEO_INFO_FORMAT (&info) == GST_VIDEO_FORMAT_ST12) {
+    sink->display->is_native_format = TRUE;
+  } else {
+    sink->display->is_native_format = FALSE;
 
-  structure = gst_buffer_pool_get_config (newpool);
-  gst_buffer_pool_config_set_params (structure, caps, info.size, 2, 0);
-  gst_buffer_pool_config_set_allocator (structure, gst_wl_shm_allocator_get (),
-      NULL);
-  if (!gst_buffer_pool_set_config (newpool, structure))
-    goto config_failed;
+    GstWlShmAllocator *self =
+        GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
+    self->display = sink->display;
 
+#endif
+    /* create a new pool for the new configuration */
+    newpool = gst_video_buffer_pool_new ();
+    if (!newpool)
+      goto pool_failed;
+
+    structure = gst_buffer_pool_get_config (newpool);
+    gst_buffer_pool_config_set_params (structure, caps, info.size, 2, 0);
+    gst_buffer_pool_config_set_allocator (structure,
+        gst_wl_shm_allocator_get (), NULL);
+    if (!gst_buffer_pool_set_config (newpool, structure))
+      goto config_failed;
+
+    /* store the video info */
+    sink->video_info = info;
+    sink->video_info_changed = TRUE;
+
+    gst_object_replace ((GstObject **) & sink->pool, (GstObject *) newpool);
+    gst_object_unref (newpool);
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  }
   /* store the video info */
   sink->video_info = info;
   sink->video_info_changed = TRUE;
-
-  gst_object_replace ((GstObject **) & sink->pool, (GstObject *) newpool);
-  gst_object_unref (newpool);
-
+#endif
   return TRUE;
 
 invalid_format:
@@ -487,7 +571,11 @@ invalid_format:
 unsupported_format:
   {
     GST_DEBUG_OBJECT (sink, "Format %s is not available on the display",
+#ifdef GST_WLSINK_ENHANCEMENT
+        gst_wl_tbm_format_to_string (format));
+#else
         gst_wl_shm_format_to_string (format));
+#endif
     return FALSE;
   }
 pool_failed:
@@ -506,10 +594,14 @@ config_failed:
 static gboolean
 gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (bsink);
   GstStructure *config;
   guint size, min_bufs, max_bufs;
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (sink->display->is_native_format == TRUE)
+    return TRUE;
+#endif
   config = gst_buffer_pool_get_config (sink->pool);
   gst_buffer_pool_config_get_params (config, NULL, &size, &min_bufs, &max_bufs);
 
@@ -526,6 +618,7 @@ gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
 static GstFlowReturn
 gst_wayland_sink_preroll (GstBaseSink * bsink, GstBuffer * buffer)
 {
+  FUNCTION;
   GST_DEBUG_OBJECT (bsink, "preroll buffer %p", buffer);
   return gst_wayland_sink_render (bsink, buffer);
 }
@@ -533,6 +626,7 @@ gst_wayland_sink_preroll (GstBaseSink * bsink, GstBuffer * buffer)
 static void
 frame_redraw_callback (void *data, struct wl_callback *callback, uint32_t time)
 {
+  FUNCTION;
   GstWaylandSink *sink = data;
 
   GST_LOG ("frame_redraw_cb");
@@ -549,6 +643,7 @@ static const struct wl_callback_listener frame_callback_listener = {
 static void
 render_last_buffer (GstWaylandSink * sink)
 {
+  FUNCTION;
   GstWlBuffer *wlbuffer;
   const GstVideoInfo *info = NULL;
   struct wl_surface *surface;
@@ -559,6 +654,7 @@ render_last_buffer (GstWaylandSink * sink)
 
   g_atomic_int_set (&sink->redraw_pending, TRUE);
   callback = wl_surface_frame (surface);
+  /* frame_callback_listener is called when wayland-client finish rendering the wl_buffer */
   wl_callback_add_listener (callback, &frame_callback_listener, sink);
 
   if (G_UNLIKELY (sink->video_info_changed)) {
@@ -571,10 +667,15 @@ render_last_buffer (GstWaylandSink * sink)
 static GstFlowReturn
 gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (bsink);
   GstBuffer *to_render;
   GstWlBuffer *wlbuffer;
   GstFlowReturn ret = GST_FLOW_OK;
+#ifdef GST_WLSINK_ENHANCEMENT
+  GstBufferPool *newpool;
+  GstStructure *structure;
+#endif
 
   g_mutex_lock (&sink->render_lock);
 
@@ -593,89 +694,187 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
           gst_wl_window_new_toplevel (sink->display, &sink->video_info);
     }
   }
-
+  GST_ERROR("1");
   /* drop buffers until we get a frame callback */
   if (g_atomic_int_get (&sink->redraw_pending) == TRUE)
     goto done;
-
+  GST_ERROR("1");
   /* make sure that the application has called set_render_rectangle() */
   if (G_UNLIKELY (sink->window->render_rectangle.w == 0))
     goto no_window_size;
-
+GST_ERROR("1");
   wlbuffer = gst_buffer_get_wl_buffer (buffer);
 
   if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
-    GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, "
-        "writing directly", buffer);
+    GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, " "writing directly", buffer);   // s/w codec case
+    GST_ERROR("wl_buffer (%p)", wlbuffer->wlbuffer);
     to_render = buffer;
+#if  0
+	tbm_bo_handle virtual_addr;
+
+	GST_ERROR("display->tbm_bo (%p)", wlbuffer->display->tbm_bo);
+	virtual_addr.ptr = NULL;
+	virtual_addr = tbm_bo_get_handle (wlbuffer->display->tbm_bo, TBM_DEVICE_CPU);
+	if (!virtual_addr.ptr) {
+	  GST_ERROR_OBJECT (sink, "get tbm bo handle failed: %s", strerror (errno));
+	  tbm_bo_unref (wlbuffer->display->tbm_bo);
+	  wlbuffer->display->tbm_bo = NULL;
+	  return FALSE;
+	}
+#endif
+	
+/////////////////////////////////////////
+#if 0
+//	GstMemory *mem;
+//	GstMapInfo mem_info = GST_MAP_INFO_INIT;
+    int size = GST_VIDEO_INFO_SIZE (&sink->video_info);
+//	mem = gst_buffer_peek_memory (to_render, 0);
+//	gst_memory_map (mem, &mem_info, GST_MAP_READ);
+//	void *data;
+//	data = mem_info.data;
+	  int ret;
+	  char file_name[128];
+	  if (dump__cnt < 10) {
+		sprintf (file_name, "/home/owner/_WLSINK_OUT_DUMP_%2.2d.dump", dump__cnt++);
+		ret = __write_rawdata (file_name, virtual_addr.ptr , size);
+		if (ret) {
+		  GST_ERROR ("_write_rawdata() failed");
+		}
+		GST_ERROR("DUMP IMAGE");
+	  }
+#endif	  
+////////////////////////////////////////////	
   } else {
     GstMemory *mem;
     struct wl_buffer *wbuf = NULL;
 
-    GST_LOG_OBJECT (sink, "buffer %p does not have a wl_buffer from our "
-        "display, creating it", buffer);
-
+    GST_LOG_OBJECT (sink, "buffer %p does not have a wl_buffer from our " "display, creating it", buffer);      //videotestsrc case , s/w codec too
     mem = gst_buffer_peek_memory (buffer, 0);
-
     if (gst_is_wl_shm_memory (mem)) {
       wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
           &sink->video_info);
     }
-
     if (wbuf) {
-      gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
+      gst_buffer_add_wl_buffer (buffer, wbuf, sink->display); //careat GstWlBuffer and add  gstbuffer, wlbuffer, display and etc
       to_render = buffer;
+  
     } else {
       GstMapInfo src;
       /* we don't know how to create a wl_buffer directly from the provided
        * memory, so we have to copy the data to a memory that we know how
        * to handle... */
 
-      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, "
-          "copying to wl_shm memory", buffer);
+      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying to wl_shm memory", buffer);  //omx codec case
+#ifdef GST_WLSINK_ENHANCEMENT
+      if (sink->display->is_native_format == TRUE) {
+        /* in case of SN12 or ST12 */
+        GstMemory *mem;
+        struct wl_buffer *wbuf = NULL;
+        GstMapInfo mem_info = GST_MAP_INFO_INIT;
+        MMVideoBuffer *mm_video_buf = NULL;
 
-      /* sink->pool always exists (created in set_caps), but it may not
-       * be active if upstream is not using it */
-      if (!gst_buffer_pool_is_active (sink->pool) &&
-          !gst_buffer_pool_set_active (sink->pool, TRUE))
-        goto activate_failed;
+        mem = gst_buffer_peek_memory (buffer, 1);
+        gst_memory_map (mem, &mem_info, GST_MAP_READ);
+        mm_video_buf = (MMVideoBuffer *) mem_info.data;
+        gst_memory_unmap (mem, &mem_info);
 
-      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
-      if (ret != GST_FLOW_OK)
-        goto no_buffer;
+        if (mm_video_buf == NULL) {
+          GST_WARNING_OBJECT (sink, "mm_video_buf is NULL. Skip rendering");
+          return ret;
+        }
+        /* assign mm_video_buf info */
+        if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+          GST_DEBUG_OBJECT (sink, "TBM bo %p %p %p", mm_video_buf->handle.bo[0],
+              mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
+          sink->display->native_video_size = 0;
+          for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
+            if (mm_video_buf->handle.bo[i] != NULL) {
+              sink->display->bo[i] = mm_video_buf->handle.bo[i];
+            } else {
+              sink->display->bo[i] = 0;
+            }
+            sink->display->plane_size[i] = mm_video_buf->size[i];
+            sink->display->stride_width[i] = mm_video_buf->stride_width[i];
+            sink->display->stride_height[i] = mm_video_buf->stride_height[i];
+            sink->display->native_video_size += sink->display->plane_size[i];
+          }
+        } else {
+          GST_ERROR_OBJECT (sink, "Buffer type is not TBM");
+          return ret;
+        }
+        wlbuffer = gst_buffer_get_wl_buffer (buffer);
+        if (G_UNLIKELY (!wlbuffer)) {
+          wbuf =
+              gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
+              &sink->video_info);
+          if (G_UNLIKELY (!wbuf))
+            goto no_wl_buffer;
 
-      /* the first time we acquire a buffer,
-       * we need to attach a wl_buffer on it */
-      wlbuffer = gst_buffer_get_wl_buffer (buffer);
-      if (G_UNLIKELY (!wlbuffer)) {
-        mem = gst_buffer_peek_memory (to_render, 0);
-        wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-            &sink->video_info);
-        if (G_UNLIKELY (!wbuf))
-          goto no_wl_buffer;
+          gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
+        }
+      } else {
+#endif
 
-        gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
+        /* sink->pool always exists (created in set_caps), but it may not
+         * be active if upstream is not using it */
+        if (!gst_buffer_pool_is_active (sink->pool) &&
+            !gst_buffer_pool_set_active (sink->pool, TRUE))
+          goto activate_failed;
+
+        ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
+        if (ret != GST_FLOW_OK)
+          goto no_buffer;
+
+        /* the first time we acquire a buffer,
+         * we need to attach a wl_buffer on it */
+        wlbuffer = gst_buffer_get_wl_buffer (buffer);
+        if (G_UNLIKELY (!wlbuffer)) {
+          mem = gst_buffer_peek_memory (to_render, 0);
+          wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
+              &sink->video_info);
+          if (G_UNLIKELY (!wbuf))
+            goto no_wl_buffer;
+
+          gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
+        }
+
+        gst_buffer_map (buffer, &src, GST_MAP_READ);
+        gst_buffer_fill (to_render, 0, src.data, src.size);
+        gst_buffer_unmap (buffer, &src);
       }
-
-      gst_buffer_map (buffer, &src, GST_MAP_READ);
-      gst_buffer_fill (to_render, 0, src.data, src.size);
-      gst_buffer_unmap (buffer, &src);
+#ifdef GST_WLSINK_ENHANCEMENT
     }
+#endif
   }
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (sink->display->is_native_format == TRUE) {
 
-  /* drop double rendering */
-  if (G_UNLIKELY (to_render == sink->last_buffer)) {
-    GST_LOG_OBJECT (sink, "Buffer already being rendered");
+    if (G_UNLIKELY (buffer == sink->last_buffer)) {
+      GST_LOG_OBJECT (sink, "Buffer already being rendered");
+      goto done;
+    }
+    gst_buffer_replace (&sink->last_buffer, buffer);
+    render_last_buffer (sink);
+
     goto done;
+  } else {
+#endif
+    /* drop double rendering */
+    if (G_UNLIKELY (buffer == sink->last_buffer)) {
+      GST_LOG_OBJECT (sink, "Buffer already being rendered");
+      goto done;
+    }
+
+    gst_buffer_replace (&sink->last_buffer, to_render);
+    render_last_buffer (sink);
+
+    if (buffer != to_render)
+      gst_buffer_unref (to_render);
+
+    goto done;
+#ifdef GST_WLSINK_ENHANCEMENT
   }
-
-  gst_buffer_replace (&sink->last_buffer, to_render);
-  render_last_buffer (sink);
-
-  if (buffer != to_render)
-    gst_buffer_unref (to_render);
-  goto done;
-
+#endif
 no_window_size:
   {
     GST_ELEMENT_ERROR (sink, RESOURCE, WRITE,
@@ -707,6 +906,20 @@ done:
     return ret;
   }
 }
+int
+__write_rawdata (const char *file, const void *data, unsigned int size)
+{
+  FILE *fp;
+
+  fp = fopen (file, "wb");
+  if (fp == NULL)
+    return -1;
+
+  fwrite ((char *) data, sizeof (char), size, fp);
+  fclose (fp);
+
+  return 0;
+}
 
 static void
 gst_wayland_sink_videooverlay_init (GstVideoOverlayInterface * iface)
@@ -719,11 +932,17 @@ gst_wayland_sink_videooverlay_init (GstVideoOverlayInterface * iface)
 static void
 gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
   struct wl_surface *surface = (struct wl_surface *) handle;
 
   g_return_if_fail (sink != NULL);
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (sink->window != NULL) {
+    GST_WARNING_OBJECT (sink, "changing window handle is not supported");
+    return;
+  }
+#endif
   g_mutex_lock (&sink->render_lock);
 
   GST_DEBUG_OBJECT (sink, "Setting window handle %" GST_PTR_FORMAT,
@@ -756,6 +975,7 @@ static void
 gst_wayland_sink_set_render_rectangle (GstVideoOverlay * overlay,
     gint x, gint y, gint w, gint h)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
 
   g_return_if_fail (sink != NULL);
@@ -778,6 +998,7 @@ gst_wayland_sink_set_render_rectangle (GstVideoOverlay * overlay,
 static void
 gst_wayland_sink_expose (GstVideoOverlay * overlay)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
 
   g_return_if_fail (sink != NULL);
@@ -802,6 +1023,7 @@ gst_wayland_sink_waylandvideo_init (GstWaylandVideoInterface * iface)
 static void
 gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (video);
   g_return_if_fail (sink != NULL);
 
@@ -820,6 +1042,7 @@ gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video)
 static void
 gst_wayland_sink_end_geometry_change (GstWaylandVideo * video)
 {
+  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (video);
   g_return_if_fail (sink != NULL);
 

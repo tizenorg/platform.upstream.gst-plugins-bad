@@ -88,6 +88,7 @@ static G_DEFINE_QUARK (GstWlBufferQDataQuark, gst_wl_buffer_qdata);
 static void
 gst_wl_buffer_dispose (GObject * gobject)
 {
+  FUNCTION;
   GstWlBuffer *self = GST_WL_BUFFER (gobject);
 
   GST_TRACE_OBJECT (self, "dispose");
@@ -105,10 +106,14 @@ gst_wl_buffer_dispose (GObject * gobject)
 static void
 gst_wl_buffer_finalize (GObject * gobject)
 {
+  FUNCTION;
   GstWlBuffer *self = GST_WL_BUFFER (gobject);
 
   GST_TRACE_OBJECT (self, "finalize");
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (self->tsurface)
+    tbm_surface_destroy (self->tsurface);
+#endif
   if (self->wlbuffer)
     wl_buffer_destroy (self->wlbuffer);
 
@@ -118,6 +123,7 @@ gst_wl_buffer_finalize (GObject * gobject)
 static void
 gst_wl_buffer_class_init (GstWlBufferClass * klass)
 {
+  FUNCTION;
   GObjectClass *object_class = (GObjectClass *) klass;
 
   object_class->dispose = gst_wl_buffer_dispose;
@@ -132,14 +138,22 @@ gst_wl_buffer_init (GstWlBuffer * self)
 static void
 buffer_release (void *data, struct wl_buffer *wl_buffer)
 {
+  FUNCTION;
   GstWlBuffer *self = data;
 
   GST_LOG_OBJECT (self, "wl_buffer::release (GstBuffer: %p)", self->gstbuffer);
 
   self->used_by_compositor = FALSE;
 
+#ifdef GST_WLSINK_ENHANCEMENT
+  //  GST_ERROR ("self->tsurface(%p)", self->tsurface);
+  //  if (self->tsurface)
+  //	tbm_surface_destroy (self->tsurface);
+#endif
+
   /* unref should be last, because it may end up destroying the GstWlBuffer */
   gst_buffer_unref (self->gstbuffer);
+
 }
 
 static const struct wl_buffer_listener buffer_listener = {
@@ -149,6 +163,7 @@ static const struct wl_buffer_listener buffer_listener = {
 static void
 gstbuffer_disposed (GstWlBuffer * self)
 {
+  FUNCTION;
   g_assert (!self->used_by_compositor);
   self->gstbuffer = NULL;
 
@@ -163,16 +178,23 @@ GstWlBuffer *
 gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
     GstWlDisplay * display)
 {
+  FUNCTION;
   GstWlBuffer *self;
 
   self = g_object_new (GST_TYPE_WL_BUFFER, NULL);
   self->gstbuffer = gstbuffer;
   self->wlbuffer = wlbuffer;
   self->display = display;
-
-  gst_wl_display_register_buffer (self->display, self);
+#ifdef GST_WLSINK_ENHANCEMENT
+  self->tsurface = display->tsurface;
+  GST_ERROR ("self->tsurface(%p)", self->tsurface);
+#endif
+  gst_wl_display_register_buffer (self->display, self); //register GstWlBuffer
 
   wl_buffer_add_listener (self->wlbuffer, &buffer_listener, self);
+#ifdef GST_WLSINK_ENHANCEMENT   //need to contribute to upstream !!
+  wl_proxy_set_queue ((struct wl_proxy *) self->wlbuffer, self->display->queue);
+#endif
 
   gst_mini_object_set_qdata ((GstMiniObject *) gstbuffer,
       gst_wl_buffer_qdata_quark (), self, (GDestroyNotify) gstbuffer_disposed);
@@ -183,6 +205,7 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
 GstWlBuffer *
 gst_buffer_get_wl_buffer (GstBuffer * gstbuffer)
 {
+  FUNCTION;
   return gst_mini_object_get_qdata ((GstMiniObject *) gstbuffer,
       gst_wl_buffer_qdata_quark ());
 }
@@ -190,6 +213,7 @@ gst_buffer_get_wl_buffer (GstBuffer * gstbuffer)
 void
 gst_wl_buffer_force_release_and_unref (GstWlBuffer * self)
 {
+  FUNCTION;
   /* Force a buffer release.
    * At this point, the GstWlDisplay has killed its event loop,
    * so we don't need to worry about buffer_release() being called
@@ -212,7 +236,11 @@ gst_wl_buffer_force_release_and_unref (GstWlBuffer * self)
   wl_buffer_destroy (self->wlbuffer);
   self->wlbuffer = NULL;
   self->display = NULL;
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  GST_ERROR ("self->tsurface(%p)", self->tsurface);
+  if (self->tsurface)
+    tbm_surface_destroy (self->tsurface);
+#endif
   /* remove the reference that the caller (GstWlDisplay) owns */
   g_object_unref (self);
 }
@@ -220,6 +248,7 @@ gst_wl_buffer_force_release_and_unref (GstWlBuffer * self)
 void
 gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
 {
+  FUNCTION;
   g_return_if_fail (self->used_by_compositor == FALSE);
 
   wl_surface_attach (surface, self->wlbuffer, 0, 0);
