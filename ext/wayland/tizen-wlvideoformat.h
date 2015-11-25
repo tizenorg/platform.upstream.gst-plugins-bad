@@ -20,19 +20,21 @@
  * Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  */
-#ifndef GST_WLSINK_ENHANCEMENT
-#ifndef __GST_WL_VIDEO_FORMAT_H__
-#define __GST_WL_VIDEO_FORMAT_H__
 
-#include <wayland-client-protocol.h>
+#ifndef __GST_TIZEN_WL_VIDEO_FORMAT_H__
+#define __GST_TIZEN_WL_VIDEO_FORMAT_H__
+
+#include <wayland-client.h>
 #include <gst/video/video.h>
 
-G_BEGIN_DECLS
-    enum wl_shm_format gst_video_format_to_wl_shm_format (GstVideoFormat
-    format);
-GstVideoFormat gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format);
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <tbm_surface.h>
 
-const gchar *gst_wl_shm_format_to_string (enum wl_shm_format wl_format);
+G_BEGIN_DECLS
+    uint32_t gst_video_format_to_wl_tbm_format (GstVideoFormat format);
+GstVideoFormat gst_wl_tbm_format_to_video_format (uint32_t wl_format);
+
+const gchar *gst_wl_tbm_format_to_string (uint32_t wl_format);
 
 G_END_DECLS
 #endif
