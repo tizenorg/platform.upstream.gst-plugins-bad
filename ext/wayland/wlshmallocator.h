@@ -28,16 +28,13 @@
 #include "wldisplay.h"
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_WL_SHM_ALLOCATOR                  (gst_wl_shm_allocator_get_type ())
 #define GST_WL_SHM_ALLOCATOR(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_SHM_ALLOCATOR, GstWlShmAllocator))
 #define GST_IS_WL_SHM_ALLOCATOR(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_SHM_ALLOCATOR))
 #define GST_WL_SHM_ALLOCATOR_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_SHM_ALLOCATOR, GstWlShmAllocatorClass))
 #define GST_IS_WL_SHM_ALLOCATOR_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_SHM_ALLOCATOR))
 #define GST_WL_SHM_ALLOCATOR_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_SHM_ALLOCATOR, GstWlShmAllocatorClass))
-
 #define GST_ALLOCATOR_WL_SHM "wl_shm"
-
 typedef struct _GstWlShmMemory GstWlShmMemory;
 typedef struct _GstWlShmAllocator GstWlShmAllocator;
 typedef struct _GstWlShmAllocatorClass GstWlShmAllocatorClass;
@@ -53,6 +50,9 @@ struct _GstWlShmMemory
 struct _GstWlShmAllocator
 {
   GstAllocator parent_instance;
+#ifdef GST_WLSINK_ENHANCEMENT
+  GstWlDisplay *display;
+#endif
 };
 
 struct _GstWlShmAllocatorClass
@@ -63,12 +63,11 @@ struct _GstWlShmAllocatorClass
 GType gst_wl_shm_allocator_get_type (void);
 
 void gst_wl_shm_allocator_register (void);
-GstAllocator * gst_wl_shm_allocator_get (void);
+GstAllocator *gst_wl_shm_allocator_get (void);
 
 gboolean gst_is_wl_shm_memory (GstMemory * mem);
-struct wl_buffer * gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem,
+struct wl_buffer *gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem,
     GstWlDisplay * display, const GstVideoInfo * info);
 
 G_END_DECLS
-
 #endif /* __GST_WL_SHM_ALLOCATOR_H__ */

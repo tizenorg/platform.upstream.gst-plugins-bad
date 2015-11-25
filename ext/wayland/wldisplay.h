@@ -24,18 +24,25 @@
 #include <gst/gst.h>
 #include <wayland-client.h>
 #include "scaler-client-protocol.h"
+#ifdef GST_WLSINK_ENHANCEMENT
+#include <tbm_bufmgr.h>
+#include <wayland-tbm-client.h>
+#include <tizen-extension-client-protocol.h>
+#define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
+#endif
 
 G_BEGIN_DECLS
-
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
 #define GST_WL_DISPLAY(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplay))
 #define GST_IS_WL_DISPLAY(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
 #define GST_IS_WL_DISPLAY_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
-
+#define FUNCTION GST_INFO ("<ENTER>")
 typedef struct _GstWlDisplay GstWlDisplay;
 typedef struct _GstWlDisplayClass GstWlDisplayClass;
+
+#define TBM_BO_NUM 20
 
 struct _GstWlDisplay
 {
@@ -62,6 +69,32 @@ struct _GstWlDisplay
   GMutex buffers_mutex;
   GHashTable *buffers;
   gboolean shutting_down;
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  /*video output layer */
+  struct tizen_policy *tizen_policy;
+  struct tizen_video *tizen_video;
+
+  struct wayland_tbm_client *tbm_client;
+  tbm_bufmgr tbm_bufmgr;
+  tbm_bo tbm_bo[TBM_BO_NUM];
+  int tbm_bo_c_idx;
+  int tbm_bo_u_idx;
+  int tbm_bo_max_idx;
+  tbm_surface_h tsurface;
+
+  gboolean is_native_format;    /*SN12, ST12 */
+  void *bo[NV_BUF_PLANE_NUM];
+  int plane_size[NV_BUF_PLANE_NUM];
+  int stride_width[NV_BUF_PLANE_NUM];
+  int stride_height[NV_BUF_PLANE_NUM];
+  int native_video_size;
+#endif
+
+#if 1
+  gboolean need_shell_surface;
+  gboolean use_parent_wl_surface;
+#endif
 };
 
 struct _GstWlDisplayClass
@@ -72,7 +105,7 @@ struct _GstWlDisplayClass
 GType gst_wl_display_get_type (void);
 
 GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
-GstWlDisplay *gst_wl_display_new_existing (struct wl_display * display,
+GstWlDisplay *gst_wl_display_new_existing (struct wl_display *display,
     gboolean take_ownership, GError ** error);
 
 /* see wlbuffer.c for explanation */
@@ -80,5 +113,4 @@ void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf);
 void gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf);
 
 G_END_DECLS
-
 #endif /* __GST_WL_DISPLAY_H__ */
