@@ -79,6 +79,7 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
+#export CFLAGS="-DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS"
 export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS"
 %configure\
     --disable-static\
