@@ -53,6 +53,9 @@ struct _GstWlShmMemory
 struct _GstWlShmAllocator
 {
   GstAllocator parent_instance;
+#ifdef GST_WLSINK_ENHANCEMENT
+  GstWlDisplay *display;
+#endif
 };
 
 struct _GstWlShmAllocatorClass
@@ -63,10 +66,10 @@ struct _GstWlShmAllocatorClass
 GType gst_wl_shm_allocator_get_type (void);
 
 void gst_wl_shm_allocator_register (void);
-GstAllocator * gst_wl_shm_allocator_get (void);
+GstAllocator *gst_wl_shm_allocator_get (void);
 
 gboolean gst_is_wl_shm_memory (GstMemory * mem);
-struct wl_buffer * gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem,
+struct wl_buffer *gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem,
     GstWlDisplay * display, const GstVideoInfo * info);
 
 G_END_DECLS

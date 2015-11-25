@@ -20,7 +20,7 @@
  * Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301 USA.
  */
-
+#ifndef GST_WLSINK_ENHANCEMENT
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -29,7 +29,7 @@
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
-
+#define FUNCTION GST_INFO ("<ENTER>")
 typedef struct
 {
   enum wl_shm_format wl_format;
@@ -80,6 +80,7 @@ static const wl_VideoFormat formats[] = {
 enum wl_shm_format
 gst_video_format_to_wl_shm_format (GstVideoFormat format)
 {
+  FUNCTION;
   guint i;
 
   for (i = 0; i < G_N_ELEMENTS (formats); i++)
@@ -93,6 +94,7 @@ gst_video_format_to_wl_shm_format (GstVideoFormat format)
 GstVideoFormat
 gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format)
 {
+  FUNCTION;
   guint i;
 
   for (i = 0; i < G_N_ELEMENTS (formats); i++)
@@ -106,6 +108,8 @@ gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format)
 const gchar *
 gst_wl_shm_format_to_string (enum wl_shm_format wl_format)
 {
+  FUNCTION;
   return gst_video_format_to_string
       (gst_wl_shm_format_to_video_format (wl_format));
 }
+#endif

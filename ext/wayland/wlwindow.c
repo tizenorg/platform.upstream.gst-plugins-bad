@@ -62,6 +62,7 @@ static const struct wl_shell_surface_listener shell_surface_listener = {
 static void
 gst_wl_window_class_init (GstWlWindowClass * klass)
 {
+  FUNCTION;
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize = gst_wl_window_finalize;
 }
@@ -74,7 +75,12 @@ gst_wl_window_init (GstWlWindow * self)
 static void
 gst_wl_window_finalize (GObject * gobject)
 {
+  FUNCTION;
   GstWlWindow *self = GST_WL_WINDOW (gobject);
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  tizen_video_object_destroy (self->video_object);
+#endif
 
   if (self->shell_surface) {
     wl_shell_surface_destroy (self->shell_surface);
@@ -96,8 +102,9 @@ gst_wl_window_finalize (GObject * gobject)
 }
 
 static GstWlWindow *
-gst_wl_window_new_internal (GstWlDisplay * display)
+gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
 {
+  FUNCTION;
   GstWlWindow *window;
   GstVideoInfo info;
   GstBuffer *buf;
@@ -115,6 +122,20 @@ gst_wl_window_new_internal (GstWlDisplay * display)
   wl_proxy_set_queue ((struct wl_proxy *) window->area_surface, display->queue);
   wl_proxy_set_queue ((struct wl_proxy *) window->video_surface,
       display->queue);
+
+#if 1                           /* create shell_surface here for enlightenment */
+  /* go toplevel */
+  if (display->need_shell_surface) {
+    window->shell_surface = wl_shell_get_shell_surface (display->shell,
+        window->area_surface);
+  }
+  if (display->use_parent_wl_surface && parent != NULL) {
+    window->area_subsurface =
+        wl_subcompositor_get_subsurface (display->subcompositor,
+        window->area_surface, parent);
+    wl_subsurface_set_desync (window->area_subsurface);
+  }
+#endif
 
   /* embed video_surface in area_surface */
   window->video_subsurface =
@@ -137,6 +158,12 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 #endif
       1, 1);
 
+#ifdef GST_WLSINK_ENHANCEMENT
+/* Inform enlightenment of surface which render video */
+  window->video_object =
+      tizen_video_get_object (display->tizen_video, window->video_surface);
+#else
+  GST_ERROR ("2");
   buf = gst_buffer_new_allocate (gst_wl_shm_allocator_get (), info.size, NULL);
   gst_buffer_map (buf, &mapinfo, GST_MAP_WRITE);
   *((guint32 *) mapinfo.data) = 0;      /* paint it black */
@@ -150,6 +177,7 @@ gst_wl_window_new_internal (GstWlDisplay * display)
   /* at this point, the GstWlBuffer keeps the buffer
    * alive and will free it on wl_buffer::release */
   gst_buffer_unref (buf);
+#endif
 
   /* do not accept input */
   region = wl_compositor_create_region (display->compositor);
@@ -166,15 +194,20 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 GstWlWindow *
 gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info)
 {
+  FUNCTION;
   GstWlWindow *window;
   gint width;
 
-  window = gst_wl_window_new_internal (display);
+/* not create shell_surface here for enlightenment */
+  display->need_shell_surface = TRUE;
 
+  window = gst_wl_window_new_internal (display, NULL);
+
+#if 0 //GST_WLSINK_ENHANCEMENT
   /* go toplevel */
   window->shell_surface = wl_shell_get_shell_surface (display->shell,
       window->area_surface);
-
+#endif
   if (window->shell_surface) {
     wl_shell_surface_add_listener (window->shell_surface,
         &shell_surface_listener, window);
@@ -198,14 +231,27 @@ GstWlWindow *
 gst_wl_window_new_in_surface (GstWlDisplay * display,
     struct wl_surface * parent)
 {
+  FUNCTION;
   GstWlWindow *window;
-  window = gst_wl_window_new_internal (display);
 
+  display->use_parent_wl_surface = TRUE;
+  window = gst_wl_window_new_internal (display, parent);
+
+#if 0
   /* embed in parent */
   window->area_subsurface =
       wl_subcompositor_get_subsurface (display->subcompositor,
       window->area_surface, parent);
   wl_subsurface_set_desync (window->area_subsurface);
+#endif
+
+#ifdef GST_WLSINK_ENHANCEMENT
+  /*Area surface from App need to be under parent surface */
+  if (display->tizen_policy)
+    tizen_policy_place_subsurface_below_parent (display->tizen_policy,
+        window->area_subsurface);
+  wl_surface_commit (parent);
+#endif
 
   return window;
 }
@@ -213,6 +259,7 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 GstWlDisplay *
 gst_wl_window_get_display (GstWlWindow * window)
 {
+  FUNCTION;
   g_return_val_if_fail (window != NULL, NULL);
 
   return g_object_ref (window->display);
@@ -221,6 +268,7 @@ gst_wl_window_get_display (GstWlWindow * window)
 struct wl_surface *
 gst_wl_window_get_wl_surface (GstWlWindow * window)
 {
+  FUNCTION;
   g_return_val_if_fail (window != NULL, NULL);
 
   return window->video_surface;
@@ -229,6 +277,7 @@ gst_wl_window_get_wl_surface (GstWlWindow * window)
 gboolean
 gst_wl_window_is_toplevel (GstWlWindow * window)
 {
+  FUNCTION;
   g_return_val_if_fail (window != NULL, FALSE);
 
   return (window->shell_surface != NULL);
@@ -237,6 +286,7 @@ gst_wl_window_is_toplevel (GstWlWindow * window)
 static void
 gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
 {
+  FUNCTION;
   GstVideoRectangle src = { 0, };
   GstVideoRectangle res;
 
@@ -272,6 +322,7 @@ void
 gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
     const GstVideoInfo * info)
 {
+  FUNCTION;
   if (G_UNLIKELY (info)) {
     window->video_width =
         gst_util_uint64_scale_int_round (info->width, info->par_n, info->par_d);
@@ -286,8 +337,10 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
   else
     wl_surface_attach (window->video_surface, NULL, 0, 0);
 
+  /*Wayland-compositor will try to render damage area which need  to be updated */
   wl_surface_damage (window->video_surface, 0, 0, window->surface_width,
       window->surface_height);
+  /* wl_surface_commit change surface state, if wl_buffer is not attached newly,  then surface is not changed */
   wl_surface_commit (window->video_surface);
 
   if (G_UNLIKELY (info)) {
@@ -306,8 +359,15 @@ void
 gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h)
 {
+  FUNCTION;
   g_return_if_fail (window != NULL);
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (window->render_rectangle.x == x && window->render_rectangle.y == y
+      && window->render_rectangle.w == w && window->render_rectangle.h == h) {
+    GST_DEBUG ("but the values are same. skip");
+    return;
+  }
+#endif
   window->render_rectangle.x = x;
   window->render_rectangle.y = y;
   window->render_rectangle.w = w;
