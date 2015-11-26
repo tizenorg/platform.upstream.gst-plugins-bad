@@ -39,8 +39,6 @@ static void
 handle_ping (void *data, struct wl_shell_surface *shell_surface,
     uint32_t serial)
 {
-  FUNCTION_ENTER ();
-
   wl_shell_surface_pong (shell_surface, serial);
 }
 
@@ -48,15 +46,11 @@ static void
 handle_configure (void *data, struct wl_shell_surface *shell_surface,
     uint32_t edges, int32_t width, int32_t height)
 {
-  FUNCTION_ENTER ();
-
 }
 
 static void
 handle_popup_done (void *data, struct wl_shell_surface *shell_surface)
 {
-  FUNCTION_ENTER ();
-
 }
 
 static const struct wl_shell_surface_listener shell_surface_listener = {
@@ -68,8 +62,6 @@ static const struct wl_shell_surface_listener shell_surface_listener = {
 static void
 gst_wl_window_class_init (GstWlWindowClass * klass)
 {
-  FUNCTION_ENTER ();
-
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize = gst_wl_window_finalize;
 }
@@ -77,15 +69,11 @@ gst_wl_window_class_init (GstWlWindowClass * klass)
 static void
 gst_wl_window_init (GstWlWindow * self)
 {
-  FUNCTION_ENTER ();
-
 }
 
 static void
 gst_wl_window_finalize (GObject * gobject)
 {
-  FUNCTION_ENTER ();
-
   GstWlWindow *self = GST_WL_WINDOW (gobject);
 
   if (self->shell_surface) {
@@ -110,8 +98,6 @@ gst_wl_window_finalize (GObject * gobject)
 static GstWlWindow *
 gst_wl_window_new_internal (GstWlDisplay * display)
 {
-  FUNCTION_ENTER ();
-
   GstWlWindow *window;
   GstVideoInfo info;
   GstBuffer *buf;
@@ -180,8 +166,6 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 GstWlWindow *
 gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info)
 {
-  FUNCTION_ENTER ();
-
   GstWlWindow *window;
   gint width;
 
@@ -214,8 +198,6 @@ GstWlWindow *
 gst_wl_window_new_in_surface (GstWlDisplay * display,
     struct wl_surface * parent)
 {
-  FUNCTION_ENTER ();
-
   GstWlWindow *window;
   window = gst_wl_window_new_internal (display);
 
@@ -225,16 +207,12 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
       window->area_surface, parent);
   wl_subsurface_set_desync (window->area_subsurface);
 
-  wl_surface_commit (parent);
-#endif
   return window;
 }
 
 GstWlDisplay *
 gst_wl_window_get_display (GstWlWindow * window)
 {
-  FUNCTION_ENTER ();
-
   g_return_val_if_fail (window != NULL, NULL);
 
   return g_object_ref (window->display);
@@ -243,8 +221,6 @@ gst_wl_window_get_display (GstWlWindow * window)
 struct wl_surface *
 gst_wl_window_get_wl_surface (GstWlWindow * window)
 {
-  FUNCTION_ENTER ();
-
   g_return_val_if_fail (window != NULL, NULL);
 
   return window->video_surface;
@@ -253,8 +229,6 @@ gst_wl_window_get_wl_surface (GstWlWindow * window)
 gboolean
 gst_wl_window_is_toplevel (GstWlWindow * window)
 {
-  FUNCTION_ENTER ();
-
   g_return_val_if_fail (window != NULL, FALSE);
 
   return (window->shell_surface != NULL);
@@ -269,86 +243,7 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   /* center the video_subsurface inside area_subsurface */
   src.w = window->video_width;
   src.h = window->video_height;
-#ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
-
-  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
-  GstVideoRectangle src_input = { 0, 0, 0, 0 };
-  GstVideoRectangle dst = { 0, 0, 0, 0 };
-
-  gint rotate = 0;
-  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
-
-  src.x = src.y = 0;
-  src_input.w = src_origin.w = window->video_width;
-  src_input.h = src_origin.h = window->video_height;
-  GST_INFO ("video (%d x %d)", window->video_width, window->video_height);
-  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
-      src_input.h);
-  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
-      src_origin.w, src_origin.h);
-
-  if (window->rotate_angle == DEGREE_0 || window->rotate_angle == DEGREE_180) {
-    src.w = window->video_width;        //video_width
-    src.h = window->video_height;       //video_height
-  } else {
-    src.w = window->video_height;
-    src.h = window->video_width;
-  }
-  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
-
-  /*default res.w and res.h */
-  dst.w = window->render_rectangle.w;
-  dst.h = window->render_rectangle.h;
-  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
-  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
-      window->render_rectangle.x, window->render_rectangle.y,
-      window->render_rectangle.w, window->render_rectangle.h);
-  switch (window->disp_geo_method) {
-    case DISP_GEO_METHOD_LETTER_BOX:
-      GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
-      gst_video_sink_center_rect (src, dst, &res, TRUE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      res.x += window->render_rectangle.x;
-      res.y += window->render_rectangle.y;
-      break;
-    case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
-      if (src.w > dst.w || src.h > dst.h) {
-        /*LETTER BOX */
-        GST_INFO
-            ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
-        gst_video_sink_center_rect (src, dst, &res, TRUE);
-        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-        res.x += window->render_rectangle.x;
-        res.y += window->render_rectangle.y;
-      } else {
-        /*ORIGIN SIZE */
-        GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
-        gst_video_sink_center_rect (src, dst, &res, FALSE);
-        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      }
-      break;
-    case DISP_GEO_METHOD_ORIGIN_SIZE:  //is working
-      GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
-      gst_video_sink_center_rect (src, dst, &res, FALSE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      break;
-    case DISP_GEO_METHOD_FULL_SCREEN:  //is working
-      GST_INFO ("DISP_GEO_METHOD_FULL_SCREEN");
-      res.x = res.y = 0;
-      res.w = window->render_rectangle.w;
-      res.h = window->render_rectangle.h;
-      break;
-    case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
-      GST_INFO ("DISP_GEO_METHOD_CROPPED_FULL_SCREEN");
-      gst_video_sink_center_rect (src, dst, &res, FALSE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      res.x = res.y = 0;
-      res.w = dst.w;
-      res.h = dst.h;
-      break;
-    default:
-      break;
-  }
+  gst_video_sink_center_rect (src, window->render_rectangle, &res, TRUE);
 
   wl_subsurface_set_position (window->video_subsurface, res.x, res.y);
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
@@ -371,7 +266,6 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   /* this is saved for use in wl_surface_damage */
   window->surface_width = res.w;
   window->surface_height = res.h;
-#endif
 }
 
 void
@@ -412,8 +306,6 @@ void
 gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h)
 {
-  FUNCTION_ENTER ();
-
   g_return_if_fail (window != NULL);
 
   window->render_rectangle.x = x;
@@ -439,42 +331,3 @@ gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
   if (window->video_width != 0)
     wl_subsurface_set_desync (window->video_subsurface);
 }
-
-#ifdef GST_WLSINK_ENHANCEMENT
-void
-gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
-{
-  FUNCTION_ENTER ();
-  g_return_if_fail (window != NULL);
-  window->rotate_angle = rotate_angle;
-  GST_INFO ("rotate_angle value is (%d)", window->rotate_angle);
-
-}
-
-void
-gst_wl_window_set_disp_geo_method (GstWlWindow * window, guint disp_geo_method)
-{
-  FUNCTION_ENTER ();
-  g_return_if_fail (window != NULL);
-  window->disp_geo_method = disp_geo_method;
-  GST_INFO ("disp_geo_method value is (%d)", window->disp_geo_method);
-}
-
-void
-gst_wl_window_set_orientation (GstWlWindow * window, guint orientation)
-{
-  FUNCTION_ENTER ();
-  g_return_if_fail (window != NULL);
-  window->orientation = orientation;
-  GST_INFO ("orientation value is (%d)", window->orientation);
-}
-
-void
-gst_wl_window_set_flip (GstWlWindow * window, guint flip)
-{
-  FUNCTION_ENTER ();
-  g_return_if_fail (window != NULL);
-  window->flip = flip;
-  GST_INFO ("flip value is (%d)", window->flip);
-}
-#endif

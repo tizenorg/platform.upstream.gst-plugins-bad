@@ -59,6 +59,9 @@ enum
   PROP_SOCKET_PATH,
   PROP_IS_LIVE,
   PROP_SHM_AREA_NAME
+#ifdef GST_TBM_SUPPORT
+  ,PROP_USE_TBM
+#endif
 };
 
 struct GstShmBuffer
@@ -134,6 +137,12 @@ gst_shm_src_class_init (GstShmSrcClass * klass)
       g_param_spec_boolean ("is-live", "Is this a live source",
           "True if the element cannot produce data in PAUSED", FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_SHM_AREA_NAME,
+      g_param_spec_string ("shm-area-name",
+          "Name of the shared memory area",
+          "The name of the shared memory area used to get buffers",
+          NULL, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 #ifdef GST_TBM_SUPPORT
   g_object_class_install_property (gobject_class, PROP_USE_TBM,
       g_param_spec_boolean ("use-tbm",
@@ -142,12 +151,6 @@ gst_shm_src_class_init (GstShmSrcClass * klass)
           FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 #endif
-
-  g_object_class_install_property (gobject_class, PROP_SHM_AREA_NAME,
-      g_param_spec_string ("shm-area-name",
-          "Name of the shared memory area",
-          "The name of the shared memory area used to get buffers",
-          NULL, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&srctemplate));
@@ -238,6 +241,11 @@ gst_shm_src_get_property (GObject * object, guint prop_id,
         g_value_set_string (value, sp_get_shm_area_name (self->pipe->pipe));
       GST_OBJECT_UNLOCK (object);
       break;
+#ifdef GST_TBM_SUPPORT
+    case PROP_USE_TBM:
+      g_value_set_boolean (value, self->use_tbm);
+      break;
+#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -318,6 +326,7 @@ gst_shm_src_stop (GstBaseSrc * bsrc)
 
   return TRUE;
 }
+
 
 static void
 free_buffer (gpointer data)
