@@ -26,6 +26,7 @@
 #include <gst/gstmemory.h>
 #include <gst/video/video.h>
 
+#include <gst/gl/gstglbasebuffer.h>
 #include <gst/gl/gl.h>
 
 G_BEGIN_DECLS
@@ -40,140 +41,122 @@ GType gst_gl_allocator_get_type(void);
 #define GST_GL_ALLOCATOR_CLASS(klass)         (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_GL_ALLOCATOR, GstGLAllocatorClass))
 #define GST_GL_ALLOCATOR_CAST(obj)            ((GstGLAllocator *)(obj))
 
-/**
- * GstGLMemoryFlags:
- *
- * Flags indicating the current state of a #GstGLMemory
- */
-typedef enum
+typedef enum _GstGLMemoryTransfer
 {
-  GST_GL_MEMORY_FLAG_DOWNLOAD_INITTED = (GST_MEMORY_FLAG_LAST << 0),
-  GST_GL_MEMORY_FLAG_UPLOAD_INITTED   = (GST_MEMORY_FLAG_LAST << 1),
-  GST_GL_MEMORY_FLAG_NEED_DOWNLOAD   = (GST_MEMORY_FLAG_LAST << 2),
-  GST_GL_MEMORY_FLAG_NEED_UPLOAD     = (GST_MEMORY_FLAG_LAST << 3)
-} GstGLMemoryFlags;
+  /* force a transfer between the texture and the PBO (if available) */
+  GST_GL_MEMORY_TRANSFER_NEED_UPLOAD = (1 << 0),
+  GST_GL_MEMORY_TRANSFER_NEED_DOWNLOAD = (1 << 1),
+} GstGLMemoryTransfer;
 
-/**
- * GST_MAP_GL:
- *
- * Flag indicating that we should map the GL object instead of to system memory.
- *
- * Combining #GST_MAP_GL with #GST_MAP_WRITE has the same semantics as though
- * you are writing to OpenGL. Conversely, combining #GST_MAP_GL with
- * #GST_MAP_READ has the same semantics as though you are reading from OpenGL.
- */
-#define GST_MAP_GL GST_MAP_FLAG_LAST << 1
+#define GST_GL_MEMORY_ADD_TRANSFER(mem,state) ((GstGLMemory *)mem)->transfer_state |= state
 
 /**
  * GstGLMemory:
  * @mem: the parent object
  * @context: the #GstGLContext to use for GL operations
- * @tex_id: the texture id for this memory
- * @v_format: the video format of this texture
- * @gl_format: the format of the texture
- * @width: width of the texture
- * @height: height of the texture
- * @download: the object used to download this texture into @v_format
- * @upload: the object used to upload this texture from @v_format
+ * @tex_id: the GL texture id for this memory
+ * @tex_target: the GL texture target for this memory
+ * @tex_type: the texture type
+ * @info: the texture's #GstVideoInfo
+ * @valign: data alignment for system memory mapping
+ * @plane: data plane in @info
+ * @tex_scaling: GL shader scaling parameters for @valign and/or width/height
  *
  * Represents information about a GL texture
  */
 struct _GstGLMemory
 {
-  GstMemory                    mem;
+  GstGLBaseBuffer       mem;
 
-  GstGLContext         *context;
   guint                 tex_id;
+  guint                 tex_target;
   GstVideoGLTextureType tex_type;
-  gint                  width;
-  gint                  height;
-  gint                  stride;
+  GstVideoInfo          info;
+  GstVideoAlignment     valign;
+  guint                 plane;
   gfloat                tex_scaling[2];
 
   /* <private> */
-  GstMapFlags           map_flags;
-  gpointer              data;
-
-  gboolean              data_wrapped;
+  GstGLMemoryTransfer   transfer_state;
   gboolean              texture_wrapped;
   GDestroyNotify        notify;
   gpointer              user_data;
-  guint                 pbo;
   guint                 unpack_length;
-
-  gpointer              _gst_reserved[GST_PADDING];
+  guint                 tex_width;
 };
 
 #define GST_CAPS_FEATURE_MEMORY_GL_MEMORY "memory:GLMemory"
+#define GST_GL_MEMORY_VIDEO_FORMATS_STR \
+    "{ RGBA, BGRA, RGBx, BGRx, ARGB, ABGR, xRGB, xBGR, RGB, BGR, RGB16, BGR16, " \
+    "AYUV, I420, YV12, NV12, NV21, YUY2, UYVY, Y41B, Y42B, Y444, " \
+    "GRAY8, GRAY16_LE, GRAY16_BE }"
 
 /**
  * GST_GL_MEMORY_ALLOCATOR:
  *
- * The name of the GL memore allocator
+ * The name of the GL memory allocator
  */
 #define GST_GL_MEMORY_ALLOCATOR   "GLMemory"
-
-/**
- * GST_GL_MEMORY_FLAGS:
- * @mem: a #GstGLMemory
- *
- * Get the currently set flags on @mem
- */
-#define GST_GL_MEMORY_FLAGS(mem) GST_MEMORY_FLAGS(mem)
-
-/**
- * GST_GL_MEMORY_FLAG_IS_SET:
- * @mem: a #GstGLMemory
- * @flag: a flag
- *
- * Whether @flag is set on @mem
- */
-#define GST_GL_MEMORY_FLAG_IS_SET(mem,flag) GST_MEMORY_FLAG_IS_SET(mem,flag)
-
-/**
- * GST_GL_MEMORY_FLAG_SET:
- * @mem: a #GstGLMemory
- * @flag: a flag
- *
- * Set @flag on @mem
- */
-#define GST_GL_MEMORY_FLAG_SET(mem,flag) GST_MINI_OBJECT_FLAG_SET(mem,flag)
-
-/**
- * GST_GL_MEMORY_FLAG_UNSET:
- * @mem: a #GstGLMemory
- * @flag: a flag
- *
- * Unset @flag on @mem
- */
-#define GST_GL_MEMORY_FLAG_UNSET(mem,flag) GST_MEMORY_FLAG_UNSET(mem,flag)
 
 void          gst_gl_memory_init (void);
 gboolean      gst_is_gl_memory (GstMemory * mem);
 
-GstMemory *   gst_gl_memory_alloc   (GstGLContext * context, GstVideoGLTextureType tex_type, 
-                                     gint width, gint height, gint stride);
-GstGLMemory * gst_gl_memory_wrapped (GstGLContext * context, GstVideoGLTextureType tex_type, 
-                                     gint width, gint height, gint stride,
-                                     gpointer data, gpointer user_data,
+GstMemory *   gst_gl_memory_alloc   (GstGLContext * context,
+                                     GstAllocationParams *params,
+                                     GstVideoInfo * info,
+                                     guint plane,
+                                     GstVideoAlignment *valign);
+GstGLMemory * gst_gl_memory_wrapped (GstGLContext * context,
+                                     GstVideoInfo * info,
+                                     guint plane,
+                                     GstVideoAlignment *valign,
+                                     gpointer data,
+                                     gpointer user_data,
                                      GDestroyNotify notify);
-GstGLMemory * gst_gl_memory_wrapped_texture (GstGLContext * context, guint texture_id,
-                                             GstVideoGLTextureType tex_type, 
-                                             gint width, gint height,
-                                             gpointer user_data, GDestroyNotify notify);
+GstGLMemory * gst_gl_memory_wrapped_texture (GstGLContext * context,
+                                             guint texture_id,
+                                             guint texture_target,
+                                             GstVideoInfo * info,
+                                             guint plane,
+                                             GstVideoAlignment *valign,
+                                             gpointer user_data,
+                                             GDestroyNotify notify);
 
-gboolean      gst_gl_memory_copy_into_texture (GstGLMemory *gl_mem, guint tex_id,
-                                               GstVideoGLTextureType tex_type, 
-                                               gint width, gint height, gint stride,
+void          gst_gl_memory_download_transfer (GstGLMemory * gl_mem);
+void          gst_gl_memory_upload_transfer   (GstGLMemory * gl_mem);
+
+gboolean      gst_gl_memory_copy_into_texture (GstGLMemory *gl_mem,
+                                               guint tex_id,
+                                               GstVideoGLTextureType tex_type,
+                                               gint width,
+                                               gint height,
+                                               gint stride,
                                                gboolean respecify);
 
-gboolean      gst_gl_memory_setup_buffer  (GstGLContext * context, GstVideoInfo * info,
+gboolean      gst_gl_memory_setup_buffer  (GstGLContext * context,
+                                           GstAllocationParams * params,
+                                           GstVideoInfo * info,
+                                           GstVideoAlignment *valign,
                                            GstBuffer * buffer);
-gboolean      gst_gl_memory_setup_wrapped (GstGLContext * context, GstVideoInfo * info,
+gboolean      gst_gl_memory_setup_wrapped (GstGLContext * context,
+                                           GstVideoInfo * info,
+                                           GstVideoAlignment *valign,
                                            gpointer data[GST_VIDEO_MAX_PLANES],
-                                           GstGLMemory *textures[GST_VIDEO_MAX_PLANES]);
+                                           GstGLMemory *textures[GST_VIDEO_MAX_PLANES],
+                                           gpointer user_data,
+                                           GDestroyNotify notify);
 
-GstVideoGLTextureType gst_gl_texture_type_from_format (GstGLContext *context, GstVideoFormat v_format, guint plane);
+gint          gst_gl_memory_get_texture_width  (GstGLMemory * gl_mem);
+gint          gst_gl_memory_get_texture_height (GstGLMemory * gl_mem);
+
+/* utility functions */
+GstVideoGLTextureType gst_gl_texture_type_from_format (GstGLContext *context,
+                                                       GstVideoFormat v_format,
+                                                       guint plane);
+guint                 gst_gl_format_from_gl_texture_type (GstVideoGLTextureType tex_format);
+guint                 gst_gl_sized_gl_format_from_gl_format_type (GstGLContext * context,
+                                                                  guint format,
+                                                                  guint type);
 
 /**
  * GstGLAllocator
@@ -182,7 +165,8 @@ GstVideoGLTextureType gst_gl_texture_type_from_format (GstGLContext *context, Gs
  */
 struct _GstGLAllocator
 {
-  GstAllocator parent;
+  GstGLBaseBufferAllocator parent;
+  GstMemoryCopyFunction fallback_mem_copy;
 };
 
 /**
@@ -192,7 +176,7 @@ struct _GstGLAllocator
  */
 struct _GstGLAllocatorClass
 {
-  GstAllocatorClass parent_class;
+  GstGLBaseBufferAllocatorClass parent_class;
 };
 
 G_END_DECLS

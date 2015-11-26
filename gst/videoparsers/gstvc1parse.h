@@ -56,13 +56,13 @@ typedef enum {
 } VC1StreamFormat;
 
 typedef enum {
-  GST_VC1_PARSE_FORMAT_WMV3,
+  GST_VC1_PARSE_FORMAT_WMV3 = 0,
   GST_VC1_PARSE_FORMAT_WVC1
 } GstVC1ParseFormat;
 
 /* FIXME move into baseparse, or anything equivalent;
- * see https://bugzilla.gnome.org/show_bug.cgi?id=650093 */
-#define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x10000
+ * see https://bugzilla.gnome.org/show_bug.cgi?id=650093
+ * #define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x100000 */
 
 typedef struct _GstVC1Parse GstVC1Parse;
 typedef struct _GstVC1ParseClass GstVC1ParseClass;
@@ -107,6 +107,14 @@ struct _GstVC1Parse
    * valid if the GstBaseParseFrame has the
    * GST_BASE_PARSE_FRAME_FLAG_PARSING flag */
   GstVC1StartCode startcode;
+
+  /* TRUE if we have already sent the sequence-layer,
+   * use for stream-format conversion */
+  gboolean seq_layer_sent;
+
+  /* TRUE if we have already sent the frame-layer first frame,
+   * use for stream-format conversion */
+  gboolean frame_layer_first_frame_sent;
 };
 
 struct _GstVC1ParseClass

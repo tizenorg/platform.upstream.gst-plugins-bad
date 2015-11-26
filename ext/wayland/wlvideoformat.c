@@ -80,7 +80,7 @@ static const wl_VideoFormat formats[] = {
 };
 
 enum wl_shm_format
-gst_video_format_to_wayland_format (GstVideoFormat format)
+gst_video_format_to_wl_shm_format (GstVideoFormat format)
 {
   guint i;
 
@@ -88,12 +88,12 @@ gst_video_format_to_wayland_format (GstVideoFormat format)
     if (formats[i].gst_format == format)
       return formats[i].wl_format;
 
-  GST_WARNING ("wayland video format not found");
+  GST_WARNING ("wayland shm video format not found");
   return -1;
 }
 
 GstVideoFormat
-gst_wayland_format_to_video_format (enum wl_shm_format wl_format)
+gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format)
 {
   guint i;
 
@@ -106,9 +106,9 @@ gst_wayland_format_to_video_format (enum wl_shm_format wl_format)
 }
 
 const gchar *
-gst_wayland_format_to_string (enum wl_shm_format wl_format)
+gst_wl_shm_format_to_string (enum wl_shm_format wl_format)
 {
   return gst_video_format_to_string
-      (gst_wayland_format_to_video_format (wl_format));
+      (gst_wl_shm_format_to_video_format (wl_format));
 }
 #endif

@@ -56,6 +56,20 @@ gst_ass_render_get_type
 </SECTION>
 
 <SECTION>
+<FILE>element-audiomixer</FILE>
+<TITLE>audiomixer</TITLE>
+GstAudioMixer
+<SUBSECTION Standard>
+GstAudioMixerClass
+GST_AUDIO_MIXER
+GST_AUDIO_MIXER_CLASS
+GST_IS_AUDIO_MIXER
+GST_IS_AUDIO_MIXER_CLASS
+GST_TYPE_AUDIO_MIXER
+gst_audio_mixer_get_type
+</SECTION>
+
+<SECTION>
 <FILE>element-audioparse</FILE>
 <TITLE>audioparse</TITLE>
 GstAudioParse
@@ -69,7 +83,6 @@ GST_TYPE_AUDIO_PARSE
 gst_audio_parse_get_type
 </SECTION>
 
-
 <SECTION>
 <FILE>element-autoconvert</FILE>
 <TITLE>autoconvert</TITLE>
@@ -81,6 +94,22 @@ GST_AUTO_CONVERT
 GST_AUTO_CONVERT_CLASS
 GST_IS_AUTO_CONVERT
 GST_IS_AUTO_CONVERT_CLASS
+</SECTION>
+
+<SECTION>
+<FILE>element-bs2b</FILE>
+<TITLE>bs2b</TITLE>
+GstBs2b
+<SUBSECTION Standard>
+GstBs2bClass
+GST_BS2B
+GST_BS2B_CAST
+GST_BS2B_CLASS
+GST_IS_BS2B
+GST_IS_BS2B_CLASS
+GST_TYPE_BS2B
+gst_bs2b_get_type
+gst_bs2b_plugin_init
 </SECTION>
 
 <SECTION>
@@ -132,8 +161,8 @@ gst_camera_bin_get_type
 <SECTION>
 <FILE>element-chromium</FILE>
 <TITLE>chromium</TITLE>
-GstChromium
 <SUBSECTION Standard>
+GstChromium
 GstChromiumClass
 GST_CHROMIUM
 GST_CHROMIUM_CLASS
@@ -415,25 +444,6 @@ gst_dilate_plugin_init
 </SECTION>
 
 <SECTION>
-<FILE>element-directdrawsink</FILE>
-<TITLE>directdrawsink</TITLE>
-GstDirectDrawSink
-<SUBSECTION Standard>
-GstDirectDrawSinkClass
-GST_DIRECTDRAW_SINK
-GST_DIRECTDRAW_SINK_CLASS
-GST_IS_DIRECTDRAW_SINK
-GST_IS_DIRECTDRAW_SINK_CLASS
-GST_TYPE_DIRECTDRAW_SINK
-gst_directdraw_sink_get_type
-GstDDrawSurface
-GST_DDRAWSURFACE
-GST_IS_DDRAWSURFACE
-GST_TYPE_DDRAWSURFACE
-DIRECTDRAW_VERSION
-</SECTION>
-
-<SECTION>
 <FILE>element-dodge</FILE>
 <TITLE>dodge</TITLE>
 GstDodge
@@ -541,20 +551,6 @@ GST_IS_EDGEDETECT_CLASS
 GST_TYPE_EDGEDETECT
 gst_edgedetect_get_type
 gst_edgedetect_plugin_init
-</SECTION>
-
-<SECTION>
-<FILE>element-eglglessink</FILE>
-<TITLE>eglglessink</TITLE>
-GstEglGlesSink
-<SUBSECTION Standard>
-GstEglGlesSinkClass
-GST_TYPE_EGLGLESSINK
-GST_EGLGLESSINK
-GST_IS_EGLGLESSINK
-GST_EGLGLESSINK_CLASS
-GST_IS_EGLGLESSINK_CLASS
-gst_eglglessink_get_type
 </SECTION>
 
 <SECTION>
@@ -923,6 +919,51 @@ gst_mpeg2enc_get_type
 </SECTION>
 
 <SECTION>
+<FILE>element-mpegpsmux</FILE>
+<TITLE>mpegpsmux</TITLE>
+<SUBSECTION Standard>
+MpegPsMux
+GST_MPEG_PSMUX
+GST_TYPE_MPEG_PSMUX
+MpegPsMuxClass
+mpegpsmux_get_type
+<SUBSECTION Private>
+MpegPsPadData
+MpegPsPadDataPrepareFunction
+CLOCK_BASE
+CLOCK_FREQ
+GSTTIME_TO_MPEGTIME
+NORMAL_TS_PACKET_LENGTH
+M2TS_PACKET_LENGTH
+STANDARD_TIME_CLOCK
+TWO_POW_33_MINUS1
+</SECTION>
+
+<SECTION>
+<FILE>element-mpegtsmux</FILE>
+<TITLE>mpegtsmux</TITLE>
+<SUBSECTION Standard>
+MpegTsMux
+GST_MPEG_TSMUX
+GST_TYPE_MPEG_TSMUX
+MpegTsMuxClass
+mpegtsmux_get_type
+<SUBSECTION Private>
+MpegTsPadData
+CLOCK_BASE
+CLOCK_FREQ
+CLOCK_FREQ_SCR
+MPEGTIME_TO_GSTTIME
+GSTTIME_TO_MPEGTIME
+MPEG_SYS_TIME_TO_GSTTIME
+GSTTIME_TO_MPEG_SYS_TIME
+NORMAL_TS_PACKET_LENGTH
+M2TS_PACKET_LENGTH
+MAX_PROG_NUMBER
+DEFAULT_PROG_ID
+</SECTION>
+
+<SECTION>
 <FILE>element-mplex</FILE>
 <TITLE>mplex</TITLE>
 GstMplex
@@ -953,21 +994,6 @@ GST_IS_MPG123_AUDIO_DEC
 GST_IS_MPG123_AUDIO_DEC_CLASS
 GST_TYPE_MPG123_AUDIO_DEC
 gst_mpg123_audio_dec_get_type
-</SECTION>
-
-<SECTION>
-<FILE>element-mythtvsrc</FILE>
-<TITLE>mythtvsrc</TITLE>
-GstMythtvSrc
-<SUBSECTION Standard>
-GstMythtvSrcClass
-GstMythtvState
-GST_MYTHTV_SRC
-GST_MYTHTV_SRC_CLASS
-GST_IS_MYTHTV_SRC
-GST_IS_MYTHTV_SRC_CLASS
-GST_TYPE_MYTHTV_SRC
-gst_mythtv_src_get_type
 </SECTION>
 
 <SECTION>
@@ -1081,6 +1107,71 @@ GST_IS_OPENCV_TEXT_OVERLAY
 GST_IS_OPENCV_TEXT_OVERLAY_CLASS
 gst_opencv_text_overlay_get_type
 gst_opencv_text_overlay_plugin_init
+</SECTION>
+
+<FILE>element-opusdec</FILE>
+<TITLE>opusdec</TITLE>
+GstOpusDec
+<SUBSECTION Standard>
+GstOpusDecClass
+gst_opus_dec_get_type
+GST_TYPE_OPUS_DEC
+GST_OPUS_DEC
+GST_OPUS_DEC_CLASS
+GST_IS_OPUS_DEC
+GST_IS_OPUS_DEC_CLASS
+</SECTION>
+
+<FILE>element-opusenc</FILE>
+<TITLE>opusenc</TITLE>
+GstOpusEnc
+<SUBSECTION Standard>
+GstOpusEncClass
+gst_opus_enc_get_type
+GST_TYPE_OPUS_ENC
+GST_OPUS_ENC
+GST_OPUS_ENC_CLASS
+GST_IS_OPUS_ENC
+GST_IS_OPUS_ENC_CLASS
+</SECTION>
+
+<FILE>element-opusparse</FILE>
+<TITLE>opusparse</TITLE>
+GstOpusParse
+<SUBSECTION Standard>
+GstOpusParseClass
+gst_opus_parse_get_type
+GST_TYPE_OPUS_PARSE
+GST_OPUS_PARSE
+GST_OPUS_PARSE_CLASS
+GST_IS_OPUS_PARSE
+GST_IS_OPUS_PARSE_CLASS
+</SECTION>
+
+<FILE>element-rtpopusdepay</FILE>
+<TITLE>rtpopusdepay</TITLE>
+GstRTPOpusDepay
+<SUBSECTION Standard>
+GstRTPOpusDepayClass
+gst_rtp_opus_depay_get_type
+GST_TYPE_RTP_OPUS_DEPAY
+GST_RTP_OPUS_DEPAY
+GST_RTP_OPUS_DEPAY_CLASS
+GST_IS_RTP_OPUS_DEPAY
+GST_IS_RTP_OPUS_DEPAY_CLASS
+</SECTION>
+
+<FILE>element-rtpopuspay</FILE>
+<TITLE>rtpopuspay</TITLE>
+GstRtpOPUSPay
+<SUBSECTION Standard>
+GstRtpOPUSPayClass
+gst_rtp_opus_pay_get_type
+GST_TYPE_RTP_OPUS_PAY
+GST_RTP_OPUS_PAY
+GST_RTP_OPUS_PAY_CLASS
+GST_IS_RTP_OPUS_PAY
+GST_IS_RTP_OPUS_PAY_CLASS
 </SECTION>
 
 <SECTION>
@@ -1643,56 +1734,3 @@ GST_IS_COMPOSITOR_PAD
 GST_IS_COMPOSITOR_PAD_CLASS
 GST_TYPE_COMPOSITOR_PAD
 </SECTION>
-
-# gst-libs
-
-<SECTION>
-<FILE>gstphotography</FILE>
-<TITLE>GstPhotography</TITLE>
-GstPhotography
-GST_PHOTOGRAPHY_AUTOFOCUS_DONE
-GST_PHOTOGRAPHY_SHAKE_RISK
-GstPhotographyNoiseReduction
-GstPhotographyWhiteBalanceMode
-GstPhotographyColorToneMode
-GstPhotographySceneMode
-GstPhotographyFlashMode
-GstPhotographyFlickerReductionMode
-GstPhotographyFocusMode
-GstPhotographyFocusStatus
-GstPhotographyCaps
-GstPhotographyShakeRisk
-GstPhotographySettings
-GstPhotographyCapturePrepared
-gst_photography_get_ev_compensation
-gst_photography_get_iso_speed
-gst_photography_get_aperture
-gst_photography_get_exposure
-gst_photography_get_white_balance_mode
-gst_photography_get_color_tone_mode
-gst_photography_get_scene_mode
-gst_photography_get_flash_mode
-gst_photography_get_noise_reduction
-gst_photography_get_zoom
-gst_photography_set_ev_compensation
-gst_photography_set_iso_speed
-gst_photography_set_aperture
-gst_photography_set_exposure
-gst_photography_set_white_balance_mode
-gst_photography_set_color_tone_mode
-gst_photography_set_scene_mode
-gst_photography_set_flash_mode
-gst_photography_set_noise_reduction
-gst_photography_set_zoom
-gst_photography_get_capabilities
-gst_photography_prepare_for_capture
-gst_photography_set_autofocus
-gst_photography_set_config
-gst_photography_get_config
-<SUBSECTION Standard>
-GST_PHOTOGRAPHY
-GST_IS_PHOTOGRAPHY
-GST_PHOTOGRAPHY_GET_INTERFACE
-gst_photography_get_type
-</SECTION>
-

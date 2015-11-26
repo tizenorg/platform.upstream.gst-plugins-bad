@@ -23,6 +23,7 @@
 #define __GST_GL_WINDOW_ANDROID_EGL_H__
 
 #include <gst/gl/gl.h>
+#include <gst/gl/egl/gstegl.h>
 
 G_BEGIN_DECLS
 
@@ -44,9 +45,6 @@ struct _GstGLWindowAndroidEGL {
   EGLNativeWindowType native_window;
   gint window_width, window_height;
 
-  GMainContext *main_context;
-  GMainLoop *loop;
-
   gpointer _reserved[GST_PADDING];
 };
 
@@ -60,7 +58,7 @@ struct _GstGLWindowAndroidEGLClass {
 
 GType gst_gl_window_android_egl_get_type     (void);
 
-GstGLWindowAndroidEGL * gst_gl_window_android_egl_new  (void);
+GstGLWindowAndroidEGL * gst_gl_window_android_egl_new  (GstGLDisplay * display);
 
 G_END_DECLS
 

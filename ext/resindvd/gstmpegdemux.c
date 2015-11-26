@@ -127,7 +127,7 @@ static GstStateChangeReturn gst_flups_demux_change_state (GstElement * element,
     GstStateChange transition);
 
 static inline void gst_flups_demux_send_gap_updates (GstFluPSDemux * demux,
-    GstClockTime new_time);
+    GstClockTime new_time, gboolean no_threshold);
 static inline void gst_flups_demux_clear_times (GstFluPSDemux * demux);
 
 static void gst_flups_demux_reset_psm (GstFluPSDemux * demux);
@@ -865,7 +865,8 @@ gst_flups_demux_clear_times (GstFluPSDemux * demux)
 }
 
 static inline void
-gst_flups_demux_send_gap_updates (GstFluPSDemux * demux, GstClockTime new_time)
+gst_flups_demux_send_gap_updates (GstFluPSDemux * demux, GstClockTime new_time,
+    gboolean no_threshold)
 {
   gint i, count = demux->found_count;
   GstEvent *event = NULL;
@@ -879,11 +880,12 @@ gst_flups_demux_send_gap_updates (GstFluPSDemux * demux, GstClockTime new_time)
     GstFluPSStream *stream = demux->streams_found[i];
 
     if (stream) {
+      GstClockTime gap_threshold = no_threshold ? 0 : stream->segment_thresh;
+
       if (stream->last_ts == GST_CLOCK_TIME_NONE ||
           stream->last_ts < demux->src_segment.start)
         stream->last_ts = demux->src_segment.start;
-      if (stream->last_ts + stream->segment_thresh < new_time) {
-
+      if (stream->last_ts + gap_threshold < new_time) {
         GST_LOG_OBJECT (demux,
             "Sending gap update to pad %s time %" GST_TIME_FORMAT " to %"
             GST_TIME_FORMAT, GST_PAD_NAME (stream->pad),
@@ -942,22 +944,20 @@ gst_flups_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       demux->bytes_since_scr = 0;
 
       GST_DEBUG_OBJECT (demux,
-          "demux: received new segment start %" G_GINT64_FORMAT " stop %"
-          G_GINT64_FORMAT " time %" G_GINT64_FORMAT
-          " base %" G_GINT64_FORMAT, start, stop, time, base);
+          "demux: received new segment %" GST_SEGMENT_FORMAT,
+          &demux->sink_segment);
 #if 0
       g_print ("demux: received new segment start %" G_GINT64_FORMAT " stop %"
           G_GINT64_FORMAT " time %" G_GINT64_FORMAT
           " base %" G_GINT64_FORMAT "\n", start, stop, time, base);
 #endif
-      position = base - start;
-      adjust = position + SCR_MUNGE;
+      adjust = base - start + SCR_MUNGE;
       if (adjust >= 0)
         demux->scr_adjust = GSTTIME_TO_MPEGTIME (adjust);
       else
         demux->scr_adjust = -GSTTIME_TO_MPEGTIME (-adjust);
 
-      start = SCR_MUNGE;
+      position = start = SCR_MUNGE;
       base = 0;
 
       if (stop != -1)
@@ -973,12 +973,9 @@ gst_flups_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       demux->src_segment.position = position;
 
       GST_DEBUG_OBJECT (demux,
-          "sending new segment: rate %g format %d, start: %"
-          G_GINT64_FORMAT ", stop: %" G_GINT64_FORMAT ", time: %"
-          G_GINT64_FORMAT ", base: %" G_GINT64_FORMAT
+          "sending new segment %" GST_SEGMENT_FORMAT
           ", scr_adjust: %" G_GINT64_FORMAT "(%" GST_TIME_FORMAT ")",
-          segment->rate, segment->format, start, stop, time, base,
-          demux->scr_adjust,
+          &demux->src_segment, demux->scr_adjust,
           GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->scr_adjust)));
 #if 0
       g_print ("sending new segment: rate %g format %d, start: %"
@@ -990,14 +987,17 @@ gst_flups_demux_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
           GST_TIME_ARGS (MPEGTIME_TO_GSTTIME (demux->scr_adjust)));
 #endif
 
-      if (demux->in_still && stop != -1) {
-        /* Generate gap buffers, due to closing segment from a still-frame */
-        gst_flups_demux_send_gap_updates (demux, stop);
-      }
-
       gst_event_unref (event);
       event = gst_event_new_segment (&demux->src_segment);
       gst_flups_demux_send_event (demux, event);
+
+      if (demux->in_still && stop != -1) {
+        /* Generate gap buffers, due to closing segment from a still-frame.
+         * Do this in the new segment with stop time. */
+        GST_DEBUG_OBJECT (demux, "Advancing all streams to stop time %"
+            GST_TIME_FORMAT, GST_TIME_ARGS (stop));
+        gst_flups_demux_send_gap_updates (demux, stop, TRUE);
+      }
 
       break;
     }
@@ -1396,8 +1396,6 @@ gst_flups_demux_parse_pack_start (GstFluPSDemux * demux)
 
     /* marker:1==1 ! mux_rate:22 ! marker:1==1 */
     new_rate = (scr2 & 0x007ffffe) >> 1;
-
-    data += 8;
   }
   new_rate *= MPEG_MUX_RATE_MULT;
 
@@ -1510,7 +1508,7 @@ gst_flups_demux_parse_pack_start (GstFluPSDemux * demux)
   if (new_time != GST_CLOCK_TIME_NONE) {
     // g_print ("SCR now %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (new_time));
     gst_segment_set_position (&demux->src_segment, GST_FORMAT_TIME, new_time);
-    gst_flups_demux_send_gap_updates (demux, new_time);
+    gst_flups_demux_send_gap_updates (demux, new_time, FALSE);
   }
 
   /* Reset the bytes_since_scr value to count the data remaining in the

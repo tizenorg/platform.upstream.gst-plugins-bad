@@ -17,7 +17,7 @@ copyl d1, s1
 .param 2 p1
 .temp 2 t1
 .temp 2 t2
-.const 1 c1 8 
+.const 1 c1 8
 
 convubw t1, d1
 convubw t2, s1
@@ -49,12 +49,13 @@ convwb tb, tw
 splatbl a, tb
 x4 convubw a_wide, a
 x4 mullw a_wide, a_wide, alpha
-x4 shruw a_wide, a_wide, 8
+x4 div255w a_wide, a_wide
 x4 convubw s_wide, t
 loadl t, d
 x4 convubw d_wide, t
 x4 subw s_wide, s_wide, d_wide
 x4 mullw s_wide, s_wide, a_wide
+
 x4 div255w s_wide, s_wide
 x4 addw d_wide, d_wide, s_wide
 x4 convwb t, d_wide
@@ -83,13 +84,15 @@ convwb tb, tw
 splatbl a, tb
 x4 convubw a_wide, a
 x4 mullw a_wide, a_wide, alpha
-x4 shruw a_wide, a_wide, 8
+x4 div255w a_wide, a_wide
+
 x4 convubw s_wide, t
 loadl t, d
 x4 convubw d_wide, t
 x4 subw s_wide, s_wide, d_wide
 x4 mullw s_wide, s_wide, a_wide
 x4 div255w s_wide, s_wide
+
 x4 addw d_wide, d_wide, s_wide
 x4 convwb t, d_wide
 orl t, t, a_alpha
@@ -114,14 +117,14 @@ storel d, t
 .const 4 a_alpha 0x000000ff
 .const 4 a_alpha_inv 0xffffff00
 
-# calc source alpha as alpha_s = alpha_s * alpha / 256
+# calc source alpha as alpha_s = alpha_s * alpha / 255
 loadl t, s
 convlw tw, t
 convwb tb, tw
 splatbl a, tb
 x4 convubw alpha_s, a
 x4 mullw alpha_s, alpha_s, alpha
-x4 shruw alpha_s, alpha_s, 8
+x4 div255w alpha_s, alpha_s
 x4 convubw s_wide, t
 x4 mullw s_wide, s_wide, alpha_s
 
@@ -175,7 +178,7 @@ storel d, t
 .const 4 a_alpha 0xff000000
 .const 4 a_alpha_inv 0x00ffffff
 
-# calc source alpha as alpha_s = alpha_s * alpha / 256
+# calc source alpha as alpha_s = alpha_s * alpha / 255
 loadl t, s
 shrul t2, t, 24
 convlw tw, t2
@@ -183,7 +186,7 @@ convwb tb, tw
 splatbl a, tb
 x4 convubw alpha_s, a
 x4 mullw alpha_s, alpha_s, alpha
-x4 shruw alpha_s, alpha_s, 8
+x4 div255w alpha_s, alpha_s
 x4 convubw s_wide, t
 x4 mullw s_wide, s_wide, alpha_s
 

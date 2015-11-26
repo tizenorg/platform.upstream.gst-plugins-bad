@@ -56,8 +56,14 @@
 #include "gl.h"
 #include "gstgldisplay.h"
 
+#if GST_GL_HAVE_WINDOW_COCOA
+#include <gst/gl/cocoa/gstgldisplay_cocoa.h>
+#endif
 #if GST_GL_HAVE_WINDOW_X11
 #include <gst/gl/x11/gstgldisplay_x11.h>
+#endif
+#if GST_GL_HAVE_WINDOW_WAYLAND
+#include <gst/gl/wayland/gstgldisplay_wayland.h>
 #endif
 #if GST_GL_HAVE_PLATFORM_EGL
 #include <gst/gl/egl/gstgldisplay_egl.h>
@@ -78,18 +84,45 @@ G_DEFINE_TYPE_WITH_CODE (GstGLDisplay, gst_gl_display, GST_TYPE_OBJECT,
 #define GST_GL_DISPLAY_GET_PRIVATE(o) \
   (G_TYPE_INSTANCE_GET_PRIVATE((o), GST_TYPE_GL_DISPLAY, GstGLDisplayPrivate))
 
+enum
+{
+  SIGNAL_0,
+  CREATE_CONTEXT,
+  LAST_SIGNAL
+};
+
+static guint gst_gl_display_signals[LAST_SIGNAL] = { 0 };
+
 static void gst_gl_display_finalize (GObject * object);
 static guintptr gst_gl_display_default_get_handle (GstGLDisplay * display);
 
 struct _GstGLDisplayPrivate
 {
-  gint dummy;
+  GstGLAPI gl_api;
+
+  GList *contexts;
 };
 
 static void
 gst_gl_display_class_init (GstGLDisplayClass * klass)
 {
   g_type_class_add_private (klass, sizeof (GstGLDisplayPrivate));
+
+  /**
+   * GstGLDisplay::create-context:
+   * @object: the #GstGLDisplay
+   * @context: other context to share resources with.
+   *
+   * Overrides the @GstGLContext creation mechanism.
+   * It can be called in any thread and it is emitted with
+   * display's object lock held.
+   *
+   * Returns: the new context.
+   */
+  gst_gl_display_signals[CREATE_CONTEXT] =
+      g_signal_new ("create-context", G_TYPE_FROM_CLASS (klass),
+      G_SIGNAL_RUN_LAST, 0, NULL, NULL, g_cclosure_marshal_generic,
+      GST_GL_TYPE_CONTEXT, 1, GST_GL_TYPE_CONTEXT);
 
   klass->get_handle = gst_gl_display_default_get_handle;
 
@@ -102,9 +135,11 @@ gst_gl_display_init (GstGLDisplay * display)
   display->priv = GST_GL_DISPLAY_GET_PRIVATE (display);
 
   display->type = GST_GL_DISPLAY_TYPE_ANY;
+  display->priv->gl_api = GST_GL_API_ANY;
 
   GST_TRACE ("init %p", display);
 
+  gst_gl_base_buffer_init_once ();
   gst_gl_memory_init ();
 
 #if GST_GL_HAVE_PLATFORM_EGL
@@ -115,7 +150,17 @@ gst_gl_display_init (GstGLDisplay * display)
 static void
 gst_gl_display_finalize (GObject * object)
 {
-  GST_TRACE ("finalize %p", object);
+  GstGLDisplay *display = GST_GL_DISPLAY (object);
+  GList *l;
+
+  GST_TRACE_OBJECT (object, "finalizing");
+
+  for (l = display->priv->contexts; l; l = l->next) {
+    g_weak_ref_clear ((GWeakRef *) l->data);
+    g_free (l->data);
+  }
+
+  g_list_free (display->priv->contexts);
 
   G_OBJECT_CLASS (gst_gl_display_parent_class)->finalize (object);
 }
@@ -124,6 +169,8 @@ gst_gl_display_finalize (GObject * object)
  * gst_gl_display_new:
  *
  * Returns: (transfer full): a new #GstGLDisplay
+ *
+ * Since: 1.4
  */
 GstGLDisplay *
 gst_gl_display_new (void)
@@ -144,8 +191,11 @@ gst_gl_display_new (void)
       GST_STR_NULL (user_choice), GST_STR_NULL (platform_choice));
 
 #if GST_GL_HAVE_WINDOW_COCOA
-  if (!display && (!user_choice || g_strstr_len (user_choice, 5, "cocoa")))
-    display = g_object_new (GST_TYPE_GL_DISPLAY, NULL);
+  if (!display && (!user_choice || g_strstr_len (user_choice, 5, "cocoa"))) {
+    display = GST_GL_DISPLAY (gst_gl_display_cocoa_new ());
+    if (!display)
+      return NULL;
+  }
 #endif
 #if GST_GL_HAVE_WINDOW_X11
   if (!display && (!user_choice || g_strstr_len (user_choice, 3, "x11")))
@@ -153,7 +203,7 @@ gst_gl_display_new (void)
 #endif
 #if GST_GL_HAVE_WINDOW_WAYLAND
   if (!display && (!user_choice || g_strstr_len (user_choice, 7, "wayland")))
-    display = g_object_new (GST_TYPE_GL_DISPLAY, NULL);
+    display = GST_GL_DISPLAY (gst_gl_display_wayland_new (NULL));
 #endif
 #if GST_GL_HAVE_PLATFORM_EGL
   if (!display && (!platform_choice
@@ -191,10 +241,68 @@ gst_gl_display_default_get_handle (GstGLDisplay * display)
 }
 
 /**
+ * gst_gl_display_filter_gl_api:
+ * @display: a #GstGLDisplay
+ * @gl_api: a #GstGLAPI to filter with
+ *
+ * limit the use of OpenGL to the requested @gl_api.  This is intended to allow
+ * application and elements to request a specific set of OpenGL API's based on
+ * what they support.  See gst_gl_context_get_gl_api() for the retreiving the
+ * API supported by a #GstGLContext.
+ */
+void
+gst_gl_display_filter_gl_api (GstGLDisplay * display, GstGLAPI gl_api)
+{
+  gchar *gl_api_s;
+
+  g_return_if_fail (GST_IS_GL_DISPLAY (display));
+
+  gl_api_s = gst_gl_api_to_string (gl_api);
+  GST_TRACE_OBJECT (display, "filtering with api %s", gl_api_s);
+  g_free (gl_api_s);
+
+  GST_OBJECT_LOCK (display);
+  display->priv->gl_api &= gl_api;
+  GST_OBJECT_UNLOCK (display);
+}
+
+GstGLAPI
+gst_gl_display_get_gl_api_unlocked (GstGLDisplay * display)
+{
+  g_return_val_if_fail (GST_IS_GL_DISPLAY (display), GST_GL_API_NONE);
+
+  return display->priv->gl_api;
+}
+
+/**
+ * gst_gl_display_get_gl_api:
+ * @display: a #GstGLDisplay
+ *
+ * see gst_gl_display_filter_gl_api() for what the returned value represents
+ *
+ * Returns: the #GstGLAPI configured for @display
+ */
+GstGLAPI
+gst_gl_display_get_gl_api (GstGLDisplay * display)
+{
+  GstGLAPI ret;
+
+  g_return_val_if_fail (GST_IS_GL_DISPLAY (display), GST_GL_API_NONE);
+
+  GST_OBJECT_LOCK (display);
+  ret = display->priv->gl_api;
+  GST_OBJECT_UNLOCK (display);
+
+  return ret;
+}
+
+/**
  * gst_gl_display_get_handle_type:
  * @display: a #GstGLDisplay
  *
  * Returns: the #GstGLDisplayType of @display
+ *
+ * Since: 1.4
  */
 GstGLDisplayType
 gst_gl_display_get_handle_type (GstGLDisplay * display)
@@ -210,6 +318,8 @@ gst_gl_display_get_handle_type (GstGLDisplay * display)
  * @display: resulting #GstGLDisplay
  *
  * Sets @display on @context
+ *
+ * Since: 1.4
  */
 void
 gst_context_set_gl_display (GstContext * context, GstGLDisplay * display)
@@ -218,8 +328,10 @@ gst_context_set_gl_display (GstContext * context, GstGLDisplay * display)
 
   g_return_if_fail (context != NULL);
 
-  GST_CAT_LOG (gst_context, "setting GstGLDisplay(%p) on context(%p)", display,
-      context);
+  if (display)
+    GST_CAT_LOG (gst_context,
+        "setting GstGLDisplay(%" GST_PTR_FORMAT ") on context(%" GST_PTR_FORMAT
+        ")", display, context);
 
   s = gst_context_writable_structure (context);
   gst_structure_set (s, GST_GL_DISPLAY_CONTEXT_TYPE, GST_TYPE_GL_DISPLAY,
@@ -232,6 +344,8 @@ gst_context_set_gl_display (GstContext * context, GstGLDisplay * display)
  * @display: resulting #GstGLDisplay
  *
  * Returns: Whether @display was in @context
+ *
+ * Since: 1.4
  */
 gboolean
 gst_context_get_gl_display (GstContext * context, GstGLDisplay ** display)
@@ -248,6 +362,204 @@ gst_context_get_gl_display (GstContext * context, GstGLDisplay ** display)
 
   GST_CAT_LOG (gst_context, "got GstGLDisplay(%p) from context(%p)", *display,
       context);
+
+  return ret;
+}
+
+/**
+ * gst_gl_display_create_context:
+ * @display: a #GstGLDisplay
+ * @other_context: other #GstGLContext to share resources with.
+ * @p_context: resulting #GstGLContext
+ * @error: resulting #GError
+ *
+ * It requires the display's object lock to be held.
+ *
+ * Returns: whether a new context could be created.
+ *
+ * Since: 1.6
+ */
+gboolean
+gst_gl_display_create_context (GstGLDisplay * display,
+    GstGLContext * other_context, GstGLContext ** p_context, GError ** error)
+{
+  GstGLContext *context = NULL;
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (display != NULL, FALSE);
+  g_return_val_if_fail (p_context != NULL, FALSE);
+  g_return_val_if_fail (error != NULL, FALSE);
+  g_return_val_if_fail (*error == NULL, FALSE);
+
+  g_signal_emit (display, gst_gl_display_signals[CREATE_CONTEXT], 0,
+      other_context, &context);
+
+  if (context) {
+    *p_context = context;
+    return TRUE;
+  }
+
+  context = gst_gl_context_new (display);
+  if (!context) {
+    g_set_error (error, GST_GL_CONTEXT_ERROR, GST_GL_CONTEXT_ERROR_FAILED,
+        "Failed to create GL context");
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (display,
+      "creating context %" GST_PTR_FORMAT " from other context %"
+      GST_PTR_FORMAT, context, other_context);
+
+  ret = gst_gl_context_create (context, other_context, error);
+
+  if (ret)
+    *p_context = context;
+
+  return ret;
+}
+
+static GstGLContext *
+_get_gl_context_for_thread_unlocked (GstGLDisplay * display, GThread * thread)
+{
+  GstGLContext *context = NULL;
+  GList *prev = NULL, *l = display->priv->contexts;
+
+  while (l) {
+    GWeakRef *ref = l->data;
+    GThread *context_thread;
+
+    context = g_weak_ref_get (ref);
+    if (!context) {
+      /* remove dead contexts */
+      g_weak_ref_clear (l->data);
+      display->priv->contexts = g_list_delete_link (display->priv->contexts, l);
+      l = prev ? prev->next : display->priv->contexts;
+      continue;
+    }
+
+    context_thread = gst_gl_context_get_thread (context);
+    if (thread != NULL && thread == context_thread) {
+      g_thread_unref (context_thread);
+      gst_object_unref (context);
+      prev = l;
+      l = l->next;
+      continue;
+    }
+
+    if (context_thread)
+      g_thread_unref (context_thread);
+    return context;
+  }
+
+  return NULL;
+}
+
+/**
+ * gst_gl_display_get_gl_context_for_thread:
+ * @display: a #GstGLDisplay
+ * @thread: a #GThread
+ *
+ * Returns: (transfer full): the #GstGLContext current on @thread or %NULL
+ *
+ * Must be called with the object lock held.
+ *
+ * Since: 1.6
+ */
+GstGLContext *
+gst_gl_display_get_gl_context_for_thread (GstGLDisplay * display,
+    GThread * thread)
+{
+  GstGLContext *context;
+
+  g_return_val_if_fail (GST_IS_GL_DISPLAY (display), NULL);
+
+  context = _get_gl_context_for_thread_unlocked (display, thread);
+  GST_DEBUG_OBJECT (display, "returning context %" GST_PTR_FORMAT " for thread "
+      "%p", context, thread);
+
+  return context;
+}
+
+static gboolean
+_check_collision (GstGLContext * context, GstGLContext * collision)
+{
+  GThread *thread, *collision_thread;
+  gboolean ret = FALSE;
+
+  if (!context || !collision)
+    return FALSE;
+
+  thread = gst_gl_context_get_thread (context);
+  collision_thread = gst_gl_context_get_thread (collision);
+
+  if (!thread || !collision_thread) {
+    ret = FALSE;
+    goto out;
+  }
+
+  if (collision == context) {
+    ret = TRUE;
+    goto out;
+  }
+
+out:
+  if (thread)
+    g_thread_unref (thread);
+  if (collision_thread)
+    g_thread_unref (collision_thread);
+
+  return ret;
+}
+
+/**
+ * gst_gl_display_add_context:
+ * @display: a #GstGLDisplay
+ * @context: (transfer none): a #GstGLContext
+ *
+ * Returns: whether @context was successfully added. %FALSE may be returned
+ * if there already exists another context for @context's active thread.
+ *
+ * Must be called with the object lock held.
+ *
+ * Since: 1.6
+ */
+gboolean
+gst_gl_display_add_context (GstGLDisplay * display, GstGLContext * context)
+{
+  GstGLContext *collision = NULL;
+  GstGLDisplay *context_display;
+  gboolean ret = TRUE;
+  GThread *thread;
+  GWeakRef *ref;
+
+  g_return_val_if_fail (GST_IS_GL_DISPLAY (display), FALSE);
+  g_return_val_if_fail (GST_GL_IS_CONTEXT (context), FALSE);
+
+  context_display = gst_gl_context_get_display (context);
+  g_assert (context_display == display);
+  gst_object_unref (context_display);
+
+  thread = gst_gl_context_get_thread (context);
+  if (thread) {
+    collision = _get_gl_context_for_thread_unlocked (display, thread);
+    g_thread_unref (thread);
+    if (_check_collision (context, collision)) {
+      ret = FALSE;
+      goto out;
+    }
+  }
+
+  ref = g_new0 (GWeakRef, 1);
+  g_weak_ref_init (ref, context);
+
+  display->priv->contexts = g_list_prepend (display->priv->contexts, ref);
+
+out:
+  if (collision)
+    gst_object_unref (collision);
+
+  GST_DEBUG_OBJECT (display, "%ssuccessfully inserted context %" GST_PTR_FORMAT,
+      ret ? "" : "un", context);
 
   return ret;
 }

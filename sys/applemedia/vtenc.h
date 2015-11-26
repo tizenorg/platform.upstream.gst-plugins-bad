@@ -22,8 +22,7 @@
 
 #include <gst/gst.h>
 #include <gst/video/video.h>
-
-#include "coremediactx.h"
+#include <VideoToolbox/VideoToolbox.h>
 
 G_BEGIN_DECLS
 
@@ -44,27 +43,28 @@ struct _GstVTEncoderDetails
   const gchar * name;
   const gchar * element_name;
   const gchar * mimetype;
-  VTFormatId format_id;
+  CMVideoCodecType format_id;
 };
 
 struct _GstVTEncClass
 {
-  GstElementClass parent_class;
+  GstVideoEncoderClass parent_class;
 };
 
 struct _GstVTEnc
 {
-  GstElement parent;
+  GstVideoEncoder parent;
 
   const GstVTEncoderDetails * details;
 
-  GstPad * sinkpad;
-  GstPad * srcpad;
-
-  gint usage;
+  CFStringRef profile_level;
   guint bitrate;
-
-  GstCoreMediaCtx * ctx;
+  gboolean allow_frame_reordering;
+  gboolean realtime;
+  gdouble quality;
+  gint max_keyframe_interval;
+  GstClockTime max_keyframe_interval_duration;
+  gint latency_frames;
 
   gboolean dump_properties;
   gboolean dump_attributes;
@@ -73,13 +73,12 @@ struct _GstVTEnc
   gint negotiated_fps_n, negotiated_fps_d;
   gint caps_width, caps_height;
   gint caps_fps_n, caps_fps_d;
+  GstVideoCodecState *input_state;
   GstVideoInfo video_info;
   VTCompressionSessionRef session;
-  CFMutableDictionaryRef options;
+  CFDictionaryRef keyframe_props;
 
-  GstBuffer * cur_inbuf;
-  GPtrArray * cur_outbufs;
-  gboolean expect_keyframe;
+  GAsyncQueue * cur_outframes;
 };
 
 void gst_vtenc_register_elements (GstPlugin * plugin);

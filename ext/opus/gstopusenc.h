@@ -27,7 +27,7 @@
 #include <gst/gst.h>
 #include <gst/audio/gstaudioencoder.h>
 
-#include <opus/opus_multistream.h>
+#include <opus_multistream.h>
 
 G_BEGIN_DECLS
 
@@ -45,6 +45,13 @@ G_BEGIN_DECLS
 #define MAX_FRAME_SIZE 2000*2
 #define MAX_FRAME_BYTES 2000
 
+typedef enum
+{
+  BITRATE_TYPE_CBR,
+  BITRATE_TYPE_VBR,
+  BITRATE_TYPE_CONSTRAINED_VBR,
+} GstOpusEncBitrateType;
+
 typedef struct _GstOpusEnc GstOpusEnc;
 typedef struct _GstOpusEncClass GstOpusEncClass;
 
@@ -57,12 +64,11 @@ struct _GstOpusEnc {
   GMutex                property_lock;
 
   /* properties */
-  gboolean              audio_or_voip;
+  gint                  audio_type;
   gint                  bitrate;
   gint                  bandwidth;
   gint                  frame_size;
-  gboolean              cbr;
-  gboolean              constrained_vbr;
+  GstOpusEncBitrateType bitrate_type;
   gint                  complexity;
   gboolean              inband_fec;
   gboolean              dtx;
@@ -73,11 +79,7 @@ struct _GstOpusEnc {
   gint                  n_channels;
   gint                  sample_rate;
 
-  gboolean              header_sent;
-
-  GSList                *headers;
-
-  GstTagList            *tags;
+  guint64               encoded_samples;
 
   guint8                channel_mapping_family;
   guint8                encoding_channel_mapping[256];

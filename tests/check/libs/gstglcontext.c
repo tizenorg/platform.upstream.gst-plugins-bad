@@ -114,7 +114,7 @@ deinit (gpointer data)
 {
   GstGLContext *context = data;
   GstGLFuncs *gl = context->gl_vtable;
-  gl->DeleteTextures (1, &tex);;
+  gl->DeleteTextures (1, &tex);
   gst_object_unref (fbo);
 #if GST_GL_HAVE_GLES2
   if (gst_gl_context_get_gl_api (context) & GST_GL_API_GLES2)
@@ -173,20 +173,20 @@ draw_render (gpointer data)
     gl->MatrixMode (GL_PROJECTION);
     gl->LoadIdentity ();
 
-    gl->Enable (GL_TEXTURE_2D);
+    gl->ActiveTexture (GL_TEXTURE0);
     gl->BindTexture (GL_TEXTURE_2D, tex);
 
     gl->EnableClientState (GL_VERTEX_ARRAY);
-    gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
     gl->VertexPointer (2, GL_FLOAT, 0, &verts);
+
+    gl->ClientActiveTexture (GL_TEXTURE0);
+    gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
     gl->TexCoordPointer (2, GL_FLOAT, 0, &texcoords);
 
     gl->DrawArrays (GL_TRIANGLE_FAN, 0, 4);
 
     gl->DisableClientState (GL_VERTEX_ARRAY);
     gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
-
-    gl->Disable (GL_TEXTURE_2D);
   }
 #endif
 #if GST_GL_HAVE_GLES2
@@ -259,7 +259,8 @@ GST_START_TEST (test_share)
       error ? error->message : "Unknown Error");
 
   /* make the window visible */
-  gst_gl_window_draw (window, 320, 240);
+  gst_gl_window_set_preferred_size (window, 320, 240);
+  gst_gl_window_draw (window);
 
   gst_gl_window_send_message (other_window, GST_GL_WINDOW_CB (init), context);
 
@@ -281,15 +282,49 @@ GST_START_TEST (test_share)
 
 GST_END_TEST;
 
+static void
+accum_true (GstGLContext * context, gpointer data)
+{
+  gint *i = data;
+  *i = 1;
+}
+
+static void
+check_wrapped (gpointer data)
+{
+  GstGLContext *wrapped_context = data;
+  GError *error = NULL;
+  gint i = 0;
+  gboolean ret;
+
+  /* check that scheduling on an unactivated wrapped context asserts */
+  ASSERT_CRITICAL (gst_gl_context_thread_add (wrapped_context,
+          (GstGLContextThreadFunc) accum_true, &i));
+  fail_if (i != 0);
+
+  /* check that scheduling on an activated context succeeds */
+  gst_gl_context_activate (wrapped_context, TRUE);
+  gst_gl_context_thread_add (wrapped_context,
+      (GstGLContextThreadFunc) accum_true, &i);
+  fail_if (i != 1);
+
+  /* check filling out the wrapped context's info */
+  fail_if (wrapped_context->gl_vtable->TexImage2D != NULL);
+  ret = gst_gl_context_fill_info (wrapped_context, &error);
+  fail_if (!ret, "error received %s\n",
+      error ? error->message : "Unknown error");
+  fail_if (wrapped_context->gl_vtable->TexImage2D == NULL);
+}
+
 GST_START_TEST (test_wrapped_context)
 {
   GstGLContext *context, *other_context, *wrapped_context;
   GstGLWindow *window, *other_window;
   GError *error = NULL;
   gint i = 0;
-  guintptr handle;
-  GstGLPlatform platform;
-  GstGLAPI apis;
+  guintptr handle, handle2;
+  GstGLPlatform platform, platform2;
+  GstGLAPI apis, apis2;
 
   context = gst_gl_context_new (display);
 
@@ -308,6 +343,14 @@ GST_START_TEST (test_wrapped_context)
   wrapped_context =
       gst_gl_context_new_wrapped (display, handle, platform, apis);
 
+  handle2 = gst_gl_context_get_gl_context (wrapped_context);
+  platform2 = gst_gl_context_get_gl_platform (wrapped_context);
+  apis2 = gst_gl_context_get_gl_api (wrapped_context);
+
+  fail_if (handle != handle2);
+  fail_if (platform != platform2);
+  fail_if (apis != apis2);
+
   other_context = gst_gl_context_new (display);
   other_window = gst_gl_window_new (display);
   gst_gl_context_set_window (other_context, other_window);
@@ -318,7 +361,8 @@ GST_START_TEST (test_wrapped_context)
       error ? error->message : "Unknown Error");
 
   /* make the window visible */
-  gst_gl_window_draw (window, 320, 240);
+  gst_gl_window_set_preferred_size (window, 320, 240);
+  gst_gl_window_draw (window);
 
   gst_gl_window_send_message (other_window, GST_GL_WINDOW_CB (init), context);
 
@@ -330,17 +374,116 @@ GST_START_TEST (test_wrapped_context)
     i++;
   }
 
+  gst_gl_window_send_message (window, GST_GL_WINDOW_CB (check_wrapped),
+      wrapped_context);
+
   gst_gl_window_send_message (other_window, GST_GL_WINDOW_CB (deinit), context);
 
-  gst_object_unref (window);
-  gst_object_unref (other_window);
   gst_object_unref (other_context);
+  gst_object_unref (other_window);
+  gst_object_unref (window);
   gst_object_unref (context);
   gst_object_unref (wrapped_context);
 }
 
 GST_END_TEST;
 
+struct context_info
+{
+  GstGLAPI api;
+  guint major;
+  guint minor;
+  GstGLPlatform platform;
+  guintptr handle;
+};
+
+static void
+_fill_context_info (GstGLContext * context, struct context_info *info)
+{
+  info->handle = gst_gl_context_get_current_gl_context (info->platform);
+  info->api =
+      gst_gl_context_get_current_gl_api (info->platform, &info->major,
+      &info->minor);
+}
+
+GST_START_TEST (test_current_context)
+{
+  GstGLContext *context;
+  GError *error = NULL;
+  guintptr handle;
+  GstGLPlatform platform;
+  GstGLAPI api;
+  gint major, minor;
+  struct context_info info;
+
+  context = gst_gl_context_new (display);
+
+  gst_gl_context_create (context, 0, &error);
+
+  fail_if (error != NULL, "Error creating master context %s\n",
+      error ? error->message : "Unknown Error");
+
+  handle = gst_gl_context_get_gl_context (context);
+  platform = gst_gl_context_get_gl_platform (context);
+  api = gst_gl_context_get_gl_api (context);
+  gst_gl_context_get_gl_version (context, &major, &minor);
+
+  info.platform = platform;
+
+  gst_gl_context_thread_add (context,
+      (GstGLContextThreadFunc) _fill_context_info, &info);
+
+  fail_if (info.platform != platform);
+  fail_if (info.api != api);
+  fail_if (info.major != major);
+  fail_if (info.minor != minor);
+  fail_if (info.handle != handle);
+
+  gst_object_unref (context);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_context_can_share)
+{
+  GstGLContext *c1, *c2, *c3;
+  GError *error = NULL;
+
+  c1 = gst_gl_context_new (display);
+  gst_gl_context_create (c1, NULL, &error);
+  fail_if (error != NULL, "Error creating context %s\n",
+      error ? error->message : "Unknown Error");
+
+  c2 = gst_gl_context_new (display);
+  gst_gl_context_create (c2, c1, &error);
+  fail_if (error != NULL, "Error creating context %s\n",
+      error ? error->message : "Unknown Error");
+
+  fail_unless (gst_gl_context_can_share (c1, c2));
+  fail_unless (gst_gl_context_can_share (c2, c1));
+
+  c3 = gst_gl_context_new (display);
+  gst_gl_context_create (c3, c2, &error);
+  fail_if (error != NULL, "Error creating context %s\n",
+      error ? error->message : "Unknown Error");
+
+  fail_unless (gst_gl_context_can_share (c1, c3));
+  fail_unless (gst_gl_context_can_share (c3, c1));
+  fail_unless (gst_gl_context_can_share (c2, c3));
+  fail_unless (gst_gl_context_can_share (c3, c2));
+
+  /* destroy the middle context */
+  gst_object_unref (c2);
+  c2 = NULL;
+
+  fail_unless (gst_gl_context_can_share (c1, c3));
+  fail_unless (gst_gl_context_can_share (c3, c1));
+
+  gst_object_unref (c1);
+  gst_object_unref (c3);
+}
+
+GST_END_TEST;
 
 static Suite *
 gst_gl_context_suite (void)
@@ -352,6 +495,8 @@ gst_gl_context_suite (void)
   tcase_add_checked_fixture (tc_chain, setup, teardown);
   tcase_add_test (tc_chain, test_share);
   tcase_add_test (tc_chain, test_wrapped_context);
+  tcase_add_test (tc_chain, test_current_context);
+  tcase_add_test (tc_chain, test_context_can_share);
 
   return s;
 }

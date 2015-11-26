@@ -29,6 +29,7 @@
 #include "camerabingeneral.h"
 
 G_BEGIN_DECLS
+
 #define GST_TYPE_WRAPPER_CAMERA_BIN_SRC \
   (gst_wrapper_camera_bin_src_get_type())
 #define GST_WRAPPER_CAMERA_BIN_SRC(obj) \
@@ -62,6 +63,7 @@ struct _GstWrapperCameraBinSrc
 
   GstCameraBinMode mode;
 
+  GstPad *srcfilter_pad;
   GstPad *vfsrc;
   GstPad *imgsrc;
   GstPad *vidsrc;
@@ -76,21 +78,21 @@ struct _GstWrapperCameraBinSrc
   GstElement *src_vid_src;
   GstElement *video_filter;
   GstElement *src_filter;
-  GstElement *src_zoom_crop;
-  GstElement *src_zoom_scale;
-  GstElement *src_zoom_filter;
-  GstElement *output_selector;
+  GstElement *digitalzoom;
+
+  /* Pad from our last element that is linked
+   * with the output pads */
+  GstPad *src_pad;
+
+  GstPad *video_tee_vf_pad;
+  GstPad *video_tee_sink;
 
   gboolean elements_created;
 
   gulong src_event_probe_id;
   gulong src_max_zoom_signal_id;
-
-  GstPad *outsel_imgpad;
-  GstPad *outsel_vidpad;
-
-  /* For changing caps without losing timestamps */
-  gboolean drop_newseg;
+  gulong image_capture_probe;
+  gulong video_capture_probe;
 
   /* Application configurable elements */
   GstElement *app_vid_src;
@@ -99,12 +101,9 @@ struct _GstWrapperCameraBinSrc
   /* Caps that videosrc supports */
   GstCaps *allowed_caps;
 
-  /* Optional base crop for frames. Used to crop frames e.g.
-     due to wrong aspect ratio, before the crop related to zooming. */
-  gint base_crop_top;
-  gint base_crop_bottom;
-  gint base_crop_left;
-  gint base_crop_right;
+  /* Optional crop for frames. Used to crop frames e.g.
+     due to wrong aspect ratio. Done before the crop related to zooming. */
+  GstElement *src_crop;
 
   /* Caps applied to capsfilters when in view finder mode */
   GstCaps *view_finder_caps;
@@ -126,5 +125,7 @@ struct _GstWrapperCameraBinSrcClass
 };
 
 gboolean gst_wrapper_camera_bin_src_plugin_init (GstPlugin * plugin);
+
+G_END_DECLS
 
 #endif /* __GST_WRAPPER_CAMERA_BIN_SRC_H__ */

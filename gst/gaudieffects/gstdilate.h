@@ -53,7 +53,6 @@
 
 G_BEGIN_DECLS
 
-/* #defines don't like whitespacey bits */
 #define GST_TYPE_DILATE \
   (gst_dilate_get_type())
 #define GST_DILATE(obj) \
@@ -73,7 +72,6 @@ struct _GstDilate
   GstVideoFilter videofilter;
 
   /* < private > */
-  gboolean silent;
   gboolean erode;
 };
 

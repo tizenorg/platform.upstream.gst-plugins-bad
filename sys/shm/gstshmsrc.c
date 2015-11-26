@@ -57,10 +57,8 @@ enum
 {
   PROP_0,
   PROP_SOCKET_PATH,
-  PROP_IS_LIVE
-#ifdef GST_TBM_SUPPORT
-  ,PROP_USE_TBM
-#endif
+  PROP_IS_LIVE,
+  PROP_SHM_AREA_NAME
 };
 
 struct GstShmBuffer
@@ -129,8 +127,8 @@ gst_shm_src_class_init (GstShmSrcClass * klass)
   g_object_class_install_property (gobject_class, PROP_SOCKET_PATH,
       g_param_spec_string ("socket-path",
           "Path to the control socket",
-          "The path to the control socket used to control the shared memory"
-          " transport", NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          "The path to the control socket used to control the shared memory",
+          NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_IS_LIVE,
       g_param_spec_boolean ("is-live", "Is this a live source",
@@ -144,6 +142,12 @@ gst_shm_src_class_init (GstShmSrcClass * klass)
           FALSE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 #endif
+
+  g_object_class_install_property (gobject_class, PROP_SHM_AREA_NAME,
+      g_param_spec_string ("shm-area-name",
+          "Name of the shared memory area",
+          "The name of the shared memory area used to get buffers",
+          NULL, G_PARAM_READABLE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&srctemplate));
@@ -228,11 +232,12 @@ gst_shm_src_get_property (GObject * object, guint prop_id,
     case PROP_IS_LIVE:
       g_value_set_boolean (value, gst_base_src_is_live (GST_BASE_SRC (object)));
       break;
-#ifdef GST_TBM_SUPPORT
-    case PROP_USE_TBM:
-      g_value_set_boolean (value, self->use_tbm);
+    case PROP_SHM_AREA_NAME:
+      GST_OBJECT_LOCK (object);
+      if (self->pipe)
+        g_value_set_string (value, sp_get_shm_area_name (self->pipe->pipe));
+      GST_OBJECT_UNLOCK (object);
       break;
-#endif
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;

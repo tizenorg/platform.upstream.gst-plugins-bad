@@ -56,16 +56,21 @@ static GstEncodingProfile *
 create_ogg_profile (void)
 {
   GstEncodingContainerProfile *container;
+  GstCaps *caps = NULL;
 
-  container = gst_encoding_container_profile_new ("ogg", NULL,
-      gst_caps_new_empty_simple ("application/ogg"), NULL);
+  caps = gst_caps_new_empty_simple ("application/ogg");
+  container = gst_encoding_container_profile_new ("ogg", NULL, caps, NULL);
+  gst_caps_unref (caps);
 
+  caps = gst_caps_new_empty_simple ("video/x-theora");
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_video_profile_new (gst_caps_new_empty_simple
-          ("video/x-theora"), NULL, NULL, 1));
+      gst_encoding_video_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
+
+  caps = gst_caps_new_empty_simple ("audio/x-vorbis");
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_audio_profile_new (gst_caps_new_empty_simple
-          ("audio/x-vorbis"), NULL, NULL, 1));
+      gst_encoding_audio_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
 
   return (GstEncodingProfile *) container;
 }
@@ -74,16 +79,21 @@ static GstEncodingProfile *
 create_webm_profile (void)
 {
   GstEncodingContainerProfile *container;
+  GstCaps *caps = NULL;
 
-  container = gst_encoding_container_profile_new ("webm", NULL,
-      gst_caps_new_empty_simple ("video/webm"), NULL);
+  caps = gst_caps_new_empty_simple ("video/webm");
+  container = gst_encoding_container_profile_new ("webm", NULL, caps, NULL);
+  gst_caps_unref (caps);
 
+  caps = gst_caps_new_empty_simple ("video/x-vp8");
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_video_profile_new (gst_caps_new_empty_simple ("video/x-vp8"),
-          NULL, NULL, 1));
+      gst_encoding_video_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
+
+  caps = gst_caps_new_empty_simple ("audio/x-vorbis");
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_audio_profile_new (gst_caps_new_empty_simple
-          ("audio/x-vorbis"), NULL, NULL, 1));
+      gst_encoding_audio_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
 
   return (GstEncodingProfile *) container;
 }
@@ -92,17 +102,23 @@ static GstEncodingProfile *
 create_mp4_profile (void)
 {
   GstEncodingContainerProfile *container;
+  GstCaps *caps = NULL;
 
-  container = gst_encoding_container_profile_new ("mp4", NULL,
+  caps =
       gst_caps_new_simple ("video/quicktime", "variant", G_TYPE_STRING, "iso",
-          NULL), NULL);
+      NULL);
+  container = gst_encoding_container_profile_new ("mp4", NULL, caps, NULL);
+  gst_caps_unref (caps);
 
+  caps = gst_caps_new_empty_simple ("video/x-h264");
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_video_profile_new (gst_caps_new_empty_simple
-          ("video/x-h264"), NULL, NULL, 1));
+      gst_encoding_video_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
+
+  caps = gst_caps_new_simple ("audio/mpeg", "version", G_TYPE_INT, 4, NULL);
   gst_encoding_container_profile_add_profile (container, (GstEncodingProfile *)
-      gst_encoding_audio_profile_new (gst_caps_new_simple ("audio/mpeg",
-              "version", G_TYPE_INT, 4, NULL), NULL, NULL, 1));
+      gst_encoding_audio_profile_new (caps, NULL, NULL, 1));
+  gst_caps_unref (caps);
 
   return (GstEncodingProfile *) container;
 }
@@ -154,9 +170,7 @@ on_videoRButton_toggled (GtkToggleButton * button, gpointer user_data)
 void
 on_viewfinderArea_realize (GtkWidget * widget, gpointer data)
 {
-#if GTK_CHECK_VERSION (2, 18, 0)
   gdk_window_ensure_native (gtk_widget_get_window (widget));
-#endif
 }
 
 void
@@ -189,6 +203,13 @@ on_formatComboBox_changed (GtkWidget * widget, gpointer data)
   }
 }
 
+void
+on_zoomScale_value_changed (GtkWidget * widget, gpointer data)
+{
+  g_object_set (camera, "zoom",
+      (gfloat) gtk_range_get_value (GTK_RANGE (widget)), NULL);
+}
+
 static GstBusSyncReply
 bus_sync_callback (GstBus * bus, GstMessage * message, gpointer data)
 {
@@ -203,11 +224,7 @@ bus_sync_callback (GstBus * bus, GstMessage * message, gpointer data)
   /* FIXME: make sure to get XID in main thread */
   ui_drawing = GTK_WIDGET (gtk_builder_get_object (builder, "viewfinderArea"));
   gst_video_overlay_set_window_handle (GST_VIDEO_OVERLAY (message->src),
-#if GTK_CHECK_VERSION (2, 91, 6)
       GDK_WINDOW_XID (gtk_widget_get_window (ui_drawing)));
-#else
-      GDK_WINDOW_XWINDOW (gtk_widget_get_window (ui_drawing)));
-#endif
 
   gst_message_unref (message);
   return GST_BUS_DROP;
@@ -260,7 +277,6 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
 static gboolean
 init_gtkwidgets_data (void)
 {
-#if GTK_CHECK_VERSION(2,24,0)
   gint i;
   GtkComboBoxText *combobox =
       GTK_COMBO_BOX_TEXT (gtk_builder_get_object (builder, "formatComboBox"));
@@ -275,16 +291,11 @@ init_gtkwidgets_data (void)
   /* default to the first one -> ogg */
   gtk_combo_box_set_active (GTK_COMBO_BOX (combobox), 0);
   return TRUE;
-#else
-  g_warning ("This needs a newer version of GTK (2.24 at least)");
-  return FALSE;
-#endif
 }
 
 int
 main (int argc, char *argv[])
 {
-  int ret = 0;
   GError *error = NULL;
   GstBus *bus;
 
@@ -319,5 +330,5 @@ main (int argc, char *argv[])
 error:
   gst_element_set_state (camera, GST_STATE_NULL);
   gst_object_unref (camera);
-  return ret;
+  return 0;
 }

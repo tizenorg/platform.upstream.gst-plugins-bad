@@ -123,12 +123,48 @@ static const guint8 default_scaling_list1[64] = {
  *  Default scaling list of 32x32 matrix for matrixId = 1
  */
 static const guint8 default_scaling_list2[64] = {
-  16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17,
-  17, 17, 17, 17, 18, 18, 18, 18, 18, 20, 20, 20,
+  16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 17,
+  17, 17, 17, 18, 18, 18, 18, 18, 18, 20, 20, 20,
   20, 20, 20, 20, 24, 24, 24, 24, 24, 24, 24, 24,
   25, 25, 25, 25, 25, 25, 25, 28, 28, 28, 28, 28,
   28, 33, 33, 33, 33, 33, 41, 41, 41, 41, 54, 54,
   54, 71, 71, 91
+};
+
+static const guint8 zigzag_4x4[16] = {
+  0, 1, 4, 8,
+  5, 2, 3, 6,
+  9, 12, 13, 10,
+  7, 11, 14, 15,
+};
+
+static const guint8 zigzag_8x8[64] = {
+  0, 1, 8, 16, 9, 2, 3, 10,
+  17, 24, 32, 25, 18, 11, 4, 5,
+  12, 19, 26, 33, 40, 48, 41, 34,
+  27, 20, 13, 6, 7, 14, 21, 28,
+  35, 42, 49, 56, 57, 50, 43, 36,
+  29, 22, 15, 23, 30, 37, 44, 51,
+  58, 59, 52, 45, 38, 31, 39, 46,
+  53, 60, 61, 54, 47, 55, 62, 63
+};
+
+static const guint8 uprightdiagonal_4x4[16] = {
+  0, 4, 1, 8,
+  5, 2, 12, 9,
+  6, 3, 13, 10,
+  7, 14, 11, 15
+};
+
+static const guint8 uprightdiagonal_8x8[64] = {
+  0, 8, 1, 16, 9, 2, 24, 17,
+  10, 3, 32, 25, 18, 11, 4, 40,
+  33, 26, 19, 12, 5, 48, 41, 34,
+  27, 20, 13, 6, 56, 49, 42, 35,
+  28, 21, 14, 7, 57, 50, 43, 36,
+  29, 22, 15, 58, 51, 44, 37, 30,
+  23, 59, 52, 45, 38, 31, 60, 53,
+  46, 39, 61, 54, 47, 62, 55, 63
 };
 
 typedef struct
@@ -137,7 +173,7 @@ typedef struct
 } PAR;
 
 /* Table E-1 - Meaning of sample aspect ratio indicator (1..16) */
-static PAR aspect_ratios[17] = {
+static const PAR aspect_ratios[17] = {
   {0, 0},
   {1, 1},
   {12, 11},
@@ -306,14 +342,12 @@ gst_h265_parse_sub_layer_hrd_parameters (GstH265SubLayerHRDParams * sub_hrd,
     sub_hrd->cbr_flag[i] = 0;
 
   for (i = 0; i <= CpbCnt; i++) {
-    READ_UE_ALLOWED (nr, sub_hrd->bit_rate_value_minus1[i], 0, G_MAXUINT32 - 1);
-    READ_UE_ALLOWED (nr, sub_hrd->cpb_size_value_minus1[i], 0, G_MAXUINT32 - 1);
+    READ_UE_MAX (nr, sub_hrd->bit_rate_value_minus1[i], G_MAXUINT32 - 1);
+    READ_UE_MAX (nr, sub_hrd->cpb_size_value_minus1[i], G_MAXUINT32 - 1);
 
     if (sub_pic_hrd_params_present_flag) {
-      READ_UE_ALLOWED (nr, sub_hrd->cpb_size_du_value_minus1[i], 0,
-          G_MAXUINT32 - 1);
-      READ_UE_ALLOWED (nr, sub_hrd->bit_rate_du_value_minus1[i], 0,
-          G_MAXUINT32 - 1);
+      READ_UE_MAX (nr, sub_hrd->cpb_size_du_value_minus1[i], G_MAXUINT32 - 1);
+      READ_UE_MAX (nr, sub_hrd->bit_rate_du_value_minus1[i], G_MAXUINT32 - 1);
     }
 
     READ_UINT8 (nr, sub_hrd->cbr_flag[i], 1);
@@ -384,12 +418,12 @@ gst_h265_parse_hrd_parameters (GstH265HRDParams * hrd, NalReader * nr,
       hrd->fixed_pic_rate_within_cvs_flag[i] = 1;
 
     if (hrd->fixed_pic_rate_within_cvs_flag[i]) {
-      READ_UE_ALLOWED (nr, hrd->elemental_duration_in_tc_minus1[i], 0, 2047);
+      READ_UE_MAX (nr, hrd->elemental_duration_in_tc_minus1[i], 2047);
     } else
       READ_UINT8 (nr, hrd->low_delay_hrd_flag[i], 1);
 
     if (!hrd->low_delay_hrd_flag[i])
-      READ_UE_ALLOWED (nr, hrd->cpb_cnt_minus1[i], 0, 31);
+      READ_UE_MAX (nr, hrd->cpb_cnt_minus1[i], 31);
 
     if (hrd->nal_hrd_parameters_present_flag)
       if (!gst_h265_parse_sub_layer_hrd_parameters (&hrd->sublayer_hrd_params
@@ -483,8 +517,8 @@ gst_h265_parse_vui_parameters (GstH265SPS * sps, NalReader * nr)
 
   READ_UINT8 (nr, vui->chroma_loc_info_present_flag, 1);
   if (vui->chroma_loc_info_present_flag) {
-    READ_UE_ALLOWED (nr, vui->chroma_sample_loc_type_top_field, 0, 5);
-    READ_UE_ALLOWED (nr, vui->chroma_sample_loc_type_bottom_field, 0, 5);
+    READ_UE_MAX (nr, vui->chroma_sample_loc_type_top_field, 5);
+    READ_UE_MAX (nr, vui->chroma_sample_loc_type_bottom_field, 5);
   }
 
   READ_UINT8 (nr, vui->neutral_chroma_indication_flag, 1);
@@ -513,8 +547,7 @@ gst_h265_parse_vui_parameters (GstH265SPS * sps, NalReader * nr)
 
     READ_UINT8 (nr, vui->poc_proportional_to_timing_flag, 1);
     if (vui->poc_proportional_to_timing_flag)
-      READ_UE_ALLOWED (nr, vui->num_ticks_poc_diff_one_minus1, 0,
-          G_MAXUINT32 - 1);
+      READ_UE_MAX (nr, vui->num_ticks_poc_diff_one_minus1, G_MAXUINT32 - 1);
 
     READ_UINT8 (nr, vui->hrd_parameters_present_flag, 1);
     if (vui->hrd_parameters_present_flag)
@@ -528,11 +561,11 @@ gst_h265_parse_vui_parameters (GstH265SPS * sps, NalReader * nr)
     READ_UINT8 (nr, vui->tiles_fixed_structure_flag, 1);
     READ_UINT8 (nr, vui->motion_vectors_over_pic_boundaries_flag, 1);
     READ_UINT8 (nr, vui->restricted_ref_pic_lists_flag, 1);
-    READ_UE_ALLOWED (nr, vui->min_spatial_segmentation_idc, 0, 4096);
-    READ_UE_ALLOWED (nr, vui->max_bytes_per_pic_denom, 0, 16);
-    READ_UE_ALLOWED (nr, vui->max_bits_per_min_cu_denom, 0, 16);
-    READ_UE_ALLOWED (nr, vui->log2_max_mv_length_horizontal, 0, 16);
-    READ_UE_ALLOWED (nr, vui->log2_max_mv_length_vertical, 0, 15);
+    READ_UE_MAX (nr, vui->min_spatial_segmentation_idc, 4096);
+    READ_UE_MAX (nr, vui->max_bytes_per_pic_denom, 16);
+    READ_UE_MAX (nr, vui->max_bits_per_min_cu_denom, 16);
+    READ_UE_MAX (nr, vui->log2_max_mv_length_horizontal, 16);
+    READ_UE_MAX (nr, vui->log2_max_mv_length_vertical, 15);
   }
 
   return TRUE;
@@ -590,7 +623,7 @@ get_default_scaling_lists (guint8 ** sl, guint8 sizeId, guint8 matrixId)
 
     case GST_H265_QUANT_MATIX_8X8:
     case GST_H265_QUANT_MATIX_16X16:
-      if (matrixId >= 0 && matrixId <= 2)
+      if (matrixId <= 2)
         memcpy (*sl, default_scaling_list1, 64);
       else
         memcpy (*sl, default_scaling_list2, 64);
@@ -649,7 +682,7 @@ gst_h265_parser_parse_scaling_lists (NalReader * nr,
         if (!scaling_list_pred_mode_flag) {
           guint8 refMatrixId;
 
-          READ_UE_ALLOWED (nr, scaling_list_pred_matrix_id_delta, 0, matrixId);
+          READ_UE_MAX (nr, scaling_list_pred_matrix_id_delta, matrixId);
 
           if (!scaling_list_pred_matrix_id_delta) {
             if (!get_default_scaling_lists (&sl, sizeId, matrixId))
@@ -710,7 +743,7 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
 {
   guint8 num_short_term_ref_pic_sets;
   guint8 RefRpsIdx = 0;
-  guint16 deltaRps = 0;
+  gint16 deltaRps = 0;
   guint8 use_delta_flag[16] = { 0 };
   guint8 used_by_curr_pic_flag[16] = { 0 };
   guint32 delta_poc_s0_minus1[16] = { 0 };
@@ -736,10 +769,10 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
     GstH265ShortTermRefPicSet *RefRPS;
 
     if (stRpsIdx == num_short_term_ref_pic_sets)
-      READ_UE_ALLOWED (nr, stRPS->delta_idx_minus1, 0, stRpsIdx - 1);
+      READ_UE_MAX (nr, stRPS->delta_idx_minus1, stRpsIdx - 1);
 
     READ_UINT8 (nr, stRPS->delta_rps_sign, 1);
-    READ_UE_ALLOWED (nr, stRPS->abs_delta_rps_minus1, 0, 32767);
+    READ_UE_MAX (nr, stRPS->abs_delta_rps_minus1, 32767);
 
     RefRpsIdx = stRpsIdx - stRPS->delta_idx_minus1 - 1; /* 7-45 */
     deltaRps = (1 - 2 * stRPS->delta_rps_sign) * (stRPS->abs_delta_rps_minus1 + 1);     /* 7-46 */
@@ -750,9 +783,6 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
       READ_UINT8 (nr, used_by_curr_pic_flag[j], 1);
       if (!used_by_curr_pic_flag[j])
         READ_UINT8 (nr, use_delta_flag[j], 1);
-
-      if (used_by_curr_pic_flag[j] || use_delta_flag[j])
-        stRPS->NumDeltaPocs++;
     }
 
     /* 7-47: calcuate NumNegativePics, DeltaPocS0 and UsedByCurrPicS0 */
@@ -803,16 +833,16 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
 
   } else {
     /* 7-49 */
-    READ_UE_ALLOWED (nr, stRPS->NumNegativePics, 0,
+    READ_UE_MAX (nr, stRPS->NumNegativePics,
         sps->max_dec_pic_buffering_minus1[sps->max_sub_layers_minus1]);
 
     /* 7-50 */
-    READ_UE_ALLOWED (nr, stRPS->NumPositivePics, 0,
+    READ_UE_MAX (nr, stRPS->NumPositivePics,
         (sps->max_dec_pic_buffering_minus1[sps->max_sub_layers_minus1] -
             stRPS->NumNegativePics));
 
     for (i = 0; i < stRPS->NumNegativePics; i++) {
-      READ_UE_ALLOWED (nr, delta_poc_s0_minus1[i], 0, 32767);
+      READ_UE_MAX (nr, delta_poc_s0_minus1[i], 32767);
       /* 7-51 */
       READ_UINT8 (nr, stRPS->UsedByCurrPicS0[i], 1);
 
@@ -827,7 +857,7 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
     }
 
     for (j = 0; j < stRPS->NumPositivePics; j++) {
-      READ_UE_ALLOWED (nr, delta_poc_s1_minus1[j], 0, 32767);
+      READ_UE_MAX (nr, delta_poc_s1_minus1[j], 32767);
 
       /* 7-52 */
       READ_UINT8 (nr, stRPS->UsedByCurrPicS1[j], 1);
@@ -842,9 +872,11 @@ gst_h265_parser_parse_short_term_ref_pic_sets (GstH265ShortTermRefPicSet *
       }
     }
 
-    /* 7-57 */
-    stRPS->NumDeltaPocs = stRPS->NumPositivePics + stRPS->NumNegativePics;
   }
+
+  /* 7-57 */
+  stRPS->NumDeltaPocs = stRPS->NumPositivePics + stRPS->NumNegativePics;
+
   return TRUE;
 
 error:
@@ -871,9 +903,9 @@ gst_h265_slice_parse_ref_pic_list_modification (GstH265SliceHdr * slice,
   READ_UINT8 (nr, rpl_mod->ref_pic_list_modification_flag_l0, 1);
 
   if (rpl_mod->ref_pic_list_modification_flag_l0) {
-    for (i = 0; i < slice->num_ref_idx_l0_active_minus1; i++) {
+    for (i = 0; i <= slice->num_ref_idx_l0_active_minus1; i++) {
       READ_UINT32 (nr, rpl_mod->list_entry_l0[i], n);
-      CHECK_ALLOWED (rpl_mod->list_entry_l0[i], 0, (NumPocTotalCurr - 1));
+      CHECK_ALLOWED_MAX (rpl_mod->list_entry_l0[i], (NumPocTotalCurr - 1));
     }
   }
   if (GST_H265_IS_B_SLICE (slice)) {
@@ -881,7 +913,7 @@ gst_h265_slice_parse_ref_pic_list_modification (GstH265SliceHdr * slice,
     if (rpl_mod->ref_pic_list_modification_flag_l1)
       for (i = 0; i <= slice->num_ref_idx_l1_active_minus1; i++) {
         READ_UINT32 (nr, rpl_mod->list_entry_l1[i], n);
-        CHECK_ALLOWED (rpl_mod->list_entry_l1[i], 0, (NumPocTotalCurr - 1));
+        CHECK_ALLOWED_MAX (rpl_mod->list_entry_l1[i], (NumPocTotalCurr - 1));
       }
   }
 
@@ -904,7 +936,7 @@ gst_h265_slice_parse_pred_weight_table (GstH265SliceHdr * slice, NalReader * nr)
 
   p = &slice->pred_weight_table;
 
-  READ_UE_ALLOWED (nr, p->luma_log2_weight_denom, 0, 7);
+  READ_UE_MAX (nr, p->luma_log2_weight_denom, 7);
 
   /* set default values */
   for (i = 0; i < G_N_ELEMENTS (p->chroma_weight_l0_flag); i++) {
@@ -919,8 +951,10 @@ gst_h265_slice_parse_pred_weight_table (GstH265SliceHdr * slice, NalReader * nr)
     }
   }
 
-  if (sps->chroma_format_idc != 0)
-    READ_SE_ALLOWED (nr, p->delta_chroma_log2_weight_denom, 0, 7);
+  if (sps->chroma_format_idc != 0) {
+    READ_SE_ALLOWED (nr, p->delta_chroma_log2_weight_denom,
+        (0 - p->luma_log2_weight_denom), (7 - p->luma_log2_weight_denom));
+  }
 
   for (i = 0; i <= slice->num_ref_idx_l0_active_minus1; i++)
     READ_UINT8 (nr, p->luma_weight_l0_flag[i], 1);
@@ -979,7 +1013,7 @@ gst_h265_parser_parse_buffering_period (GstH265Parser * parser,
 
   GST_DEBUG ("parsing \"Buffering period\"");
 
-  READ_UE_ALLOWED (nr, sps_id, 0, GST_H265_MAX_SPS_COUNT - 1);
+  READ_UE_MAX (nr, sps_id, GST_H265_MAX_SPS_COUNT - 1);
   sps = gst_h265_parser_get_sps (parser, sps_id);
   if (!sps) {
     GST_WARNING ("couldn't find associated sequence parameter set with id: %d",
@@ -1225,7 +1259,7 @@ gst_h265_parser_identify_nalu_unchecked (GstH265Parser * parser,
 
   if (nalu->type == GST_H265_NAL_EOS || nalu->type == GST_H265_NAL_EOB) {
     GST_DEBUG ("end-of-seq or end-of-stream nal found");
-    nalu->size = 0;
+    nalu->size = 2;
     return GST_H265_PARSER_OK;
   }
 
@@ -1255,7 +1289,7 @@ gst_h265_parser_identify_nalu (GstH265Parser * parser,
       gst_h265_parser_identify_nalu_unchecked (parser, data, offset, size,
       nalu);
 
-  if (res != GST_H265_PARSER_OK || nalu->size == 0)
+  if (res != GST_H265_PARSER_OK || nalu->size == 2)
     goto beach;
 
   off2 = scan_for_start_codes (data + nalu->offset, size - nalu->offset);
@@ -1272,7 +1306,7 @@ gst_h265_parser_identify_nalu (GstH265Parser * parser,
     off2--;
 
   nalu->size = off2;
-  if (nalu->size < 2)
+  if (nalu->size < 3)
     return GST_H265_PARSER_BROKEN_DATA;
 
   GST_DEBUG ("Complete nal found. Off: %d, Size: %d", nalu->offset, nalu->size);
@@ -1443,12 +1477,10 @@ gst_h265_parse_vps (GstH265NalUnit * nalu, GstH265VPS * vps)
   for (i =
       (vps->sub_layer_ordering_info_present_flag ? 0 :
           vps->max_sub_layers_minus1); i <= vps->max_sub_layers_minus1; i++) {
-    READ_UE_ALLOWED (&nr, vps->max_dec_pic_buffering_minus1[i], 0,
-        G_MAXUINT32 - 1);
-    READ_UE_ALLOWED (&nr, vps->max_num_reorder_pics[i], 0,
+    READ_UE_MAX (&nr, vps->max_dec_pic_buffering_minus1[i], G_MAXUINT32 - 1);
+    READ_UE_MAX (&nr, vps->max_num_reorder_pics[i],
         vps->max_dec_pic_buffering_minus1[i]);
-    READ_UE_ALLOWED (&nr, vps->max_latency_increase_plus1[i], 0,
-        G_MAXUINT32 - 1);
+    READ_UE_MAX (&nr, vps->max_latency_increase_plus1[i], G_MAXUINT32 - 1);
   }
   /* setting default values if vps->sub_layer_ordering_info_present_flag is zero */
   if (!vps->sub_layer_ordering_info_present_flag && vps->max_sub_layers_minus1) {
@@ -1463,10 +1495,10 @@ gst_h265_parse_vps (GstH265NalUnit * nalu, GstH265VPS * vps)
   }
 
   READ_UINT8 (&nr, vps->max_layer_id, 6);
-  CHECK_ALLOWED (vps->max_layer_id, 0, 0);
+  CHECK_ALLOWED_MAX (vps->max_layer_id, 0);
 
-  READ_UE_ALLOWED (&nr, vps->num_layer_sets_minus1, 0, 1023);
-  CHECK_ALLOWED (vps->num_layer_sets_minus1, 0, 0);
+  READ_UE_MAX (&nr, vps->num_layer_sets_minus1, 1023);
+  CHECK_ALLOWED_MAX (vps->num_layer_sets_minus1, 0);
 
   for (i = 1; i <= vps->num_layer_sets_minus1; i++)
     for (j = 0; j <= vps->max_layer_id; j++)
@@ -1480,15 +1512,14 @@ gst_h265_parse_vps (GstH265NalUnit * nalu, GstH265VPS * vps)
     READ_UINT8 (&nr, vps->poc_proportional_to_timing_flag, 1);
 
     if (vps->poc_proportional_to_timing_flag)
-      READ_UE_ALLOWED (&nr, vps->num_ticks_poc_diff_one_minus1, 0,
-          G_MAXUINT32 - 1);
+      READ_UE_MAX (&nr, vps->num_ticks_poc_diff_one_minus1, G_MAXUINT32 - 1);
 
-    READ_UE_ALLOWED (&nr, vps->num_hrd_parameters, 0, 1024);
-    CHECK_ALLOWED (vps->num_hrd_parameters, 0, 1);
+    READ_UE_MAX (&nr, vps->num_hrd_parameters, 1024);
+    CHECK_ALLOWED_MAX (vps->num_hrd_parameters, 1);
 
     if (vps->num_hrd_parameters) {
-      READ_UE_ALLOWED (&nr, vps->hrd_layer_set_idx, 0, 1023);
-      CHECK_ALLOWED (vps->hrd_layer_set_idx, 0, 0);
+      READ_UE_MAX (&nr, vps->hrd_layer_set_idx, 1023);
+      CHECK_ALLOWED_MAX (vps->hrd_layer_set_idx, 0);
 
       if (!gst_h265_parse_hrd_parameters (&vps->hrd_params, &nr,
               vps->cprms_present_flag, vps->max_sub_layers_minus1))
@@ -1553,6 +1584,8 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
   GstH265VPS *vps;
   guint8 vps_id;
   guint i;
+  guint subwc[] = { 1, 2, 2, 1, 1 };
+  guint subhc[] = { 1, 2, 1, 1, 1 };
   GstH265VUIParams *vui = NULL;
 
   INITIALIZE_DEBUG_CATEGORY;
@@ -1588,9 +1621,9 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
           sps->max_sub_layers_minus1))
     goto error;
 
-  READ_UE_ALLOWED (&nr, sps->id, 0, GST_H265_MAX_SPS_COUNT - 1);
+  READ_UE_MAX (&nr, sps->id, GST_H265_MAX_SPS_COUNT - 1);
 
-  READ_UE_ALLOWED (&nr, sps->chroma_format_idc, 0, 3);
+  READ_UE_MAX (&nr, sps->chroma_format_idc, 3);
   if (sps->chroma_format_idc == 3)
     READ_UINT8 (&nr, sps->separate_colour_plane_flag, 1);
 
@@ -1605,19 +1638,18 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
     READ_UE (&nr, sps->conf_win_bottom_offset);
   }
 
-  READ_UE_ALLOWED (&nr, sps->bit_depth_luma_minus8, 0, 6);
-  READ_UE_ALLOWED (&nr, sps->bit_depth_chroma_minus8, 0, 6);
-  READ_UE_ALLOWED (&nr, sps->log2_max_pic_order_cnt_lsb_minus4, 0, 12);
+  READ_UE_MAX (&nr, sps->bit_depth_luma_minus8, 6);
+  READ_UE_MAX (&nr, sps->bit_depth_chroma_minus8, 6);
+  READ_UE_MAX (&nr, sps->log2_max_pic_order_cnt_lsb_minus4, 12);
 
   READ_UINT8 (&nr, sps->sub_layer_ordering_info_present_flag, 1);
   for (i =
       (sps->sub_layer_ordering_info_present_flag ? 0 :
           sps->max_sub_layers_minus1); i <= sps->max_sub_layers_minus1; i++) {
-    READ_UE_ALLOWED (&nr, sps->max_dec_pic_buffering_minus1[i], 0, 16);
-    READ_UE_ALLOWED (&nr, sps->max_num_reorder_pics[i], 0,
+    READ_UE_MAX (&nr, sps->max_dec_pic_buffering_minus1[i], 16);
+    READ_UE_MAX (&nr, sps->max_num_reorder_pics[i],
         sps->max_dec_pic_buffering_minus1[i]);
-    READ_UE_ALLOWED (&nr, sps->max_latency_increase_plus1[i], 0,
-        G_MAXUINT32 - 1);
+    READ_UE_MAX (&nr, sps->max_latency_increase_plus1[i], G_MAXUINT32 - 1);
   }
   /* setting default values if sps->sub_layer_ordering_info_present_flag is zero */
   if (!sps->sub_layer_ordering_info_present_flag && sps->max_sub_layers_minus1) {
@@ -1633,12 +1665,12 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
 
   /* The limits are calculted based on the profile_tier_level constraint
    * in Annex-A: CtbLog2SizeY = 4 to 6 */
-  READ_UE_ALLOWED (&nr, sps->log2_min_luma_coding_block_size_minus3, 0, 3);
-  READ_UE_ALLOWED (&nr, sps->log2_diff_max_min_luma_coding_block_size, 0, 6);
-  READ_UE_ALLOWED (&nr, sps->log2_min_transform_block_size_minus2, 0, 3);
-  READ_UE_ALLOWED (&nr, sps->log2_diff_max_min_transform_block_size, 0, 3);
-  READ_UE_ALLOWED (&nr, sps->max_transform_hierarchy_depth_inter, 0, 4);
-  READ_UE_ALLOWED (&nr, sps->max_transform_hierarchy_depth_intra, 0, 4);
+  READ_UE_MAX (&nr, sps->log2_min_luma_coding_block_size_minus3, 3);
+  READ_UE_MAX (&nr, sps->log2_diff_max_min_luma_coding_block_size, 6);
+  READ_UE_MAX (&nr, sps->log2_min_transform_block_size_minus2, 3);
+  READ_UE_MAX (&nr, sps->log2_diff_max_min_transform_block_size, 3);
+  READ_UE_MAX (&nr, sps->max_transform_hierarchy_depth_inter, 4);
+  READ_UE_MAX (&nr, sps->max_transform_hierarchy_depth_intra, 4);
 
   READ_UINT8 (&nr, sps->scaling_list_enabled_flag, 1);
   if (sps->scaling_list_enabled_flag) {
@@ -1656,14 +1688,12 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
   if (sps->pcm_enabled_flag) {
     READ_UINT8 (&nr, sps->pcm_sample_bit_depth_luma_minus1, 4);
     READ_UINT8 (&nr, sps->pcm_sample_bit_depth_chroma_minus1, 4);
-    READ_UE_ALLOWED (&nr, sps->log2_min_pcm_luma_coding_block_size_minus3, 0,
-        2);
-    READ_UE_ALLOWED (&nr, sps->log2_diff_max_min_pcm_luma_coding_block_size, 0,
-        2);
+    READ_UE_MAX (&nr, sps->log2_min_pcm_luma_coding_block_size_minus3, 2);
+    READ_UE_MAX (&nr, sps->log2_diff_max_min_pcm_luma_coding_block_size, 2);
     READ_UINT8 (&nr, sps->pcm_loop_filter_disabled_flag, 1);
   }
 
-  READ_UE_ALLOWED (&nr, sps->num_short_term_ref_pic_sets, 0, 64);
+  READ_UE_MAX (&nr, sps->num_short_term_ref_pic_sets, 64);
   for (i = 0; i < sps->num_short_term_ref_pic_sets; i++)
     if (!gst_h265_parser_parse_short_term_ref_pic_sets
         (&sps->short_term_ref_pic_set[i], &nr, i, sps))
@@ -1671,7 +1701,7 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
 
   READ_UINT8 (&nr, sps->long_term_ref_pics_present_flag, 1);
   if (sps->long_term_ref_pics_present_flag) {
-    READ_UE_ALLOWED (&nr, sps->num_long_term_ref_pics_sps, 0, 32);
+    READ_UE_MAX (&nr, sps->num_long_term_ref_pics_sps, 32);
     for (i = 0; i < sps->num_long_term_ref_pics_sps; i++) {
       READ_UINT16 (&nr, sps->lt_ref_pic_poc_lsb_sps[i],
           sps->log2_max_pic_order_cnt_lsb_minus4 + 4);
@@ -1705,7 +1735,20 @@ gst_h265_parse_sps (GstH265Parser * parser, GstH265NalUnit * nalu,
     goto error;
   }
 
-  /* ToDo: Add crop_rectangle dimensions */
+  if (sps->conformance_window_flag) {
+    const guint crop_unit_x = subwc[sps->chroma_format_idc];
+    const guint crop_unit_y = subhc[sps->chroma_format_idc];
+
+    sps->crop_rect_width = sps->width -
+        (sps->conf_win_left_offset + sps->conf_win_right_offset) * crop_unit_x;
+    sps->crop_rect_height = sps->height -
+        (sps->conf_win_top_offset + sps->conf_win_bottom_offset) * crop_unit_y;
+    sps->crop_rect_x = sps->conf_win_left_offset * crop_unit_x;
+    sps->crop_rect_y = sps->conf_win_top_offset * crop_unit_y;
+
+    GST_LOG ("crop_rectangle x=%u y=%u width=%u, height=%u", sps->crop_rect_x,
+        sps->crop_rect_y, sps->crop_rect_width, sps->crop_rect_height);
+  }
 
   sps->fps_num = 0;
   sps->fps_den = 1;
@@ -1752,6 +1795,7 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
   GstH265SPS *sps;
   gint sps_id;
   gint qp_bd_offset;
+  guint32 CtbSizeY, MinCbLog2SizeY, CtbLog2SizeY;
   guint8 i;
 
   INITIALIZE_DEBUG_CATEGORY;
@@ -1760,8 +1804,8 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
   nal_reader_init (&nr, nalu->data + nalu->offset + nalu->header_bytes,
       nalu->size - nalu->header_bytes);
 
-  READ_UE_ALLOWED (&nr, pps->id, 0, GST_H265_MAX_PPS_COUNT - 1);
-  READ_UE_ALLOWED (&nr, sps_id, 0, GST_H265_MAX_SPS_COUNT - 1);
+  READ_UE_MAX (&nr, pps->id, GST_H265_MAX_PPS_COUNT - 1);
+  READ_UE_MAX (&nr, sps_id, GST_H265_MAX_SPS_COUNT - 1);
 
   sps = gst_h265_parser_get_sps (parser, sps_id);
   if (!sps) {
@@ -1771,6 +1815,14 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
   }
   pps->sps = sps;
   qp_bd_offset = 6 * sps->bit_depth_luma_minus8;
+
+  MinCbLog2SizeY = sps->log2_min_luma_coding_block_size_minus3 + 3;
+  CtbLog2SizeY = MinCbLog2SizeY + sps->log2_diff_max_min_luma_coding_block_size;
+  CtbSizeY = 1 << CtbLog2SizeY;
+  pps->PicHeightInCtbsY =
+      ceil ((gdouble) sps->pic_height_in_luma_samples / (gdouble) CtbSizeY);
+  pps->PicWidthInCtbsY =
+      ceil ((gdouble) sps->pic_width_in_luma_samples / (gdouble) CtbSizeY);
 
   /* set default values for fields that might not be present in the bitstream
      and have valid defaults */
@@ -1790,8 +1842,8 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
   READ_UINT8 (&nr, pps->sign_data_hiding_enabled_flag, 1);
   READ_UINT8 (&nr, pps->cabac_init_present_flag, 1);
 
-  READ_UE_ALLOWED (&nr, pps->num_ref_idx_l0_default_active_minus1, 0, 14);
-  READ_UE_ALLOWED (&nr, pps->num_ref_idx_l1_default_active_minus1, 0, 14);
+  READ_UE_MAX (&nr, pps->num_ref_idx_l0_default_active_minus1, 14);
+  READ_UE_MAX (&nr, pps->num_ref_idx_l1_default_active_minus1, 14);
   READ_SE_ALLOWED (&nr, pps->init_qp_minus26, -(26 + qp_bd_offset), 25);
 
   READ_UINT8 (&nr, pps->constrained_intra_pred_flag, 1);
@@ -1799,7 +1851,7 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
 
   READ_UINT8 (&nr, pps->cu_qp_delta_enabled_flag, 1);
   if (pps->cu_qp_delta_enabled_flag)
-    READ_UE_ALLOWED (&nr, pps->diff_cu_qp_delta_depth, 0,
+    READ_UE_MAX (&nr, pps->diff_cu_qp_delta_depth,
         sps->log2_diff_max_min_luma_coding_block_size);
 
   READ_SE_ALLOWED (&nr, pps->cb_qp_offset, -12, 12);
@@ -1813,16 +1865,40 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
   READ_UINT8 (&nr, pps->entropy_coding_sync_enabled_flag, 1);
 
   if (pps->tiles_enabled_flag) {
-    READ_UE_ALLOWED (&nr, pps->num_tile_columns_minus1, 1, 19);
-    READ_UE_ALLOWED (&nr, pps->num_tile_rows_minus1, 1, 21);
+    READ_UE_ALLOWED (&nr, pps->num_tile_columns_minus1, 0, 19);
+    READ_UE_ALLOWED (&nr, pps->num_tile_rows_minus1, 0, 21);
 
     READ_UINT8 (&nr, pps->uniform_spacing_flag, 1);
-    if (!pps->uniform_spacing_flag) {
-      for (i = 0; i < pps->num_tile_columns_minus1; i++)
+    /* 6.5.1, 6-4, 6-5, 7.4.3.3.1 */
+    if (pps->uniform_spacing_flag) {
+      guint8 num_col = pps->num_tile_columns_minus1 + 1;
+      guint8 num_row = pps->num_tile_rows_minus1 + 1;
+      for (i = 0; i < num_col; i++) {
+        pps->column_width_minus1[i] =
+            ((i + 1) * pps->PicWidthInCtbsY / num_col
+            - i * pps->PicWidthInCtbsY / num_col) - 1;
+      }
+      for (i = 0; i < num_row; i++) {
+        pps->row_height_minus1[i] =
+            ((i + 1) * pps->PicHeightInCtbsY / num_row
+            - i * pps->PicHeightInCtbsY / num_row) - 1;
+      }
+    } else {
+      pps->column_width_minus1[pps->num_tile_columns_minus1] =
+          pps->PicWidthInCtbsY - 1;
+      for (i = 0; i < pps->num_tile_columns_minus1; i++) {
         READ_UE (&nr, pps->column_width_minus1[i]);
+        pps->column_width_minus1[pps->num_tile_columns_minus1] -=
+            (pps->column_width_minus1[i] + 1);
+      }
 
-      for (i = 0; i < pps->num_tile_rows_minus1; i++)
+      pps->row_height_minus1[pps->num_tile_rows_minus1] =
+          pps->PicHeightInCtbsY - 1;
+      for (i = 0; i < pps->num_tile_rows_minus1; i++) {
         READ_UE (&nr, pps->row_height_minus1[i]);
+        pps->row_height_minus1[pps->num_tile_rows_minus1] -=
+            (pps->row_height_minus1[i] + 1);
+      }
     }
     READ_UINT8 (&nr, pps->loop_filter_across_tiles_enabled_flag, 1);
   }
@@ -1850,7 +1926,7 @@ gst_h265_parse_pps (GstH265Parser * parser, GstH265NalUnit * nalu,
       goto error;
 
   READ_UINT8 (&nr, pps->lists_modification_present_flag, 1);
-  READ_UE_ALLOWED (&nr, pps->log2_parallel_merge_level_minus2, 0, 4);
+  READ_UE_MAX (&nr, pps->log2_parallel_merge_level_minus2, 4);
   READ_UINT8 (&nr, pps->slice_segment_header_extension_present_flag, 1);
   READ_UINT8 (&nr, pps->pps_extension_flag, 1);
 
@@ -1909,15 +1985,9 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
   GstH265PPS *pps;
   GstH265SPS *sps;
   guint i;
-  guint CurrRpsIdx = 0;
   GstH265ShortTermRefPicSet *stRPS = NULL;
   guint32 UsedByCurrPicLt[16];
   guint32 PicSizeInCtbsY;
-  guint32 PicWidthInCtbsY;
-  guint32 PicHeightInCtbsY;
-  guint32 CtbSizeY;
-  guint32 MinCbLog2SizeY;
-  guint32 CtbLog2SizeY;
   gint NumPocTotalCurr = 0;
 
   if (!nalu->size) {
@@ -1936,7 +2006,7 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
       && nalu->type <= RESERVED_IRAP_NAL_TYPE_MAX)
     READ_UINT8 (&nr, slice->no_output_of_prior_pics_flag, 1);
 
-  READ_UE_ALLOWED (&nr, pps_id, 0, GST_H265_MAX_PPS_COUNT - 1);
+  READ_UE_MAX (&nr, pps_id, GST_H265_MAX_PPS_COUNT - 1);
   pps = gst_h265_parser_get_pps (parser, pps_id);
   if (!pps) {
     GST_WARNING
@@ -1953,14 +2023,7 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
     return GST_H265_PARSER_BROKEN_LINK;
   }
 
-  MinCbLog2SizeY = sps->log2_min_luma_coding_block_size_minus3 + 3;
-  CtbLog2SizeY = MinCbLog2SizeY + sps->log2_diff_max_min_luma_coding_block_size;
-  CtbSizeY = 1 << CtbLog2SizeY;
-  PicHeightInCtbsY =
-      ceil ((gdouble) sps->pic_height_in_luma_samples / (gdouble) CtbSizeY);
-  PicWidthInCtbsY =
-      ceil ((gdouble) sps->pic_width_in_luma_samples / (gdouble) CtbSizeY);
-  PicSizeInCtbsY = PicWidthInCtbsY * PicHeightInCtbsY;
+  PicSizeInCtbsY = pps->PicWidthInCtbsY * pps->PicHeightInCtbsY;
   /* set default values for fields that might not be present in the bitstream
    * and have valid defaults */
   slice->dependent_slice_segment_flag = 0;
@@ -2002,7 +2065,7 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
   if (!slice->dependent_slice_segment_flag) {
     for (i = 0; i < pps->num_extra_slice_header_bits; i++)
       nal_reader_skip (&nr, 1);
-    READ_UE_ALLOWED (&nr, slice->type, 0, 63);
+    READ_UE_MAX (&nr, slice->type, 63);
 
 
     if (pps->output_flag_present_flag)
@@ -2014,7 +2077,6 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
         && (nalu->type != GST_H265_NAL_SLICE_IDR_N_LP)) {
       READ_UINT16 (&nr, slice->pic_order_cnt_lsb,
           (sps->log2_max_pic_order_cnt_lsb_minus4 + 4));
-      CHECK_ALLOWED (slice->pic_order_cnt_lsb, 0, G_MAXUINT16);
 
       READ_UINT8 (&nr, slice->short_term_ref_pic_set_sps_flag, 1);
       if (!slice->short_term_ref_pic_set_sps_flag) {
@@ -2025,7 +2087,7 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
       } else if (sps->num_short_term_ref_pic_sets > 1) {
         const guint n = ceil_log2 (sps->num_short_term_ref_pic_sets);
         READ_UINT8 (&nr, slice->short_term_ref_pic_set_idx, n);
-        CHECK_ALLOWED (slice->short_term_ref_pic_set_idx, 0,
+        CHECK_ALLOWED_MAX (slice->short_term_ref_pic_set_idx,
             sps->num_short_term_ref_pic_sets - 1);
       }
 
@@ -2033,10 +2095,10 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
         guint32 limit;
 
         if (sps->num_long_term_ref_pics_sps > 0)
-          READ_UE_ALLOWED (&nr, slice->num_long_term_sps, 0,
+          READ_UE_MAX (&nr, slice->num_long_term_sps,
               sps->num_long_term_ref_pics_sps);
 
-        READ_UE_ALLOWED (&nr, slice->num_long_term_pics, 0, 16);
+        READ_UE_MAX (&nr, slice->num_long_term_pics, 16);
         limit = slice->num_long_term_sps + slice->num_long_term_pics;
         for (i = 0; i < limit; i++) {
           if (i < slice->num_long_term_sps) {
@@ -2074,9 +2136,9 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
       READ_UINT8 (&nr, slice->num_ref_idx_active_override_flag, 1);
 
       if (slice->num_ref_idx_active_override_flag) {
-        READ_UE_ALLOWED (&nr, slice->num_ref_idx_l0_active_minus1, 0, 14);
+        READ_UE_MAX (&nr, slice->num_ref_idx_l0_active_minus1, 14);
         if (GST_H265_IS_B_SLICE (slice))
-          READ_UE_ALLOWED (&nr, slice->num_ref_idx_l1_active_minus1, 0, 14);
+          READ_UE_MAX (&nr, slice->num_ref_idx_l1_active_minus1, 14);
       } else {
         /*set default values */
         slice->num_ref_idx_l0_active_minus1 =
@@ -2085,24 +2147,25 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
             pps->num_ref_idx_l1_default_active_minus1;
       }
 
+      /* calculate NumPocTotalCurr */
+      if (slice->short_term_ref_pic_set_sps_flag)
+        stRPS = &sps->short_term_ref_pic_set[slice->short_term_ref_pic_set_idx];
+      else
+        stRPS = &slice->short_term_ref_pic_sets;
+
+      for (i = 0; i < stRPS->NumNegativePics; i++)
+        if (stRPS->UsedByCurrPicS0[i])
+          NumPocTotalCurr++;
+      for (i = 0; i < stRPS->NumPositivePics; i++)
+        if (stRPS->UsedByCurrPicS1[i])
+          NumPocTotalCurr++;
+      for (i = 0;
+          i < (slice->num_long_term_sps + slice->num_long_term_pics); i++)
+        if (UsedByCurrPicLt[i])
+          NumPocTotalCurr++;
+      slice->NumPocTotalCurr = NumPocTotalCurr;
+
       if (pps->lists_modification_present_flag) {
-        /* calculate NumPocTotalCurr */
-        if (slice->short_term_ref_pic_set_sps_flag)
-          CurrRpsIdx = slice->short_term_ref_pic_set_idx;
-        else
-          CurrRpsIdx = sps->num_short_term_ref_pic_sets;
-        stRPS = &sps->short_term_ref_pic_set[CurrRpsIdx];
-        for (i = 0; i < stRPS->NumNegativePics; i++)
-          if (stRPS->UsedByCurrPicS0[i])
-            NumPocTotalCurr++;
-        for (i = 0; i < stRPS->NumPositivePics; i++)
-          if (stRPS->UsedByCurrPicS1[i])
-            NumPocTotalCurr++;
-        for (i = 0;
-            i < (slice->num_long_term_sps + slice->num_long_term_pics); i++)
-          if (UsedByCurrPicLt[i])
-            NumPocTotalCurr++;
-        slice->NumPocTotalCurr = NumPocTotalCurr;
         if (NumPocTotalCurr > 1)
           if (!gst_h265_slice_parse_ref_pic_list_modification (slice, &nr,
                   NumPocTotalCurr))
@@ -2126,11 +2189,11 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
           if ((GST_H265_IS_P_SLICE (slice))
               || ((GST_H265_IS_B_SLICE (slice))
                   && (slice->collocated_from_l0_flag))) {
-            READ_UE_ALLOWED (&nr, slice->collocated_ref_idx, 0,
+            READ_UE_MAX (&nr, slice->collocated_ref_idx,
                 slice->num_ref_idx_l0_active_minus1);
           } else if ((GST_H265_IS_B_SLICE (slice))
               && (!slice->collocated_from_l0_flag)) {
-            READ_UE_ALLOWED (&nr, slice->collocated_ref_idx, 0,
+            READ_UE_MAX (&nr, slice->collocated_ref_idx,
                 slice->num_ref_idx_l1_active_minus1);
           }
         }
@@ -2139,7 +2202,7 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
           (pps->weighted_bipred_flag && GST_H265_IS_B_SLICE (slice)))
         if (!gst_h265_slice_parse_pred_weight_table (slice, &nr))
           goto error;
-      READ_UE_ALLOWED (&nr, slice->five_minus_max_num_merge_cand, 0, 4);
+      READ_UE_MAX (&nr, slice->five_minus_max_num_merge_cand, 4);
     }
 
     READ_SE_ALLOWED (&nr, slice->qp_delta, -87, 77);
@@ -2168,17 +2231,18 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
     guint32 offset_max;
 
     if (!pps->tiles_enabled_flag && pps->entropy_coding_sync_enabled_flag)
-      offset_max = PicHeightInCtbsY - 1;
+      offset_max = pps->PicHeightInCtbsY - 1;
     else if (pps->tiles_enabled_flag && !pps->entropy_coding_sync_enabled_flag)
       offset_max =
           (pps->num_tile_columns_minus1 + 1) * (pps->num_tile_rows_minus1 + 1) -
           1;
     else
-      offset_max = (pps->num_tile_columns_minus1 + 1) * PicHeightInCtbsY - 1;
+      offset_max =
+          (pps->num_tile_columns_minus1 + 1) * pps->PicHeightInCtbsY - 1;
 
-    READ_UE_ALLOWED (&nr, slice->num_entry_point_offsets, 0, offset_max);
+    READ_UE_MAX (&nr, slice->num_entry_point_offsets, offset_max);
     if (slice->num_entry_point_offsets > 0) {
-      READ_UE_ALLOWED (&nr, slice->offset_len_minus1, 0, 31);
+      READ_UE_MAX (&nr, slice->offset_len_minus1, 31);
       slice->entry_point_offset_minus1 =
           g_new0 (guint32, slice->num_entry_point_offsets);
       for (i = 0; i < slice->num_entry_point_offsets; i++)
@@ -2189,10 +2253,18 @@ gst_h265_parser_parse_slice_hdr (GstH265Parser * parser,
 
   if (pps->slice_segment_header_extension_present_flag) {
     guint16 slice_segment_header_extension_length;
-    READ_UE_ALLOWED (&nr, slice_segment_header_extension_length, 0, 256);
+    READ_UE_MAX (&nr, slice_segment_header_extension_length, 256);
     for (i = 0; i < slice_segment_header_extension_length; i++)
       if (!nal_reader_skip (&nr, 8))
         goto error;
+  }
+
+  /* Skip the byte alignment bits */
+  if (!nal_reader_skip (&nr, 1))
+    goto error;
+  while (!nal_reader_is_byte_aligned (&nr)) {
+    if (!nal_reader_skip (&nr, 1))
+      goto error;
   }
 
   slice->header_size = nal_reader_get_pos (&nr);
@@ -2208,68 +2280,106 @@ error:
   return GST_H265_PARSER_ERROR;
 }
 
-/**
- * gst_h265_parser_parse_sei:
- * @parser: a #GstH265Parser
- * @nalu: The #GST_H265_NAL_SEI #GstH265NalUnit to parse
- * @sei: The #GstH265SEIMessage to fill.
- *
- * Parses @data, and fills the @sei structures.
- * The resulting @sei  structure shall be deallocated with
- * gst_h265_sei_free() when it is no longer needed
- *
- * Returns: a #GstH265ParserResult
- */
-GstH265ParserResult
-gst_h265_parser_parse_sei (GstH265Parser * parser,
-    GstH265NalUnit * nalu, GstH265SEIMessage * sei)
+static gboolean
+nal_reader_has_more_data_in_payload (NalReader * nr,
+    guint32 payload_start_pos_bit, guint32 payloadSize)
 {
-  NalReader nr;
+  if (nal_reader_is_byte_aligned (nr) &&
+      (nal_reader_get_pos (nr) == (payload_start_pos_bit + 8 * payloadSize)))
+    return FALSE;
+
+  return TRUE;
+}
+
+static GstH265ParserResult
+gst_h265_parser_parse_sei_message (GstH265Parser * parser,
+    guint8 nal_type, NalReader * nr, GstH265SEIMessage * sei)
+{
   guint32 payloadSize;
   guint8 payload_type_byte, payload_size_byte;
-#ifndef GST_DISABLE_GST_DEBUG
   guint remaining, payload_size;
-#endif
-  GstH265ParserResult res;
+  guint32 payload_start_pos_bit;
+  GstH265ParserResult res = GST_H265_PARSER_OK;
+
   GST_DEBUG ("parsing \"Sei message\"");
-  nal_reader_init (&nr, nalu->data + nalu->offset + 1, nalu->size - 1);
-  /* init */
-  memset (sei, 0, sizeof (*sei));
+
   sei->payloadType = 0;
   do {
-    READ_UINT8 (&nr, payload_type_byte, 8);
+    READ_UINT8 (nr, payload_type_byte, 8);
     sei->payloadType += payload_type_byte;
   } while (payload_type_byte == 0xff);
   payloadSize = 0;
   do {
-    READ_UINT8 (&nr, payload_size_byte, 8);
+    READ_UINT8 (nr, payload_size_byte, 8);
     payloadSize += payload_size_byte;
   }
   while (payload_size_byte == 0xff);
-#ifndef GST_DISABLE_GST_DEBUG
-  remaining = nal_reader_get_remaining (&nr) * 8;
-  payload_size = payloadSize < remaining ? payloadSize : remaining;
+
+  remaining = nal_reader_get_remaining (nr);
+  payload_size = payloadSize * 8 < remaining ? payloadSize * 8 : remaining;
+
+  payload_start_pos_bit = nal_reader_get_pos (nr);
   GST_DEBUG
       ("SEI message received: payloadType  %u, payloadSize = %u bytes",
       sei->payloadType, payload_size);
-#endif
-  if (sei->payloadType == GST_H265_SEI_BUF_PERIOD) {
-    /* size not set; might depend on emulation_prevention_three_byte */
-    res = gst_h265_parser_parse_buffering_period (parser,
-        &sei->payload.buffering_period, &nr);
-  } else if (sei->payloadType == GST_H265_SEI_PIC_TIMING) {
-    /* size not set; might depend on emulation_prevention_three_byte */
-    res = gst_h265_parser_parse_pic_timing (parser,
-        &sei->payload.pic_timing, &nr);
-  } else
-    res = GST_H265_PARSER_OK;
+
+  if (nal_type == GST_H265_NAL_PREFIX_SEI) {
+    switch (sei->payloadType) {
+      case GST_H265_SEI_BUF_PERIOD:
+        /* size not set; might depend on emulation_prevention_three_byte */
+        res = gst_h265_parser_parse_buffering_period (parser,
+            &sei->payload.buffering_period, nr);
+        break;
+      case GST_H265_SEI_PIC_TIMING:
+        /* size not set; might depend on emulation_prevention_three_byte */
+        res = gst_h265_parser_parse_pic_timing (parser,
+            &sei->payload.pic_timing, nr);
+        break;
+      default:
+        /* Just consume payloadSize bytes, which does not account for
+           emulation prevention bytes */
+        if (!nal_reader_skip_long (nr, payload_size))
+          goto error;
+        res = GST_H265_PARSER_OK;
+        break;
+    }
+  } else if (nal_type == GST_H265_NAL_SUFFIX_SEI) {
+    switch (sei->payloadType) {
+      default:
+        /* Just consume payloadSize bytes, which does not account for
+           emulation prevention bytes */
+        if (!nal_reader_skip_long (nr, payload_size))
+          goto error;
+        res = GST_H265_PARSER_OK;
+        break;
+    }
+  }
+
+  /* Not parsing the reserved_payload_extension, but it shouldn't be
+   * an issue because of 1: There shall not be any reserved_payload_extension
+   * present in bitstreams conforming to the specification.2. Even though
+   * it is present, the size will be less than total PayloadSize since the
+   * size of reserved_payload_extension is supposed to be
+   * 8 * payloadSize - nEarlierBits - nPayloadZeroBits -1 which means the
+   * the current implementation will still skip all unnecessary bits correctly.
+   * In theory, we can have a more optimized implementation by skipping the
+   * data left in PayLoadSize without out individually checking for each bits,
+   * since the totoal size will be always less than payloadSize*/
+  if (nal_reader_has_more_data_in_payload (nr, payload_start_pos_bit,
+          payloadSize)) {
+    /* Skip the byte alignment bits */
+    if (!nal_reader_skip (nr, 1))
+      goto error;
+    while (!nal_reader_is_byte_aligned (nr)) {
+      if (!nal_reader_skip (nr, 1))
+        goto error;
+    }
+  }
 
   return res;
 
 error:
   GST_WARNING ("error parsing \"Sei message\"");
-  gst_h265_sei_free (sei);
-
   return GST_H265_PARSER_ERROR;
 }
 
@@ -2386,4 +2496,242 @@ gst_h265_sei_free (GstH265SEIMessage * sei)
     pic_timing->num_nalus_in_du_minus1 = 0;
     pic_timing->du_cpb_removal_delay_increment_minus1 = 0;
   }
+}
+
+/**
+ * gst_h265_parser_parse_sei:
+ * @nalparser: a #GstH265Parser
+ * @nalu: The #GST_H265_NAL_SEI #GstH265NalUnit to parse
+ * @messages: The GArray of #GstH265SEIMessage to fill. The caller must free it when done.
+ *
+ * Parses @data, create and fills the @messages array.
+ *
+ * Returns: a #GstH265ParserResult
+ */
+GstH265ParserResult
+gst_h265_parser_parse_sei (GstH265Parser * nalparser, GstH265NalUnit * nalu,
+    GArray ** messages)
+{
+  NalReader nr;
+  GstH265SEIMessage sei;
+  GstH265ParserResult res;
+
+  GST_DEBUG ("parsing SEI nal");
+  nal_reader_init (&nr, nalu->data + nalu->offset + nalu->header_bytes,
+      nalu->size - nalu->header_bytes);
+  *messages = g_array_new (FALSE, FALSE, sizeof (GstH265SEIMessage));
+  g_array_set_clear_func (*messages, (GDestroyNotify) gst_h265_sei_free);
+
+  do {
+    res = gst_h265_parser_parse_sei_message (nalparser, nalu->type, &nr, &sei);
+    if (res == GST_H265_PARSER_OK)
+      g_array_append_val (*messages, sei);
+    else
+      break;
+  } while (nal_reader_has_more_data (&nr));
+
+  return res;
+}
+
+
+/**
+ * gst_h265_quant_matrix_4x4_get_zigzag_from_raster:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from raster scan order to
+ * zigzag scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_4x4_get_zigzag_from_raster (guint8 out_quant[16],
+    const guint8 quant[16])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 16; i++)
+    out_quant[i] = quant[zigzag_4x4[i]];
+}
+
+/**
+ * gst_h265_quant_matrix_4x4_get_raster_from_zigzag:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from zigzag scan order to
+ * raster scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_4x4_get_raster_from_zigzag (guint8 out_quant[16],
+    const guint8 quant[16])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 16; i++)
+    out_quant[zigzag_4x4[i]] = quant[i];
+}
+
+/**
+ * gst_h265_quant_matrix_8x8_get_zigzag_from_raster:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from raster scan order to
+ * zigzag scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_8x8_get_zigzag_from_raster (guint8 out_quant[64],
+    const guint8 quant[64])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 64; i++)
+    out_quant[i] = quant[zigzag_8x8[i]];
+}
+
+/**
+ * gst_h265_quant_matrix_8x8_get_raster_from_zigzag:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from zigzag scan order to
+ * raster scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_8x8_get_raster_from_zigzag (guint8 out_quant[64],
+    const guint8 quant[64])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 64; i++)
+    out_quant[zigzag_8x8[i]] = quant[i];
+}
+
+/**
+ * gst_h265_quant_matrix_4x4_get_uprightdiagonal_from_raster:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from raster scan order to
+ * uprightdiagonal scan order and store the resulting factors
+ * into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_4x4_get_uprightdiagonal_from_raster (guint8 out_quant[16],
+    const guint8 quant[16])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 16; i++)
+    out_quant[i] = quant[uprightdiagonal_4x4[i]];
+}
+
+/**
+ * gst_h265_quant_matrix_4x4_get_raster_from_uprightdiagonal:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from uprightdiagonal scan order to
+ * raster scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_4x4_get_raster_from_uprightdiagonal (guint8 out_quant[16],
+    const guint8 quant[16])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 16; i++)
+    out_quant[uprightdiagonal_4x4[i]] = quant[i];
+}
+
+/**
+ * gst_h265_quant_matrix_8x8_get_uprightdiagonal_from_raster:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from raster scan order to
+ * uprightdiagonal scan order and store the resulting factors
+ * into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_8x8_get_uprightdiagonal_from_raster (guint8 out_quant[64],
+    const guint8 quant[64])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 64; i++)
+    out_quant[i] = quant[uprightdiagonal_8x8[i]];
+}
+
+/**
+ * gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal:
+ * @out_quant: (out): The resulting quantization matrix
+ * @quant: The source quantization matrix
+ *
+ * Converts quantization matrix @quant from uprightdiagonal scan order to
+ * raster scan order and store the resulting factors into @out_quant.
+ *
+ * Note: it is an error to pass the same table in both @quant and
+ * @out_quant arguments.
+ *
+ * Since: 1.6
+ */
+void
+gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal (guint8 out_quant[64],
+    const guint8 quant[64])
+{
+  guint i;
+
+  g_return_if_fail (out_quant != quant);
+
+  for (i = 0; i < 64; i++)
+    out_quant[uprightdiagonal_8x8[i]] = quant[i];
 }

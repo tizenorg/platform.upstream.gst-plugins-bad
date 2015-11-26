@@ -67,22 +67,9 @@ struct _GstWlDisplay
   GThread *thread;
   GstPoll *wl_fd_poll;
 
-#ifdef GST_WLSINK_ENHANCEMENT
-  /*video output layer */
-  struct tizen_policy *tizen_policy;
-  struct tizen_video *tizen_video;
-
-  struct wayland_tbm_client *tbm_client;
-  tbm_bufmgr tbm_bufmgr;
-  tbm_bo tbm_bo;
-
-  gboolean is_native_format;    /*SN12, ST12 */
-  void *bo[NV_BUF_PLANE_NUM];
-  int plane_size[NV_BUF_PLANE_NUM];
-  int stride_width[NV_BUF_PLANE_NUM];
-  int stride_height[NV_BUF_PLANE_NUM];
-  int native_video_size;
-#endif
+  GMutex buffers_mutex;
+  GHashTable *buffers;
+  gboolean shutting_down;
 };
 
 struct _GstWlDisplayClass
@@ -95,6 +82,10 @@ GType gst_wl_display_get_type (void);
 GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
 GstWlDisplay *gst_wl_display_new_existing (struct wl_display *display,
     gboolean take_ownership, GError ** error);
+
+/* see wlbuffer.c for explanation */
+void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf);
+void gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf);
 
 G_END_DECLS
 #endif /* __GST_WL_DISPLAY_H__ */

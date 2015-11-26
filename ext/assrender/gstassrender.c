@@ -31,10 +31,6 @@
  * </refsect2>
  */
 
-/* FIXME 0.11: suppress warnings for deprecated API such as GStaticRecMutex
- * with newer GLib versions (>= 2.31.0) */
-#define GLIB_DISABLE_DEPRECATION_WARNINGS
-
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif
@@ -119,11 +115,14 @@ static GstStateChangeReturn gst_ass_render_change_state (GstElement * element,
 G_DEFINE_TYPE (GstAssRender, gst_ass_render, GST_TYPE_ELEMENT);
 
 static GstCaps *gst_ass_render_get_videosink_caps (GstPad * pad,
-    GstCaps * filter);
-static GstCaps *gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter);
+    GstAssRender * render, GstCaps * filter);
+static GstCaps *gst_ass_render_get_src_caps (GstPad * pad,
+    GstAssRender * render, GstCaps * filter);
 
-static gboolean gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps);
-static gboolean gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps);
+static gboolean gst_ass_render_setcaps_video (GstPad * pad,
+    GstAssRender * render, GstCaps * caps);
+static gboolean gst_ass_render_setcaps_text (GstPad * pad,
+    GstAssRender * render, GstCaps * caps);
 
 static GstFlowReturn gst_ass_render_chain_video (GstPad * pad,
     GstObject * parent, GstBuffer * buf);
@@ -429,7 +428,7 @@ gst_ass_render_query_src (GstPad * pad, GstObject * parent, GstQuery * query)
       GstCaps *filter, *caps;
 
       gst_query_parse_caps (query, &filter);
-      caps = gst_ass_render_get_src_caps (pad, filter);
+      caps = gst_ass_render_get_src_caps (pad, (GstAssRender *) parent, filter);
       gst_query_set_caps_result (query, caps);
       gst_caps_unref (caps);
       res = TRUE;
@@ -581,9 +580,9 @@ gst_ass_render_intersect_by_feature (GstCaps * caps,
 }
 
 static GstCaps *
-gst_ass_render_get_videosink_caps (GstPad * pad, GstCaps * filter)
+gst_ass_render_get_videosink_caps (GstPad * pad, GstAssRender * render,
+    GstCaps * filter)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstPad *srcpad = render->srcpad;
   GstCaps *peer_caps = NULL, *caps = NULL, *assrender_filter = NULL;
 
@@ -638,15 +637,13 @@ gst_ass_render_get_videosink_caps (GstPad * pad, GstCaps * filter)
 
   GST_DEBUG_OBJECT (render, "returning  %" GST_PTR_FORMAT, caps);
 
-  gst_object_unref (render);
-
   return caps;
 }
 
 static GstCaps *
-gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter)
+gst_ass_render_get_src_caps (GstPad * pad, GstAssRender * render,
+    GstCaps * filter)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstPad *sinkpad = render->video_sinkpad;
   GstCaps *peer_caps = NULL, *caps = NULL, *assrender_filter = NULL;
 
@@ -702,8 +699,6 @@ gst_ass_render_get_src_caps (GstPad * pad, GstCaps * filter)
   }
 
   GST_DEBUG_OBJECT (render, "returning  %" GST_PTR_FORMAT, caps);
-
-  gst_object_unref (render);
 
   return caps;
 }
@@ -784,9 +779,9 @@ gst_ass_render_can_handle_caps (GstCaps * incaps)
 }
 
 static gboolean
-gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
+gst_ass_render_setcaps_video (GstPad * pad, GstAssRender * render,
+    GstCaps * caps)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstQuery *query;
   gboolean ret = FALSE;
   gint par_n = 1, par_d = 1;
@@ -819,13 +814,8 @@ gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
     overlay_caps = gst_caps_copy (caps);
 
     f = gst_caps_get_features (overlay_caps, 0);
-    if (f == NULL) {
-      f = gst_caps_features_new
-          (GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION, NULL);
-    } else {
-      gst_caps_features_add (f,
-          GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
-    }
+    gst_caps_features_add (f,
+        GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
 
     ret = gst_pad_peer_query_accept_caps (render->srcpad, overlay_caps);
     GST_DEBUG_OBJECT (render, "Downstream accepts the overlay meta: %d", ret);
@@ -904,7 +894,6 @@ gst_ass_render_setcaps_video (GstPad * pad, GstCaps * caps)
   GST_DEBUG_OBJECT (render, "ass renderer setup complete");
 
 out:
-  gst_object_unref (render);
 
   return ret;
 
@@ -924,9 +913,9 @@ unsupported_caps:
 }
 
 static gboolean
-gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps)
+gst_ass_render_setcaps_text (GstPad * pad, GstAssRender * render,
+    GstCaps * caps)
 {
-  GstAssRender *render = GST_ASS_RENDER (gst_pad_get_parent (pad));
   GstStructure *structure;
   const GValue *value;
   GstBuffer *priv;
@@ -967,8 +956,6 @@ gst_ass_render_setcaps_text (GstPad * pad, GstCaps * caps)
     ret = TRUE;
   }
   g_mutex_unlock (&render->ass_mutex);
-
-  gst_object_unref (render);
 
   return ret;
 }
@@ -1067,6 +1054,35 @@ gst_ass_render_composite_overlay (GstAssRender * render, ASS_Image * images)
   gst_video_overlay_rectangle_unref (rectangle);
 
   return composition;
+}
+
+static gboolean
+gst_ass_render_push_frame (GstAssRender * render, GstBuffer * video_frame)
+{
+  GstVideoFrame frame;
+
+  if (!render->composition)
+    goto done;
+
+  video_frame = gst_buffer_make_writable (video_frame);
+
+  if (render->attach_compo_to_buffer) {
+    gst_buffer_add_video_overlay_composition_meta (video_frame,
+        render->composition);
+    goto done;
+  }
+
+  if (!gst_video_frame_map (&frame, &render->info, video_frame,
+          GST_MAP_READWRITE)) {
+    GST_WARNING_OBJECT (render, "failed to map video frame for blending");
+    goto done;
+  }
+
+  gst_video_overlay_composition_blend (render->composition, &frame);
+  gst_video_frame_unmap (&frame);
+
+done:
+  return gst_pad_push (render->srcpad, video_frame);
 }
 
 static GstFlowReturn
@@ -1219,26 +1235,12 @@ wait_for_text_buf:
         if (!render->composition)
           render->composition = gst_ass_render_composite_overlay (render,
               ass_image);
-
-        if (render->composition) {
-          buffer = gst_buffer_make_writable (buffer);
-          if (render->attach_compo_to_buffer) {
-            gst_buffer_add_video_overlay_composition_meta (buffer,
-                render->composition);
-          } else {
-            GstVideoFrame frame;
-
-            gst_video_frame_map (&frame, &render->info, buffer, GST_MAP_WRITE);
-            gst_video_overlay_composition_blend (render->composition, &frame);
-            gst_video_frame_unmap (&frame);
-          }
-        }
       } else {
         GST_DEBUG_OBJECT (render, "nothing to render right now");
       }
 
       /* Push the video frame */
-      ret = gst_pad_push (render->srcpad, buffer);
+      ret = gst_ass_render_push_frame (render, buffer);
 
       if (text_running_time_end <= vid_running_time_end) {
         GST_ASS_RENDER_LOCK (render);
@@ -1422,7 +1424,7 @@ beach:
 }
 
 static void
-gst_ass_render_handle_tags (GstAssRender * render, GstTagList * taglist)
+gst_ass_render_handle_tag_sample (GstAssRender * render, GstSample * sample)
 {
   static const gchar *mimetypes[] = {
     "application/x-font-ttf",
@@ -1433,6 +1435,60 @@ gst_ass_render_handle_tags (GstAssRender * render, GstTagList * taglist)
     ".otf",
     ".ttf"
   };
+
+  GstBuffer *buf;
+  const GstStructure *structure;
+  gboolean valid_mimetype, valid_extension;
+  guint i;
+  const gchar *filename;
+
+  buf = gst_sample_get_buffer (sample);
+  structure = gst_sample_get_info (sample);
+
+  if (!buf || !structure)
+    return;
+
+  valid_mimetype = FALSE;
+  valid_extension = FALSE;
+
+  for (i = 0; i < G_N_ELEMENTS (mimetypes); i++) {
+    if (gst_structure_has_name (structure, mimetypes[i])) {
+      valid_mimetype = TRUE;
+      break;
+    }
+  }
+
+  filename = gst_structure_get_string (structure, "filename");
+  if (!filename)
+    return;
+
+  if (!valid_mimetype) {
+    guint len = strlen (filename);
+    const gchar *extension = filename + len - 4;
+    for (i = 0; i < G_N_ELEMENTS (extensions); i++) {
+      if (g_ascii_strcasecmp (extension, extensions[i]) == 0) {
+        valid_extension = TRUE;
+        break;
+      }
+    }
+  }
+
+  if (valid_mimetype || valid_extension) {
+    GstMapInfo map;
+
+    g_mutex_lock (&render->ass_mutex);
+    gst_buffer_map (buf, &map, GST_MAP_READ);
+    ass_add_font (render->ass_library, (gchar *) filename,
+        (gchar *) map.data, map.size);
+    gst_buffer_unmap (buf, &map);
+    GST_DEBUG_OBJECT (render, "registered new font %s", filename);
+    g_mutex_unlock (&render->ass_mutex);
+  }
+}
+
+static void
+gst_ass_render_handle_tags (GstAssRender * render, GstTagList * taglist)
+{
   guint tag_size;
 
   if (!taglist)
@@ -1440,58 +1496,16 @@ gst_ass_render_handle_tags (GstAssRender * render, GstTagList * taglist)
 
   tag_size = gst_tag_list_get_tag_size (taglist, GST_TAG_ATTACHMENT);
   if (tag_size > 0 && render->embeddedfonts) {
-    GstSample *sample;
-    GstBuffer *buf;
-    const GstStructure *structure;
-    gboolean valid_mimetype, valid_extension;
-    guint j;
-    const gchar *filename;
     guint index;
-    GstMapInfo map;
+    GstSample *sample;
 
     GST_DEBUG_OBJECT (render, "TAG event has attachments");
 
     for (index = 0; index < tag_size; index++) {
-      if (!gst_tag_list_get_sample_index (taglist, GST_TAG_ATTACHMENT, index,
-              &sample))
-        continue;
-      buf = gst_sample_get_buffer (sample);
-      structure = gst_sample_get_info (sample);
-      if (!buf || !structure)
-        continue;
-
-      valid_mimetype = FALSE;
-      valid_extension = FALSE;
-
-      for (j = 0; j < G_N_ELEMENTS (mimetypes); j++) {
-        if (gst_structure_has_name (structure, mimetypes[j])) {
-          valid_mimetype = TRUE;
-          break;
-        }
-      }
-      filename = gst_structure_get_string (structure, "filename");
-      if (!filename)
-        continue;
-
-      if (!valid_mimetype) {
-        guint len = strlen (filename);
-        const gchar *extension = filename + len - 4;
-        for (j = 0; j < G_N_ELEMENTS (extensions); j++) {
-          if (g_ascii_strcasecmp (extension, extensions[j]) == 0) {
-            valid_extension = TRUE;
-            break;
-          }
-        }
-      }
-
-      if (valid_mimetype || valid_extension) {
-        g_mutex_lock (&render->ass_mutex);
-        gst_buffer_map (buf, &map, GST_MAP_READ);
-        ass_add_font (render->ass_library, (gchar *) filename,
-            (gchar *) map.data, map.size);
-        gst_buffer_unmap (buf, &map);
-        GST_DEBUG_OBJECT (render, "registered new font %s", filename);
-        g_mutex_unlock (&render->ass_mutex);
+      if (gst_tag_list_get_sample_index (taglist, GST_TAG_ATTACHMENT, index,
+              &sample)) {
+        gst_ass_render_handle_tag_sample (render, sample);
+        gst_sample_unref (sample);
       }
     }
   }
@@ -1511,7 +1525,7 @@ gst_ass_render_event_video (GstPad * pad, GstObject * parent, GstEvent * event)
       GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
-      ret = gst_ass_render_setcaps_video (pad, caps);
+      ret = gst_ass_render_setcaps_video (pad, render, caps);
       gst_event_unref (event);
       break;
     }
@@ -1595,7 +1609,9 @@ gst_ass_render_query_video (GstPad * pad, GstObject * parent, GstQuery * query)
       GstCaps *filter, *caps;
 
       gst_query_parse_caps (query, &filter);
-      caps = gst_ass_render_get_videosink_caps (pad, filter);
+      caps =
+          gst_ass_render_get_videosink_caps (pad, (GstAssRender *) parent,
+          filter);
       gst_query_set_caps_result (query, caps);
       gst_caps_unref (caps);
       res = TRUE;
@@ -1624,7 +1640,7 @@ gst_ass_render_event_text (GstPad * pad, GstObject * parent, GstEvent * event)
       GstCaps *caps;
 
       gst_event_parse_caps (event, &caps);
-      ret = gst_ass_render_setcaps_text (pad, caps);
+      ret = gst_ass_render_setcaps_text (pad, render, caps);
       gst_event_unref (event);
       break;
     }
@@ -1677,6 +1693,9 @@ gst_ass_render_event_text (GstPad * pad, GstObject * parent, GstEvent * event)
        * a text segment update */
       GST_ASS_RENDER_BROADCAST (render);
       GST_ASS_RENDER_UNLOCK (render);
+
+      gst_event_unref (event);
+      ret = TRUE;
       break;
     }
     case GST_EVENT_FLUSH_STOP:

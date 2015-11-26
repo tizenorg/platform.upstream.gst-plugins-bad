@@ -36,7 +36,6 @@
  */
 
 /* TODO:
- * - React on state-change and update state accordingly.
  * - Implement support for timestamping the buffers.
  */
 
@@ -64,8 +63,7 @@ enum
   PROP_SRC_PORT,
   PROP_DST_PORT,
   PROP_CAPS,
-  PROP_TS_OFFSET,
-  PROP_LAST
+  PROP_TS_OFFSET
 };
 
 GST_DEBUG_CATEGORY_STATIC (gst_pcap_parse_debug);
@@ -86,6 +84,8 @@ static void gst_pcap_parse_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static void gst_pcap_parse_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
+static GstStateChangeReturn
+gst_pcap_parse_change_state (GstElement * element, GstStateChange transition);
 
 static void gst_pcap_parse_reset (GstPcapParse * self);
 
@@ -93,6 +93,7 @@ static GstFlowReturn gst_pcap_parse_chain (GstPad * pad,
     GstObject * parent, GstBuffer * buffer);
 static gboolean gst_pcap_sink_event (GstPad * pad,
     GstObject * parent, GstEvent * event);
+
 
 #define parent_class gst_pcap_parse_parent_class
 G_DEFINE_TYPE (GstPcapParse, gst_pcap_parse, GST_TYPE_ELEMENT);
@@ -141,6 +142,8 @@ gst_pcap_parse_class_init (GstPcapParseClass * klass)
       gst_static_pad_template_get (&sink_template));
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&src_template));
+
+  element_class->change_state = gst_pcap_parse_change_state;
 
   gst_element_class_set_static_metadata (element_class, "PCapParse",
       "Raw/Parser",
@@ -309,7 +312,6 @@ gst_pcap_parse_reset (GstPcapParse * self)
   self->initialized = FALSE;
   self->swap_endian = FALSE;
   self->cur_packet_size = -1;
-  self->buffer_offset = 0;
   self->cur_ts = GST_CLOCK_TIME_NONE;
   self->base_ts = GST_CLOCK_TIME_NONE;
   self->newsegment_sent = FALSE;
@@ -360,20 +362,28 @@ gst_pcap_parse_scan_frame (GstPcapParse * self,
   guint16 len;
 
   switch (self->linktype) {
-    case DLT_ETHER:
+    case LINKTYPE_ETHER:
       if (buf_size < ETH_HEADER_LEN + IP_HEADER_MIN_LEN + UDP_HEADER_LEN)
         return FALSE;
 
       eth_type = GUINT16_FROM_BE (*((guint16 *) (buf + 12)));
       buf_ip = buf + ETH_HEADER_LEN;
       break;
-    case DLT_SLL:
+    case LINKTYPE_SLL:
       if (buf_size < SLL_HEADER_LEN + IP_HEADER_MIN_LEN + UDP_HEADER_LEN)
         return FALSE;
 
       eth_type = GUINT16_FROM_BE (*((guint16 *) (buf + 14)));
       buf_ip = buf + SLL_HEADER_LEN;
       break;
+    case LINKTYPE_RAW:
+      if (buf_size < IP_HEADER_MIN_LEN + UDP_HEADER_LEN)
+        return FALSE;
+
+      eth_type = 0x800;         /* This is fine since IPv4/IPv6 is parse elsewhere */
+      buf_ip = buf;
+      break;
+
     default:
       return FALSE;
   }
@@ -445,6 +455,7 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
 {
   GstPcapParse *self = GST_PCAP_PARSE (parent);
   GstFlowReturn ret = GST_FLOW_OK;
+  GstBufferList *list = NULL;
 
   gst_adapter_push (self->adapter, buffer);
 
@@ -471,46 +482,36 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
           if (gst_pcap_parse_scan_frame (self, data, self->cur_packet_size,
                   &payload_data, &payload_size)) {
             GstBuffer *out_buf;
-            GstMapInfo map;
+            guintptr offset = payload_data - data;
 
-            out_buf = gst_buffer_new_and_alloc (payload_size);
-            if (out_buf) {
+            gst_adapter_unmap (self->adapter);
+            gst_adapter_flush (self->adapter, offset);
+            /* we don't use _take_buffer_fast() on purpose here, we need a
+             * buffer with a single memory, since the RTP depayloaders expect
+             * the complete RTP header to be in the first memory if there are
+             * multiple ones and we can't guarantee that with _fast() */
+            out_buf = gst_adapter_take_buffer (self->adapter, payload_size);
+            gst_adapter_flush (self->adapter,
+                self->cur_packet_size - offset - payload_size);
 
-              if (GST_CLOCK_TIME_IS_VALID (self->cur_ts)) {
-                if (!GST_CLOCK_TIME_IS_VALID (self->base_ts))
-                  self->base_ts = self->cur_ts;
-                if (self->offset >= 0) {
-                  self->cur_ts -= self->base_ts;
-                  self->cur_ts += self->offset;
-                }
+            if (GST_CLOCK_TIME_IS_VALID (self->cur_ts)) {
+              if (!GST_CLOCK_TIME_IS_VALID (self->base_ts))
+                self->base_ts = self->cur_ts;
+              if (self->offset >= 0) {
+                self->cur_ts -= self->base_ts;
+                self->cur_ts += self->offset;
               }
-
-              gst_buffer_map (out_buf, &map, GST_MAP_WRITE);
-              memcpy (map.data, payload_data, payload_size);
-              gst_buffer_unmap (out_buf, &map);
-              GST_BUFFER_TIMESTAMP (out_buf) = self->cur_ts;
-
-              if (!self->newsegment_sent &&
-                  GST_CLOCK_TIME_IS_VALID (self->cur_ts)) {
-                GstSegment segment;
-
-                if (self->caps)
-                  gst_pad_set_caps (self->src_pad, self->caps);
-                gst_segment_init (&segment, GST_FORMAT_TIME);
-                segment.start = self->cur_ts;
-                gst_pad_push_event (self->src_pad,
-                    gst_event_new_segment (&segment));
-                self->newsegment_sent = TRUE;
-              }
-
-              ret = gst_pad_push (self->src_pad, out_buf);
-
-              self->buffer_offset += payload_size;
             }
-          }
+            GST_BUFFER_TIMESTAMP (out_buf) = self->cur_ts;
 
-          gst_adapter_unmap (self->adapter);
-          gst_adapter_flush (self->adapter, self->cur_packet_size);
+
+            if (list == NULL)
+              list = gst_buffer_list_new ();
+            gst_buffer_list_add (list, out_buf);
+          } else {
+            gst_adapter_unmap (self->adapter);
+            gst_adapter_flush (self->adapter, self->cur_packet_size);
+          }
         }
 
         self->cur_packet_size = -1;
@@ -569,10 +570,11 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
         goto out;
       }
 
-      if (linktype != DLT_ETHER && linktype != DLT_SLL) {
+      if (linktype != LINKTYPE_ETHER && linktype != LINKTYPE_SLL &&
+          linktype != LINKTYPE_RAW) {
         GST_ELEMENT_ERROR (self, STREAM, WRONG_TYPE, (NULL),
-            ("Only dumps of type Ethernet or Linux Coooked (SLL) understood,"
-                " type %d unknown", linktype));
+            ("Only dumps of type Ethernet, raw IP or Linux Cooked (SLL) "
+                "understood; type %d unknown", linktype));
         ret = GST_FLOW_ERROR;
         goto out;
       }
@@ -585,9 +587,26 @@ gst_pcap_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
     }
   }
 
+  if (list) {
+    if (!self->newsegment_sent && GST_CLOCK_TIME_IS_VALID (self->cur_ts)) {
+      GstSegment segment;
+
+      if (self->caps)
+        gst_pad_set_caps (self->src_pad, self->caps);
+      gst_segment_init (&segment, GST_FORMAT_TIME);
+      segment.start = self->base_ts;
+      gst_pad_push_event (self->src_pad, gst_event_new_segment (&segment));
+      self->newsegment_sent = TRUE;
+    }
+
+    ret = gst_pad_push_list (self->src_pad, list);
+    list = NULL;
+  }
+
 out:
-  if (ret != GST_FLOW_OK)
-    gst_pcap_parse_reset (self);
+
+  if (list)
+    gst_buffer_list_unref (list);
 
   return ret;
 }
@@ -603,10 +622,33 @@ gst_pcap_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       /* Drop it, we'll replace it with our own */
       gst_event_unref (event);
       break;
+    case GST_EVENT_FLUSH_STOP:
+      gst_pcap_parse_reset (self);
+      break;
     default:
       ret = gst_pad_push_event (self->src_pad, event);
       break;
   }
+
+  return ret;
+}
+
+static GstStateChangeReturn
+gst_pcap_parse_change_state (GstElement * element, GstStateChange transition)
+{
+  GstPcapParse *self = GST_PCAP_PARSE (element);
+  GstStateChangeReturn ret;
+
+  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+
+  switch (transition) {
+    case GST_STATE_CHANGE_PAUSED_TO_READY:
+      gst_pcap_parse_reset (self);
+      break;
+    default:
+      break;
+  }
+
 
   return ret;
 }

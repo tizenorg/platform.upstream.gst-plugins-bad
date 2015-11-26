@@ -67,7 +67,7 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
 #define DEBUG_INIT \
   GST_DEBUG_CATEGORY_INIT (gst_gl_filtershader_debug, "glshader", 0, "glshader element");
-
+#define gst_gl_filtershader_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstGLFilterShader, gst_gl_filtershader,
     GST_TYPE_GL_FILTER, DEBUG_INIT);
 
@@ -75,7 +75,7 @@ static void gst_gl_filtershader_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_gl_filtershader_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
-static void gst_gl_filter_filtershader_reset (GstGLFilter * filter);
+static gboolean gst_gl_filter_filtershader_reset (GstBaseTransform * trans);
 
 static gboolean gst_gl_filtershader_load_shader (GstGLFilterShader *
     filter_shader, char *filename, char **storage);
@@ -93,10 +93,16 @@ static void gst_gl_filtershader_hcallback (gint width, gint height,
 static void
 gst_gl_filtershader_init_resources (GstGLFilter * filter)
 {
-  glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA8,
+  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
+  guint internal_format;
+
+  internal_format =
+      gst_gl_sized_gl_format_from_gl_format_type (context, GL_RGBA,
+      GL_UNSIGNED_BYTE);
+  glTexImage2D (GL_TEXTURE_2D, 0, internal_format,
       GST_VIDEO_INFO_WIDTH (&filter->out_info),
-      GST_VIDEO_INFO_HEIGHT (&filter->out_info),
-      0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+      GST_VIDEO_INFO_HEIGHT (&filter->out_info), 0, GL_RGBA, GL_UNSIGNED_BYTE,
+      NULL);
   glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -140,6 +146,8 @@ gst_gl_filtershader_class_init (GstGLFilterShaderClass * klass)
       "OpenGL fragment shader filter", "Filter/Effect",
       "Load GLSL fragment shader from file", "<luc.deschenaux@freesurf.ch>");
 
+  GST_BASE_TRANSFORM_CLASS (klass)->stop = gst_gl_filter_filtershader_reset;
+
   GST_GL_FILTER_CLASS (klass)->filter = gst_gl_filtershader_filter;
   GST_GL_FILTER_CLASS (klass)->filter_texture =
       gst_gl_filtershader_filter_texture;
@@ -147,8 +155,10 @@ gst_gl_filtershader_class_init (GstGLFilterShaderClass * klass)
       gst_gl_filtershader_init_resources;
   GST_GL_FILTER_CLASS (klass)->display_reset_cb =
       gst_gl_filtershader_reset_resources;
-  GST_GL_FILTER_CLASS (klass)->onInitFBO = gst_gl_filtershader_init_shader;
-  GST_GL_FILTER_CLASS (klass)->onReset = gst_gl_filter_filtershader_reset;
+  GST_GL_FILTER_CLASS (klass)->init_fbo = gst_gl_filtershader_init_shader;
+
+  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api =
+      GST_GL_API_OPENGL | GST_GL_API_GLES2 | GST_GL_API_OPENGL3;
 }
 
 static void
@@ -157,15 +167,18 @@ gst_gl_filtershader_init (GstGLFilterShader * filtershader)
   filtershader->shader0 = NULL;
 }
 
-static void
-gst_gl_filter_filtershader_reset (GstGLFilter * filter)
+static gboolean
+gst_gl_filter_filtershader_reset (GstBaseTransform * trans)
 {
-  GstGLFilterShader *filtershader = GST_GL_FILTERSHADER (filter);
+  GstGLFilterShader *filtershader = GST_GL_FILTERSHADER (trans);
 
   //blocking call, wait the opengl thread has destroyed the shader
   if (filtershader->shader0)
-    gst_gl_context_del_shader (filter->context, filtershader->shader0);
+    gst_gl_context_del_shader (GST_GL_BASE_FILTER (trans)->context,
+        filtershader->shader0);
   filtershader->shader0 = NULL;
+
+  return GST_BASE_TRANSFORM_CLASS (parent_class)->stop (trans);
 }
 
 static void
@@ -182,8 +195,9 @@ gst_gl_filtershader_set_property (GObject * object, guint prop_id,
         g_free (filtershader->filename);
       }
       if (filtershader->compiled) {
-        //gst_gl_context_del_shader (filtershader->filter.context, filtershader->shader0);
-        gst_gl_filter_filtershader_reset (&filtershader->filter);
+        if (filtershader->shader0)
+          gst_gl_context_del_shader (GST_GL_BASE_FILTER (filtershader)->context,
+              filtershader->shader0);
         filtershader->shader0 = 0;
       }
       filtershader->filename = g_strdup (g_value_get_string (value));
@@ -323,8 +337,8 @@ gst_gl_filtershader_init_shader (GstGLFilter * filter)
     return FALSE;
 
   //blocking call, wait the opengl thread has compiled the shader
-  if (!gst_gl_context_gen_shader (filter->context, text_vertex_shader,
-          hfilter_fragment_source, &filtershader->shader0))
+  if (!gst_gl_context_gen_shader (GST_GL_BASE_FILTER (filter)->context,
+          text_vertex_shader, hfilter_fragment_source, &filtershader->shader0))
     return FALSE;
 
 
@@ -392,26 +406,11 @@ gst_gl_filtershader_hcallback (gint width, gint height, guint texture,
 {
   GstGLFilter *filter = GST_GL_FILTER (stuff);
   GstGLFilterShader *filtershader = GST_GL_FILTERSHADER (filter);
-  GstGLFuncs *gl = filter->context->gl_vtable;
-  const GLfloat vVertices[] = {
-    -1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-    1.0, -1.0f, -1.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
-    -1.0f, 1.0f, -1.0f, 0.0f, 1.0f
-  };
-  GLushort indices[] = { 0, 1, 2, 0, 2, 3 };
-
-#if GST_GL_HAVE_OPENGL
-  if (gst_gl_context_get_gl_api (filter->context) & GST_GL_API_OPENGL) {
-    gl->MatrixMode (GL_PROJECTION);
-    gl->LoadIdentity ();
-  }
-#endif
+  GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
   gst_gl_shader_use (filtershader->shader0);
 
   gl->ActiveTexture (GL_TEXTURE0);
-  gl->Enable (GL_TEXTURE_2D);
   gl->BindTexture (GL_TEXTURE_2D, texture);
 
   gst_gl_shader_set_uniform_1i (filtershader->shader0, "tex", 0);
@@ -420,10 +419,10 @@ gst_gl_filtershader_hcallback (gint width, gint height, guint texture,
   gst_gl_shader_set_uniform_1f (filtershader->shader0, "time",
       filtershader->time);
 
-  filtershader->attr_position_loc =
+  filter->draw_attr_position_loc =
       gst_gl_shader_get_attribute_location (filtershader->shader0,
       "a_position");
-  filtershader->attr_texture_loc =
+  filter->draw_attr_texture_loc =
       gst_gl_shader_get_attribute_location (filtershader->shader0,
       "a_texcoord");
 
@@ -442,19 +441,5 @@ gst_gl_filtershader_hcallback (gint width, gint height, guint texture,
 
   gl->Clear (GL_COLOR_BUFFER_BIT);
 
-  gl->EnableVertexAttribArray (filtershader->attr_position_loc);
-  gl->EnableVertexAttribArray (filtershader->attr_texture_loc);
-
-  /* Load the vertex position */
-  gl->VertexAttribPointer (filtershader->attr_position_loc, 3, GL_FLOAT,
-      GL_FALSE, 5 * sizeof (GLfloat), vVertices);
-
-  /* Load the texture coordinate */
-  gl->VertexAttribPointer (filtershader->attr_texture_loc, 2, GL_FLOAT,
-      GL_FALSE, 5 * sizeof (GLfloat), &vVertices[3]);
-
-  gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
-
-  gl->DisableVertexAttribArray (filtershader->attr_position_loc);
-  gl->DisableVertexAttribArray (filtershader->attr_texture_loc);
+  gst_gl_filter_draw_texture (filter, texture, width, height);
 }

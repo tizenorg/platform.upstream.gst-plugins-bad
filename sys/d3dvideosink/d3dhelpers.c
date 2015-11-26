@@ -28,6 +28,14 @@
 
 #include <stdio.h>
 
+typedef enum
+{
+  WINDOW_VISIBILITY_FULL = 1,
+  WINDOW_VISIBILITY_PARTIAL = 2,
+  WINDOW_VISIBILITY_HIDDEN = 3,
+  WINDOW_VISIBILITY_ERROR = 4
+} WindowHandleVisibility;
+
 /** FWD DECLS **/
 
 static gboolean d3d_hidden_window_thread (GstD3DVideoSinkClass * klass);
@@ -1062,7 +1070,12 @@ d3d_prepare_render_window (GstD3DVideoSink * sink)
   LOCK_SINK (sink);
 
   if (sink->d3d.window_handle == NULL) {
-    GST_DEBUG_OBJECT (sink, "No window handle has been set..");
+    GST_DEBUG_OBJECT (sink, "No window handle has been set.");
+    goto end;
+  }
+
+  if (sink->d3d.device_lost) {
+    GST_DEBUG_OBJECT (sink, "Device is lost, waiting for reset.");
     goto end;
   }
 
@@ -1308,6 +1321,10 @@ d3d_init_swap_chain (GstD3DVideoSink * sink, HWND hWnd)
   GST_DEBUG ("Direct3D stretch rect texture filter: %d", d3d_filtertype);
 
   sink->d3d.filtertype = d3d_filtertype;
+
+  if (sink->d3d.swapchain != NULL)
+    IDirect3DSwapChain9_Release (sink->d3d.swapchain);
+
   sink->d3d.swapchain = d3d_swapchain;
 
   ret = TRUE;
@@ -1341,6 +1358,10 @@ d3d_release_swap_chain (GstD3DVideoSink * sink)
     ret = TRUE;
     goto end;
   }
+
+  gst_buffer_replace (&sink->fallback_buffer, NULL);
+  if (sink->fallback_pool)
+    gst_buffer_pool_set_active (sink->fallback_pool, FALSE);
 
   if (sink->d3d.swapchain) {
     ref_count = IDirect3DSwapChain9_Release (sink->d3d.swapchain);
@@ -1810,6 +1831,12 @@ end:
 GstFlowReturn
 d3d_render_buffer (GstD3DVideoSink * sink, GstBuffer * buf)
 {
+  WindowHandleVisibility handle_visibility = WINDOW_VISIBILITY_ERROR;
+  int clip_ret;
+  HDC handle_hdc;
+  RECT handle_rectangle;
+  RECT clip_rectangle;
+
   GstFlowReturn ret = GST_FLOW_OK;
   GstMemory *mem;
   LPDIRECT3DSURFACE9 surface = NULL;
@@ -1829,6 +1856,36 @@ d3d_render_buffer (GstD3DVideoSink * sink, GstBuffer * buf)
 
   if (sink->d3d.device_lost) {
     GST_LOG_OBJECT (sink, "Device lost, waiting for reset..");
+    goto end;
+  }
+
+  /* check for window handle visibility, if hidden skip frame rendering  */
+
+  handle_hdc = GetDC (sink->d3d.window_handle);
+  GetClientRect (sink->d3d.window_handle, &handle_rectangle);
+  clip_ret = GetClipBox (handle_hdc, &clip_rectangle);
+  ReleaseDC (sink->d3d.window_handle, handle_hdc);
+
+  switch (clip_ret) {
+    case NULLREGION:
+      handle_visibility = WINDOW_VISIBILITY_HIDDEN;
+      break;
+    case SIMPLEREGION:
+      if (EqualRect (&clip_rectangle, &handle_rectangle))
+        handle_visibility = WINDOW_VISIBILITY_FULL;
+      else
+        handle_visibility = WINDOW_VISIBILITY_PARTIAL;
+      break;
+    case COMPLEXREGION:
+      handle_visibility = WINDOW_VISIBILITY_PARTIAL;
+      break;
+    default:
+      handle_visibility = WINDOW_VISIBILITY_ERROR;
+      break;
+  }
+
+  if (handle_visibility == WINDOW_VISIBILITY_HIDDEN) {
+    GST_DEBUG_OBJECT (sink, "Hidden hwnd, skipping frame rendering...");
     goto end;
   }
 

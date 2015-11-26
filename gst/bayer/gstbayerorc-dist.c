@@ -931,11 +931,12 @@ bayer_orc_merge_bg_bgra (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 98, 103, 95, 98, 103, 114, 97, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 255, 0, 0, 0, 14, 4, 0, 255, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 5, 9, 21, 1, 39, 35, 4,
-        8, 79, 36, 7, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 33, 6, 35, 21, 1, 196, 32,
-        34, 16, 21, 1, 195, 0, 33, 32, 2, 0,
+        2, 255, 0, 0, 0, 14, 2, 0, 255, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 5,
+        9, 21, 1, 39, 35, 4, 8, 79, 36, 7, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 33,
+        6, 35, 21, 1, 196, 32, 34, 18, 21, 1, 195, 0, 33, 32, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_bg_bgra);
@@ -950,8 +951,9 @@ bayer_orc_merge_bg_bgra (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x000000ff, "c1");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 2, 0x000000ff, "c1");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -974,7 +976,7 @@ bayer_orc_merge_bg_bgra (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_S3, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_T3, ORC_VAR_C1,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_T3, ORC_VAR_C3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergewl", 1, ORC_VAR_D1, ORC_VAR_T2, ORC_VAR_T1,
           ORC_VAR_D1);
@@ -1301,11 +1303,12 @@ bayer_orc_merge_gr_bgra (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 103, 114, 95, 98, 103, 114, 97, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 0, 255, 0, 0, 14, 4, 255, 0, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 4, 8, 21, 1, 39, 35, 5,
-        9, 79, 36, 6, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 33, 34, 35, 21, 1, 196, 32,
-        7, 17, 21, 1, 195, 0, 33, 32, 2, 0,
+        2, 0, 255, 0, 0, 14, 2, 255, 0, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 4,
+        8, 21, 1, 39, 35, 5, 9, 79, 36, 6, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 33,
+        34, 35, 21, 1, 196, 32, 7, 18, 21, 1, 195, 0, 33, 32, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_gr_bgra);
@@ -1320,8 +1323,9 @@ bayer_orc_merge_gr_bgra (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c1");
-      orc_program_add_constant (p, 4, 0x000000ff, "c2");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c1");
+      orc_program_add_constant (p, 2, 0x000000ff, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -1344,7 +1348,7 @@ bayer_orc_merge_gr_bgra (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T3, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_S4, ORC_VAR_C2,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_S4, ORC_VAR_C3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergewl", 1, ORC_VAR_D1, ORC_VAR_T2, ORC_VAR_T1,
           ORC_VAR_D1);
@@ -1671,11 +1675,12 @@ bayer_orc_merge_bg_abgr (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 98, 103, 95, 97, 98, 103, 114, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 255, 0, 0, 0, 14, 4, 0, 255, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 5, 9, 21, 1, 39, 35, 4,
-        8, 79, 36, 7, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 16, 6, 21, 1, 196, 33,
-        35, 34, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 255, 0, 0, 0, 14, 2, 0, 255, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 5,
+        9, 21, 1, 39, 35, 4, 8, 79, 36, 7, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        18, 6, 21, 1, 196, 33, 35, 34, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_bg_abgr);
@@ -1690,8 +1695,9 @@ bayer_orc_merge_bg_abgr (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x000000ff, "c1");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 2, 0x000000ff, "c1");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -1712,7 +1718,7 @@ bayer_orc_merge_bg_abgr (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "orw", 0, ORC_VAR_T4, ORC_VAR_T5, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C1, ORC_VAR_S3,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C3, ORC_VAR_S3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T4, ORC_VAR_T3,
           ORC_VAR_D1);
@@ -2041,11 +2047,12 @@ bayer_orc_merge_gr_abgr (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 103, 114, 95, 97, 98, 103, 114, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 0, 255, 0, 0, 14, 4, 255, 0, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 4, 8, 21, 1, 39, 35, 5,
-        9, 79, 36, 6, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 17, 34, 21, 1, 196, 33,
-        35, 7, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 0, 255, 0, 0, 14, 2, 255, 0, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 4,
+        8, 21, 1, 39, 35, 5, 9, 79, 36, 6, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        18, 34, 21, 1, 196, 33, 35, 7, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_gr_abgr);
@@ -2060,8 +2067,9 @@ bayer_orc_merge_gr_abgr (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c1");
-      orc_program_add_constant (p, 4, 0x000000ff, "c2");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c1");
+      orc_program_add_constant (p, 2, 0x000000ff, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -2082,7 +2090,7 @@ bayer_orc_merge_gr_abgr (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "orw", 0, ORC_VAR_T4, ORC_VAR_T5, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C2, ORC_VAR_T3,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C3, ORC_VAR_T3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T4, ORC_VAR_S4,
           ORC_VAR_D1);
@@ -2411,11 +2419,12 @@ bayer_orc_merge_bg_rgba (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 98, 103, 95, 114, 103, 98, 97, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 255, 0, 0, 0, 14, 4, 0, 255, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 5, 9, 21, 1, 39, 35, 4,
-        8, 79, 36, 7, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 34, 35, 21, 1, 196, 33,
-        6, 16, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 255, 0, 0, 0, 14, 2, 0, 255, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 5,
+        9, 21, 1, 39, 35, 4, 8, 79, 36, 7, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        34, 35, 21, 1, 196, 33, 6, 18, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_bg_rgba);
@@ -2430,8 +2439,9 @@ bayer_orc_merge_bg_rgba (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x000000ff, "c1");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 2, 0x000000ff, "c1");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -2454,7 +2464,7 @@ bayer_orc_merge_bg_rgba (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_T3, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_S3, ORC_VAR_C1,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_S3, ORC_VAR_C3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergewl", 1, ORC_VAR_D1, ORC_VAR_T1, ORC_VAR_T2,
           ORC_VAR_D1);
@@ -2781,11 +2791,12 @@ bayer_orc_merge_gr_rgba (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 103, 114, 95, 114, 103, 98, 97, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 0, 255, 0, 0, 14, 4, 255, 0, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 4, 8, 21, 1, 39, 35, 5,
-        9, 79, 36, 6, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 7, 35, 21, 1, 196, 33,
-        34, 17, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 0, 255, 0, 0, 14, 2, 255, 0, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 4,
+        8, 21, 1, 39, 35, 5, 9, 79, 36, 6, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        7, 35, 21, 1, 196, 33, 34, 18, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_gr_rgba);
@@ -2800,8 +2811,9 @@ bayer_orc_merge_gr_rgba (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c1");
-      orc_program_add_constant (p, 4, 0x000000ff, "c2");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c1");
+      orc_program_add_constant (p, 2, 0x000000ff, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -2824,7 +2836,7 @@ bayer_orc_merge_gr_rgba (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_S4, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T3, ORC_VAR_C2,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T3, ORC_VAR_C3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergewl", 1, ORC_VAR_D1, ORC_VAR_T1, ORC_VAR_T2,
           ORC_VAR_D1);
@@ -3151,11 +3163,12 @@ bayer_orc_merge_bg_argb (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 98, 103, 95, 97, 114, 103, 98, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 255, 0, 0, 0, 14, 4, 0, 255, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 5, 9, 21, 1, 39, 35, 4,
-        8, 79, 36, 7, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 16, 34, 21, 1, 196, 33,
-        35, 6, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 255, 0, 0, 0, 14, 2, 0, 255, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 5,
+        9, 21, 1, 39, 35, 4, 8, 79, 36, 7, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        18, 34, 21, 1, 196, 33, 35, 6, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_bg_argb);
@@ -3170,8 +3183,9 @@ bayer_orc_merge_bg_argb (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x000000ff, "c1");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 2, 0x000000ff, "c1");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -3192,7 +3206,7 @@ bayer_orc_merge_bg_argb (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "orw", 0, ORC_VAR_T4, ORC_VAR_T5, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C1, ORC_VAR_T3,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C3, ORC_VAR_T3,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T4, ORC_VAR_S3,
           ORC_VAR_D1);
@@ -3521,11 +3535,12 @@ bayer_orc_merge_gr_argb (guint8 * ORC_RESTRICT d1,
         1, 9, 23, 98, 97, 121, 101, 114, 95, 111, 114, 99, 95, 109, 101, 114,
         103, 101, 95, 103, 114, 95, 97, 114, 103, 98, 11, 8, 8, 12, 2, 2,
         12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 12, 2, 2, 14,
-        4, 0, 255, 0, 0, 14, 4, 255, 0, 0, 0, 20, 4, 20, 4, 20,
-        2, 20, 2, 20, 2, 21, 1, 39, 34, 4, 8, 21, 1, 39, 35, 5,
-        9, 79, 36, 6, 21, 1, 39, 35, 35, 36, 73, 35, 35, 16, 73, 36,
-        36, 17, 92, 35, 36, 35, 21, 1, 196, 32, 17, 7, 21, 1, 196, 33,
-        35, 34, 21, 1, 195, 0, 32, 33, 2, 0,
+        2, 0, 255, 0, 0, 14, 2, 255, 0, 0, 0, 14, 1, 255, 0, 0,
+        0, 20, 4, 20, 4, 20, 2, 20, 2, 20, 2, 21, 1, 39, 34, 4,
+        8, 21, 1, 39, 35, 5, 9, 79, 36, 6, 21, 1, 39, 35, 35, 36,
+        73, 35, 35, 16, 73, 36, 36, 17, 92, 35, 36, 35, 21, 1, 196, 32,
+        18, 7, 21, 1, 196, 33, 35, 34, 21, 1, 195, 0, 32, 33, 2, 0,
+
       };
       p = orc_program_new_from_static_bytecode (bc);
       orc_program_set_backup_function (p, _backup_bayer_orc_merge_gr_argb);
@@ -3540,8 +3555,9 @@ bayer_orc_merge_gr_argb (guint8 * ORC_RESTRICT d1,
       orc_program_add_source (p, 2, "s4");
       orc_program_add_source (p, 2, "s5");
       orc_program_add_source (p, 2, "s6");
-      orc_program_add_constant (p, 4, 0x0000ff00, "c1");
-      orc_program_add_constant (p, 4, 0x000000ff, "c2");
+      orc_program_add_constant (p, 2, 0x0000ff00, "c1");
+      orc_program_add_constant (p, 2, 0x000000ff, "c2");
+      orc_program_add_constant (p, 1, 0x000000ff, "c3");
       orc_program_add_temporary (p, 4, "t1");
       orc_program_add_temporary (p, 4, "t2");
       orc_program_add_temporary (p, 2, "t3");
@@ -3562,7 +3578,7 @@ bayer_orc_merge_gr_argb (guint8 * ORC_RESTRICT d1,
           ORC_VAR_D1);
       orc_program_append_2 (p, "orw", 0, ORC_VAR_T4, ORC_VAR_T5, ORC_VAR_T4,
           ORC_VAR_D1);
-      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C2, ORC_VAR_S4,
+      orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T1, ORC_VAR_C3, ORC_VAR_S4,
           ORC_VAR_D1);
       orc_program_append_2 (p, "mergebw", 1, ORC_VAR_T2, ORC_VAR_T4, ORC_VAR_T3,
           ORC_VAR_D1);

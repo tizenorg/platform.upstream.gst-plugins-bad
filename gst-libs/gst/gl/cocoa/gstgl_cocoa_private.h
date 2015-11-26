@@ -27,51 +27,39 @@
 
 #include "gstglwindow_cocoa.h"
 #include "gstglcontext_cocoa.h"
+#include "gstglcaopengllayer.h"
 
 G_BEGIN_DECLS
 
-@interface AppThreadPerformer : NSObject {
-  GstGLWindowCocoa *m_cocoa;
-  GstGLWindowCB m_callback;
-  GstGLWindowResizeCB m_callback2;
-  gpointer m_data;
-  gint m_width;
-  gint m_height;
-}
-- (id) init: (GstGLWindowCocoa *)window;
-- (id) initWithCallback:(GstGLWindowCocoa *)window callback:(GstGLWindowCB)callback userData:(gpointer) data;
-- (id) initWithSize: (GstGLWindowCocoa *)window callback:(GstGLWindowResizeCB)callback userData:(gpointer)data toSize:(NSSize)size;
-- (id) initWithAll: (GstGLWindowCocoa *)window callback:(GstGLWindowCB)callback userData:(gpointer) data;
-- (void) updateWindow;
-- (void) sendToApp;
-- (void) setWindow;
-- (void) stopApp;
-- (void) closeWindow;
-@end
-
 struct _GstGLContextCocoaPrivate
 {
-  NSOpenGLContext *gl_context;
-  NSOpenGLContext *external_gl_context;
-  NSRect rect;
+  CGLPixelFormatObj pixel_format;
+  CGLContextObj gl_context;
+  CGLContextObj external_gl_context;
+
+  GstGLAPI context_api;
+
   gint source_id;
 };
 
 
 /* =============================================================*/
 /*                                                              */
-/*                  GstGLNSOpenGLView declaration               */
+/*                  GstGLNSView declaration               */
 /*                                                              */
 /* =============================================================*/
 
-@interface GstGLNSOpenGLView: NSOpenGLView {
-  GstGLWindowCocoa *m_cocoa;
+@interface GstGLNSView: NSView {
+@public
+  GstGLWindowCocoa *window_cocoa;
+  GstGLCAOpenGLLayer *layer;
 }
-- (id) initWithFrame:(GstGLWindowCocoa *)window rect:(NSRect)contentRect
-    pixelFormat:(NSOpenGLPixelFormat *)fmt;
+- (id) initWithFrameLayer:(GstGLWindowCocoa *)window rect:(NSRect)contentRect layer:(CALayer *)layerContent;
 @end
 
 gboolean gst_gl_window_cocoa_create_window (GstGLWindowCocoa *window_cocoa);
+
+void _invoke_on_main (GstGLWindowCB func, gpointer data);
 
 G_END_DECLS
 

@@ -3,7 +3,7 @@
   <description>GStreamer OpenCV Plugins</description>
   <filename>../../ext/opencv/.libs/libgstopencv.so</filename>
   <basename>libgstopencv.so</basename>
-  <version>1.4.1</version>
+  <version>1.6.1</version>
   <license>LGPL</license>
   <source>gst-plugins-bad</source>
   <package>GStreamer Bad Plug-ins source release</package>
@@ -182,7 +182,7 @@
       <longname>faceblur</longname>
       <class>Filter/Effect/Video</class>
       <description>Blurs faces in images and videos</description>
-      <author>Michael Sheldon &lt;mike@mikeasoft.com&gt;</author>
+      <author>Michael Sheldon &lt;mike@mikeasoft.com&gt;,Robert Jobbagy &lt;jobbagy.robert@gmail.com&gt;</author>
       <pads>
         <caps>
           <name>sink</name>

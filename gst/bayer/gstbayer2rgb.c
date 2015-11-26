@@ -286,7 +286,7 @@ gst_bayer2rgb_transform_caps (GstBaseTransform * base,
   GstCaps *newcaps;
   GstStructure *newstruct;
 
-  GST_DEBUG_OBJECT (caps, "transforming caps (from)");
+  GST_DEBUG_OBJECT (base, "transforming caps from %" GST_PTR_FORMAT, caps);
 
   structure = gst_caps_get_structure (caps, 0);
 
@@ -305,7 +305,17 @@ gst_bayer2rgb_transform_caps (GstBaseTransform * base,
   gst_structure_set_value (newstruct, "framerate",
       gst_structure_get_value (structure, "framerate"));
 
-  GST_DEBUG_OBJECT (newcaps, "transforming caps (into)");
+  if (filter != NULL) {
+    GstCaps *icaps;
+
+    GST_DEBUG_OBJECT (base, "                filter %" GST_PTR_FORMAT, filter);
+
+    icaps = gst_caps_intersect_full (filter, newcaps, GST_CAPS_INTERSECT_FIRST);
+    gst_caps_unref (newcaps);
+    newcaps = icaps;
+  }
+
+  GST_DEBUG_OBJECT (base, "                  into %" GST_PTR_FORMAT, newcaps);
 
   return newcaps;
 }
@@ -452,14 +462,25 @@ gst_bayer2rgb_transform (GstBaseTransform * base, GstBuffer * inbuf,
   GstVideoFrame frame;
 
   GST_DEBUG ("transforming buffer");
-  gst_buffer_map (inbuf, &map, GST_MAP_READ);
-  gst_video_frame_map (&frame, &filter->info, outbuf, GST_MAP_WRITE);
+
+  if (!gst_buffer_map (inbuf, &map, GST_MAP_READ))
+    goto map_failed;
+
+  if (!gst_video_frame_map (&frame, &filter->info, outbuf, GST_MAP_WRITE)) {
+    gst_buffer_unmap (inbuf, &map);
+    goto map_failed;
+  }
 
   output = GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
-  gst_bayer2rgb_process (filter, output, filter->width * 4,
+  gst_bayer2rgb_process (filter, output, frame.info.stride[0],
       map.data, filter->width);
+
   gst_video_frame_unmap (&frame);
   gst_buffer_unmap (inbuf, &map);
 
+  return GST_FLOW_OK;
+
+map_failed:
+  GST_WARNING_OBJECT (base, "Could not map buffer, skipping");
   return GST_FLOW_OK;
 }

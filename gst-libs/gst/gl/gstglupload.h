@@ -22,7 +22,6 @@
 #define __GST_GL_UPLOAD_H__
 
 #include <gst/video/video.h>
-#include <gst/gstmemory.h>
 
 #include <gst/gl/gstgl_fwd.h>
 
@@ -37,6 +36,22 @@ GType gst_gl_upload_get_type (void);
 #define GST_GL_UPLOAD_CAST(obj) ((GstGLUpload*)(obj))
 
 /**
+ * GstGLUploadReturn:
+ * @GST_GL_UPLOAD_DONE: No further processing required
+ * @GST_GL_UPLOAD_ERROR: An unspecified error occured
+ * @GST_GL_UPLOAD_UNSUPPORTED: The configuration is unsupported.
+ */
+typedef enum
+{
+  GST_GL_UPLOAD_DONE = 1,
+
+  GST_GL_UPLOAD_ERROR = -1,
+  GST_GL_UPLOAD_UNSUPPORTED = -2,
+  /* <private> */
+  GST_GL_UPLOAD_UNSHARED_GL_CONTEXT = -3,
+} GstGLUploadReturn;
+
+/**
  * GstGLUpload
  *
  * Opaque #GstGLUpload object
@@ -47,17 +62,7 @@ struct _GstGLUpload
   GstObject        parent;
 
   GstGLContext    *context;
-  GstGLColorConvert *convert;
 
-  /* input data */
-  GstVideoInfo     in_info;
-
-  gboolean         initted;
-
-  GstGLMemory     *in_tex[GST_VIDEO_MAX_PLANES];
-  GstGLMemory     *out_tex;
-
-  /* <private> */
   GstGLUploadPrivate *priv;
 
   gpointer _reserved[GST_PADDING];
@@ -73,17 +78,28 @@ struct _GstGLUploadClass
   GstObjectClass object_class;
 };
 
-GstGLUpload * gst_gl_upload_new            (GstGLContext * context);
+GstCaps *     gst_gl_upload_get_input_template_caps (void);
 
-void           gst_gl_upload_set_format    (GstGLUpload * upload, GstVideoInfo * in_info);
-GstVideoInfo * gst_gl_upload_get_format    (GstGLUpload * upload);
+GstGLUpload * gst_gl_upload_new                    (GstGLContext * context);
 
-gboolean gst_gl_upload_perform_with_buffer (GstGLUpload * upload, GstBuffer * buffer, guint * tex_id);
-void gst_gl_upload_release_buffer (GstGLUpload * upload);
-gboolean gst_gl_upload_perform_with_data          (GstGLUpload * upload, GLuint * texture_id,
-                                                   gpointer data[GST_VIDEO_MAX_PLANES]);
+GstCaps *     gst_gl_upload_transform_caps         (GstGLContext * context,
+                                                    GstPadDirection direction,
+                                                    GstCaps * caps,
+                                                    GstCaps * filter);
+gboolean      gst_gl_upload_set_caps               (GstGLUpload * upload,
+                                                    GstCaps * in_caps,
+                                                    GstCaps * out_caps);
+void          gst_gl_upload_get_caps               (GstGLUpload * upload,
+                                                    GstCaps ** in_caps,
+                                                    GstCaps ** out_caps);
+void          gst_gl_upload_propose_allocation     (GstGLUpload * upload,
+                                                    GstQuery * decide_query,
+                                                    GstQuery * query);
 
-gboolean gst_gl_upload_perform_with_gl_texture_upload_meta (GstGLUpload *upload, GstVideoGLTextureUploadMeta *meta, guint texture_id[4]);
+GstGLUploadReturn gst_gl_upload_perform_with_buffer (GstGLUpload * upload,
+                                                    GstBuffer * buffer,
+                                                    GstBuffer ** outbuf);
+void              gst_gl_upload_release_buffer     (GstGLUpload * upload);
 
 G_END_DECLS
 

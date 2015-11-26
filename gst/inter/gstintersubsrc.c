@@ -48,8 +48,6 @@ GST_DEBUG_CATEGORY_STATIC (gst_inter_sub_src_debug_category);
 #define GST_CAT_DEFAULT gst_inter_sub_src_debug_category
 
 /* prototypes */
-
-
 static void gst_inter_sub_src_set_property (GObject * object,
     guint property_id, const GValue * value, GParamSpec * pspec);
 static void gst_inter_sub_src_get_property (GObject * object,
@@ -71,8 +69,9 @@ enum
   PROP_CHANNEL
 };
 
-/* pad templates */
+#define DEFAULT_CHANNEL ("default")
 
+/* pad templates */
 static GstStaticPadTemplate gst_inter_sub_src_src_template =
 GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
@@ -114,7 +113,7 @@ gst_inter_sub_src_class_init (GstInterSubSrcClass * klass)
   g_object_class_install_property (gobject_class, PROP_CHANNEL,
       g_param_spec_string ("channel", "Channel",
           "Channel name to match inter src and sink elements",
-          "default", G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          DEFAULT_CHANNEL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void
@@ -123,7 +122,7 @@ gst_inter_sub_src_init (GstInterSubSrc * intersubsrc)
   gst_base_src_set_format (GST_BASE_SRC (intersubsrc), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (intersubsrc), TRUE);
 
-  intersubsrc->channel = g_strdup ("default");
+  intersubsrc->channel = g_strdup (DEFAULT_CHANNEL);
 }
 
 void
@@ -219,7 +218,6 @@ gst_inter_sub_src_get_times (GstBaseSrc * src, GstBuffer * buffer,
     *end = -1;
   }
 }
-
 
 static GstFlowReturn
 gst_inter_sub_src_create (GstBaseSrc * src, guint64 offset, guint size,

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: gst-plugins-bad 1.2.1\n"
 "Report-Msgid-Bugs-To: http://bugzilla.gnome.org/\n"
-"POT-Creation-Date: 2014-08-27 14:38+0300\n"
+"POT-Creation-Date: 2015-10-30 14:30+0200\n"
 "PO-Revision-Date: 2014-04-20 15:52+0300\n"
 "Last-Translator: Rihards Prieditis <rprieditis@gmail.com>\n"
 "Language-Team: Latvian <translation-team-lv@lists.sourceforge.net>\n"
@@ -22,9 +22,6 @@ msgstr ""
 "2);\n"
 "X-Generator: Lokalize 1.5\n"
 
-msgid "Internal data stream error."
-msgstr "Iekšējās datu plūsmas kļūda."
-
 msgid "format wasn't negotiated before get function"
 msgstr ""
 
@@ -34,7 +31,7 @@ msgstr ""
 msgid ""
 "GStreamer can play audio using any number of output elements. Some possible "
 "choices are osssink, pulsesink and alsasink. The audiosink can be a partial "
-"pipeline instea of just one element."
+"pipeline instead of just one element."
 msgstr ""
 
 msgid "description for default GStreamer sound events audiosink"
@@ -117,6 +114,9 @@ msgstr ""
 msgid "Describes the selected visualization element."
 msgstr ""
 
+msgid "OpenCV failed to load template image"
+msgstr ""
+
 msgid "Could not read title information for DVD."
 msgstr "Nevarēja nolasīt virsrakstu informāciju no DVD."
 
@@ -140,29 +140,9 @@ msgstr "Nevarēja nolasīt DVD."
 msgid "This file contains no playable streams."
 msgstr "Šī datne nesatur atskaņojamas straumes."
 
-msgid "Couldn't get the Manifest's URI"
-msgstr "Nevarēja saņemt manifesta URI"
-
-msgid "Failed to get fragment URL."
-msgstr "Neizdevās saņemt fragmenta URL."
-
-msgid "Couldn't download fragments"
-msgstr "Nevarēja lejupielādēt fragmentus"
-
 #, fuzzy
 msgid "Could not open sndfile stream for reading."
 msgstr "Nevarēja atvērt datni “%s” lasīšanai."
-
-msgid "No file name specified for writing."
-msgstr "Ierakstīšanai nav norādīts neviens datnes nosaukums."
-
-#, c-format
-msgid "Could not open file \"%s\" for writing."
-msgstr "Nav iespējams atvērt datni “%s” ierakstīšanai."
-
-#, c-format
-msgid "Could not write to file \"%s\"."
-msgstr "Nevarēja ierakstīt datnē “%s”."
 
 msgid "Could not establish connection to sndio"
 msgstr "Nevarēja izveidot savienojumu ar sndio"
@@ -191,14 +171,33 @@ msgid "File location is set to NULL, please set it to a valid filename"
 msgstr ""
 "Datnes vieta ir iestatīta uz NULL, lūdzu, iestatiet derīgu datnes nosaukumu"
 
+msgid "Digitalzoom element couldn't be created"
+msgstr ""
+
 msgid "Subpicture format was not configured before data flow"
 msgstr "Apakšattēla formāts netika konfigurēts pirms datu plūsmas"
+
+msgid "Failed to get fragment URL."
+msgstr "Neizdevās saņemt fragmenta URL."
+
+msgid "Internal data stream error."
+msgstr "Iekšējās datu plūsmas kļūda."
+
+msgid "Couldn't download fragments"
+msgstr "Nevarēja lejupielādēt fragmentus"
+
+msgid "No file name specified for writing."
+msgstr "Ierakstīšanai nav norādīts neviens datnes nosaukums."
 
 #, c-format
 msgid "Given file name \"%s\" can't be converted to local file name encoding."
 msgstr ""
 "Doto datnes nosaukumu “%s” nevar pārveidot uz lokālo datnes nosaukuma "
 "kodējumu."
+
+#, c-format
+msgid "Could not open file \"%s\" for writing."
+msgstr "Nav iespējams atvērt datni “%s” ierakstīšanai."
 
 #, c-format
 msgid "Device \"%s\" does not exist."
@@ -233,6 +232,12 @@ msgstr "DVB kanāla konfigurācijas datne nesatur nevienu kanālu"
 #, c-format
 msgid "Couldn't find details for DVB channel %s"
 msgstr "Nevarēja atrast sīkāku informāciju par DVB kanālu %s"
+
+#~ msgid "Couldn't get the Manifest's URI"
+#~ msgstr "Nevarēja saņemt manifesta URI"
+
+#~ msgid "Could not write to file \"%s\"."
+#~ msgstr "Nevarēja ierakstīt datnē “%s”."
 
 #~ msgid "Internal clock error."
 #~ msgstr "Iekšējā pulksteņa kļūda."

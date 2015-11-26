@@ -83,6 +83,7 @@ struct _GstKsVideoDevicePrivate
   guint fps_n;
   guint fps_d;
   guint8 *rgb_swap_buf;
+  gboolean is_muxed;
 
   HANDLE pin_handle;
 
@@ -627,8 +628,7 @@ gst_ks_video_device_create_pin (GstKsVideoDevice * self,
     if (ks_object_get_property (pin_handle, KSPROPSETID_Stream,
             KSPROPERTY_STREAM_MASTERCLOCK, (gpointer *) & cur_clock_handle,
             &cur_clock_handle_size, NULL)) {
-      GST_DEBUG ("current master clock handle: 0x%08x",
-          (guint) * cur_clock_handle);
+      GST_DEBUG ("current master clock handle: %p", *cur_clock_handle);
       CloseHandle (*cur_clock_handle);
       g_free (cur_clock_handle);
     } else {
@@ -753,13 +753,16 @@ gst_ks_video_device_set_caps (GstKsVideoDevice * self, GstCaps * caps)
   if (!gst_structure_get_int (s, "width", &width) ||
       !gst_structure_get_int (s, "height", &height) ||
       !gst_structure_get_fraction (s, "framerate", &fps_n, &fps_d)) {
-    GST_ERROR ("Failed to get width/height/fps");
-    goto error;
+    gst_structure_get_boolean (s, "systemstream", &priv->is_muxed);
+    if (!priv->is_muxed) {
+      GST_ERROR ("Failed to get width/height/fps");
+      goto error;
+    }
+  } else {
+    if (!ks_video_fixate_media_type (media_type->range,
+            media_type->format, width, height, fps_n, fps_d))
+      goto error;
   }
-
-  if (!ks_video_fixate_media_type (media_type->range,
-          media_type->format, width, height, fps_n, fps_d))
-    goto error;
 
   if (priv->cur_media_type != NULL) {
     if (media_type->format_size == priv->cur_media_type->format_size &&
@@ -912,10 +915,12 @@ gst_ks_read_request_pick_buffer (GstKsVideoDevice * self, ReadRequest * req)
   gboolean buffer_found = FALSE;
   guint i;
 
-  buffer_found = gst_buffer_is_writable (req->buf);
+  buffer_found = gst_buffer_is_writable (req->buf)
+      && gst_buffer_is_all_memory_writable (req->buf);
 
   for (i = 0; !buffer_found && i < G_N_ELEMENTS (priv->spare_buffers); i++) {
-    if (gst_buffer_is_writable (priv->spare_buffers[i])) {
+    if (gst_buffer_is_writable (priv->spare_buffers[i])
+        && gst_buffer_is_all_memory_writable (priv->spare_buffers[i])) {
       GstBuffer *hold;
 
       hold = req->buf;
@@ -963,8 +968,13 @@ gst_ks_video_device_request_frame (GstKsVideoDevice * self, ReadRequest * req,
   params = &req->params;
   memset (params, 0, sizeof (KSSTREAM_READ_PARAMS));
 
-  gst_buffer_map (req->buf, &info, GST_MAP_READ);
-  params->header.Size = sizeof (KSSTREAM_HEADER) + sizeof (KS_FRAME_INFO);
+  if (!gst_buffer_map (req->buf, &info, GST_MAP_WRITE))
+    goto map_failed;
+
+  params->header.Size = sizeof (KSSTREAM_HEADER);
+  if (!priv->is_muxed) {
+    params->header.Size += sizeof (KS_FRAME_INFO);
+  }
   params->header.PresentationTime.Numerator = 1;
   params->header.PresentationTime.Denominator = 1;
   params->header.FrameExtent = gst_ks_video_device_get_frame_size (self);
@@ -992,6 +1002,10 @@ error_ioctl:
   {
     gst_ks_video_device_parse_win32_error ("DeviceIoControl", GetLastError (),
         error_code, error_str);
+    return FALSE;
+  }
+map_failed:
+  {
     return FALSE;
   }
 }
@@ -1161,20 +1175,23 @@ error_get_result:
   }
 }
 
-void
-gst_ks_video_device_postprocess_frame (GstKsVideoDevice * self,
-    guint8 * buf, guint buf_size)
+gboolean
+gst_ks_video_device_postprocess_frame (GstKsVideoDevice * self, GstBuffer * buf)
 {
   GstKsVideoDevicePrivate *priv = GST_KS_VIDEO_DEVICE_GET_PRIVATE (self);
 
   /* If it's RGB we need to flip the image */
   if (priv->rgb_swap_buf != NULL) {
+    GstMapInfo info;
     gint stride, line;
     guint8 *dst, *src;
 
-    stride = buf_size / priv->height;
-    dst = buf;
-    src = buf + buf_size - stride;
+    if (!gst_buffer_map (buf, &info, GST_MAP_READWRITE))
+      return FALSE;
+
+    stride = info.size / priv->height;
+    dst = info.data;
+    src = info.data + info.size - stride;
 
     for (line = 0; line < priv->height / 2; line++) {
       memcpy (priv->rgb_swap_buf, dst, stride);
@@ -1185,7 +1202,11 @@ gst_ks_video_device_postprocess_frame (GstKsVideoDevice * self,
       dst += stride;
       src -= stride;
     }
+
+    gst_buffer_unmap (buf, &info);
   }
+
+  return TRUE;
 }
 
 void
@@ -1202,4 +1223,12 @@ gst_ks_video_device_cancel_stop (GstKsVideoDevice * self)
   GstKsVideoDevicePrivate *priv = GST_KS_VIDEO_DEVICE_GET_PRIVATE (self);
 
   ResetEvent (priv->cancel_event);
+}
+
+gboolean
+gst_ks_video_device_stream_is_muxed (GstKsVideoDevice * self)
+{
+  GstKsVideoDevicePrivate *priv = GST_KS_VIDEO_DEVICE_GET_PRIVATE (self);
+
+  return priv->is_muxed;
 }

@@ -23,7 +23,7 @@ static void
 gst_core_video_meta_free (GstCoreVideoMeta * meta, GstBuffer * buf)
 {
   if (meta->pixbuf != NULL) {
-    CVPixelBufferUnlockBaseAddress (meta->pixbuf, kCVPixelBufferLock_ReadOnly);
+    CVPixelBufferUnlockBaseAddress (meta->pixbuf, 0);
   }
 
   CVBufferRelease (meta->cvbuf);
@@ -59,7 +59,8 @@ gst_core_video_meta_get_info (void)
 }
 
 GstBuffer *
-gst_core_video_buffer_new (CVBufferRef cvbuf, GstVideoInfo * vinfo)
+gst_core_video_buffer_new (CVBufferRef cvbuf, GstVideoInfo * vinfo,
+    gboolean map)
 {
   CVPixelBufferRef pixbuf = NULL;
   GstBuffer *buf;
@@ -74,8 +75,7 @@ gst_core_video_buffer_new (CVBufferRef cvbuf, GstVideoInfo * vinfo)
 
   pixbuf = (CVPixelBufferRef) cvbuf;
 
-  if (CVPixelBufferLockBaseAddress (pixbuf,
-          kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) {
+  if (map && CVPixelBufferLockBaseAddress (pixbuf, 0) != kCVReturnSuccess) {
     goto error;
   }
 
@@ -102,10 +102,12 @@ gst_core_video_buffer_new (CVBufferRef cvbuf, GstVideoInfo * vinfo)
       offset[i] = off;
       off += size;
 
-      gst_buffer_append_memory (buf,
-          gst_memory_new_wrapped (GST_MEMORY_FLAG_NO_SHARE,
-              CVPixelBufferGetBaseAddressOfPlane (pixbuf, i), size, 0, size,
-              NULL, NULL));
+      if (map) {
+        gst_buffer_append_memory (buf,
+            gst_memory_new_wrapped (GST_MEMORY_FLAG_NO_SHARE,
+                CVPixelBufferGetBaseAddressOfPlane (pixbuf, i), size, 0, size,
+                NULL, NULL));
+      }
     }
   } else {
     int size;
@@ -115,9 +117,11 @@ gst_core_video_buffer_new (CVBufferRef cvbuf, GstVideoInfo * vinfo)
     offset[0] = 0;
     size = stride[0] * CVPixelBufferGetHeight (pixbuf);
 
-    gst_buffer_append_memory (buf,
-        gst_memory_new_wrapped (GST_MEMORY_FLAG_NO_SHARE,
-            CVPixelBufferGetBaseAddress (pixbuf), size, 0, size, NULL, NULL));
+    if (map) {
+      gst_buffer_append_memory (buf,
+          gst_memory_new_wrapped (GST_MEMORY_FLAG_NO_SHARE,
+              CVPixelBufferGetBaseAddress (pixbuf), size, 0, size, NULL, NULL));
+    }
   }
 
   if (vinfo) {

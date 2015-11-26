@@ -4,6 +4,7 @@
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2008 Michael Sheldon <mike@mikeasoft.com>
  * Copyright (C) 2011 Stefan Sauer <ensonic@users.sf.net>
+ * Copyright (C) 2011 Robert Jobbagy <jobbagy.robert@gmail.com>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -48,12 +49,10 @@
 #define __GST_FACE_DETECT_H__
 
 #include <gst/gst.h>
+#include <opencv2/core/version.hpp>
 #include <cv.h>
 #include "gstopencvvideofilter.h"
-
-#if (CV_MAJOR_VERSION >= 2) && (CV_MINOR_VERSION >= 2)
 #include <opencv2/objdetect/objdetect.hpp>
-#endif
 
 G_BEGIN_DECLS
 /* #defines don't like whitespacey bits */
@@ -102,14 +101,14 @@ struct _GstFaceDetect
   gint flags;
   gint min_size_width;
   gint min_size_height;
+  gint min_stddev;
   gint updates;
 
   IplImage *cvGray;
-  CvHaarClassifierCascade *cvFaceDetect;
-  CvHaarClassifierCascade *cvNoseDetect;
-  CvHaarClassifierCascade *cvMouthDetect;
-  CvHaarClassifierCascade *cvEyesDetect;
-  CvMemStorage *cvStorage;
+  cv::CascadeClassifier *cvFaceDetect;
+  cv::CascadeClassifier *cvNoseDetect;
+  cv::CascadeClassifier *cvMouthDetect;
+  cv::CascadeClassifier *cvEyesDetect;
 };
 
 struct _GstFaceDetectClass

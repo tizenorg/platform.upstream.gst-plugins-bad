@@ -26,18 +26,17 @@
  * <refsect2>
  * <title>Examples</title>
  * |[
- * gst-launch  videotestsrc ! "video/x-raw-rgb" ! glupload ! gloverlay location=imagefile ! glimagesink
+ * gst-launch-1.0 videotestsrc ! gloverlay location=image.jpg ! glimagesink
  * ]|
  * FBO (Frame Buffer Object) is required.
  * </refsect2>
  */
 
-/* FIXME: Redo this */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
+#include <gst/base/gsttypefindhelper.h>
 #include <gst/gl/gstglconfig.h>
 
 #include "gstgloverlay.h"
@@ -70,39 +69,66 @@ static void gst_gl_overlay_set_property (GObject * object, guint prop_id,
 static void gst_gl_overlay_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static void gst_gl_overlay_init_resources (GstGLFilter * filter);
-static void gst_gl_overlay_reset_resources (GstGLFilter * filter);
-
+static void gst_gl_overlay_before_transform (GstBaseTransform * trans,
+    GstBuffer * outbuf);
 static gboolean gst_gl_overlay_filter_texture (GstGLFilter * filter,
     guint in_tex, guint out_tex);
 
-static gint gst_gl_overlay_load_png (GstGLFilter * filter);
-static gint gst_gl_overlay_load_jpeg (GstGLFilter * filter);
+static gboolean gst_gl_overlay_load_png (GstGLOverlay * overlay, FILE * fp);
+static gboolean gst_gl_overlay_load_jpeg (GstGLOverlay * overlay, FILE * fp);
 
 enum
 {
   PROP_0,
   PROP_LOCATION,
-  PROP_XPOS_PNG,
-  PROP_YPOS_PNG,
-  PROP_SIZE_PNG,
-  PROP_XPOS_VIDEO,
-  PROP_YPOS_VIDEO,
-  PROP_SIZE_VIDEO,
-  PROP_VIDEOTOP,
-  PROP_ROTATE_PNG,
-  PROP_ROTATE_VIDEO,
-  PROP_ANGLE_PNG,
-  PROP_ANGLE_VIDEO,
-  PROP_RATIO_VIDEO
+  PROP_OFFSET_X,
+  PROP_OFFSET_Y,
+  PROP_RELATIVE_X,
+  PROP_RELATIVE_Y,
+  PROP_OVERLAY_WIDTH,
+  PROP_OVERLAY_HEIGHT,
+  PROP_ALPHA
 };
 
+/* *INDENT-OFF* */
+/* vertex source */
+static const gchar *overlay_v_src =
+    "attribute vec4 a_position;\n"
+    "attribute vec2 a_texcoord;\n"
+    "varying vec2 v_texcoord;\n"
+    "void main()\n"
+    "{\n"
+    "   gl_Position = a_position;\n"
+    "   v_texcoord = a_texcoord;\n"
+    "}";
+
+/* fragment source */
+static const gchar *overlay_f_src =
+    "#ifdef GL_ES\n"
+    "precision mediump float;\n"
+    "#endif\n"
+    "uniform sampler2D texture;\n"
+    "uniform float alpha;\n"
+    "varying vec2 v_texcoord;\n"
+    "void main()\n"
+    "{\n"
+    "  vec4 rgba = texture2D( texture, v_texcoord );\n"
+    "  gl_FragColor = vec4(rgba.rgb, rgba.a * alpha);\n"
+    "}\n";
+/* *INDENT-ON* */
 
 /* init resources that need a gl context */
-static void
+static gboolean
 gst_gl_overlay_init_gl_resources (GstGLFilter * filter)
 {
-//  GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
+  GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
+
+  if (overlay->shader)
+    gst_gl_context_del_shader (GST_GL_BASE_FILTER (filter)->context,
+        overlay->shader);
+
+  return gst_gl_context_gen_shader (GST_GL_BASE_FILTER (filter)->context,
+      overlay_v_src, overlay_f_src, &overlay->shader);
 }
 
 /* free resources that need a gl context */
@@ -110,9 +136,43 @@ static void
 gst_gl_overlay_reset_gl_resources (GstGLFilter * filter)
 {
   GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
+  const GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
-  gl->DeleteTextures (1, &overlay->pbuftexture);
+  if (overlay->shader) {
+    gst_gl_context_del_shader (GST_GL_BASE_FILTER (filter)->context,
+        overlay->shader);
+    overlay->shader = NULL;
+  }
+
+  if (overlay->image_memory) {
+    gst_memory_unref ((GstMemory *) overlay->image_memory);
+    overlay->image_memory = NULL;
+  }
+
+  if (overlay->vao) {
+    gl->DeleteVertexArrays (1, &overlay->vao);
+    overlay->vao = 0;
+  }
+
+  if (overlay->vbo) {
+    gl->DeleteBuffers (1, &overlay->vbo);
+    overlay->vbo = 0;
+  }
+
+  if (overlay->vbo_indices) {
+    gl->DeleteBuffers (1, &overlay->vbo_indices);
+    overlay->vbo_indices = 0;
+  }
+
+  if (overlay->overlay_vao) {
+    gl->DeleteVertexArrays (1, &overlay->overlay_vao);
+    overlay->overlay_vao = 0;
+  }
+
+  if (overlay->overlay_vbo) {
+    gl->DeleteBuffers (1, &overlay->overlay_vbo);
+    overlay->overlay_vbo = 0;
+  }
 }
 
 static void
@@ -129,311 +189,84 @@ gst_gl_overlay_class_init (GstGLOverlayClass * klass)
 
   GST_GL_FILTER_CLASS (klass)->set_caps = gst_gl_overlay_set_caps;
   GST_GL_FILTER_CLASS (klass)->filter_texture = gst_gl_overlay_filter_texture;
-  GST_GL_FILTER_CLASS (klass)->display_init_cb =
-      gst_gl_overlay_init_gl_resources;
   GST_GL_FILTER_CLASS (klass)->display_reset_cb =
       gst_gl_overlay_reset_gl_resources;
-  GST_GL_FILTER_CLASS (klass)->onStart = gst_gl_overlay_init_resources;
-  GST_GL_FILTER_CLASS (klass)->onStop = gst_gl_overlay_reset_resources;
+  GST_GL_FILTER_CLASS (klass)->init_fbo = gst_gl_overlay_init_gl_resources;
 
-  g_object_class_install_property (gobject_class,
-      PROP_LOCATION,
-      g_param_spec_string ("location",
-          "Location of the image",
-          "Location of the image", NULL,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  GST_BASE_TRANSFORM_CLASS (klass)->before_transform =
+      GST_DEBUG_FUNCPTR (gst_gl_overlay_before_transform);
 
-  g_object_class_install_property (gobject_class,
-      PROP_XPOS_PNG,
-      g_param_spec_int ("xpos-png",
-          "X position of overlay image in percents",
-          "X position of overlay image in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_YPOS_PNG,
-      g_param_spec_int ("ypos-png",
-          "Y position of overlay image in percents",
-          "Y position of overlay image in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_SIZE_PNG,
-      g_param_spec_int ("proportion-png",
-          "Relative size of overlay image, in percents",
-          "Relative size of iverlay image, in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_XPOS_VIDEO,
-      g_param_spec_int ("xpos-video",
-          "X position of overlay video in percents",
-          "X position of overlay video in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_YPOS_VIDEO,
-      g_param_spec_int ("ypos-video",
-          "Y position of overlay video in percents",
-          "Y position of overlay video in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_SIZE_VIDEO,
-      g_param_spec_int ("proportion-video",
-          "Relative size of overlay video, in percents",
-          "Relative size of iverlay video, in percents",
-          0, 100, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_VIDEOTOP,
-      g_param_spec_boolean ("video-top",
-          "Video-top", "Video is over png image", FALSE,
-          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_ROTATE_PNG,
-      g_param_spec_int ("rotate-png",
-          "choose rotation axis for the moment only Y axis is implemented",
-          "choose rotation axis for the moment only Y axis is implemented",
-          0, 3, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_ROTATE_VIDEO,
-      g_param_spec_int ("rotate-video",
-          "choose rotation axis for the moment only Y axis is implemented",
-          "choose rotation axis for the moment only Y axis is implemented",
-          0, 3, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_ANGLE_PNG,
-      g_param_spec_int ("angle-png",
-          "choose angle in axis to choosen between -90 and 90",
-          "choose angle in axis to choosen between -90 and 90",
-          -90, 90, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_ANGLE_VIDEO,
-      g_param_spec_int ("angle-video",
-          "choose angle in axis to choosen between -90 and 90",
-          "choose angle in axis to choosen between -90 and 90",
-          -90, 90, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-      PROP_RATIO_VIDEO,
-      g_param_spec_int ("ratio-video",
-          "choose ratio video between 0 and 3\n \t\t\t0 : Default ratio\n\t\t\t1 : 4 / 3\n\t\t\t2 : 16 / 9\n\t\t\t3 : 16 / 10",
-          "choose ratio video between 0 and 3\n \t\t\t0 : Default ratio\n\t\t\t1 : 4 / 3\n\t\t\t2 : 16 / 9\n\t\t\t3 : 16 / 10",
-          0, 3, 0, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_LOCATION,
+      g_param_spec_string ("location", "location",
+          "Location of image file to overlay", NULL, GST_PARAM_CONTROLLABLE
+          | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_OFFSET_X,
+      g_param_spec_int ("offset-x", "X Offset",
+          "For positive value, horizontal offset of overlay image in pixels from"
+          " left of video image. For negative value, horizontal offset of overlay"
+          " image in pixels from right of video image", G_MININT, G_MAXINT, 0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_OFFSET_Y,
+      g_param_spec_int ("offset-y", "Y Offset",
+          "For positive value, vertical offset of overlay image in pixels from"
+          " top of video image. For negative value, vertical offset of overlay"
+          " image in pixels from bottom of video image", G_MININT, G_MAXINT, 0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_RELATIVE_X,
+      g_param_spec_double ("relative-x", "Relative X Offset",
+          "Horizontal offset of overlay image in fractions of video image "
+          "width, from top-left corner of video image", 0.0, 1.0, 0.0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_RELATIVE_Y,
+      g_param_spec_double ("relative-y", "Relative Y Offset",
+          "Vertical offset of overlay image in fractions of video image "
+          "height, from top-left corner of video image", 0.0, 1.0, 0.0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_OVERLAY_WIDTH,
+      g_param_spec_int ("overlay-width", "Overlay Width",
+          "Width of overlay image in pixels (0 = same as overlay image)", 0,
+          G_MAXINT, 0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_OVERLAY_HEIGHT,
+      g_param_spec_int ("overlay-height", "Overlay Height",
+          "Height of overlay image in pixels (0 = same as overlay image)", 0,
+          G_MAXINT, 0,
+          GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING | G_PARAM_READWRITE
+          | G_PARAM_STATIC_STRINGS));
+  g_object_class_install_property (gobject_class, PROP_ALPHA,
+      g_param_spec_double ("alpha", "Alpha", "Global alpha of overlay image",
+          0.0, 1.0, 1.0, GST_PARAM_CONTROLLABLE | GST_PARAM_MUTABLE_PLAYING
+          | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_metadata (element_class,
       "Gstreamer OpenGL Overlay", "Filter/Effect/Video",
-      "Overlay GL video texture with a PNG image",
-      "Filippo Argiolas <filippo.argiolas@gmail.com>");
+      "Overlay GL video texture with a JPEG/PNG image",
+      "Filippo Argiolas <filippo.argiolas@gmail.com>, "
+      "Matthew Waters <matthew@centricular.com>");
 
-  /*
-     g_object_class_install_property (gobject_class,
-     PROP_STRETCH,
-     g_param_spec_boolean ("stretch",
-     "Stretch the image to texture size",
-     "Stretch the image to fit video texture size",
-     TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-   */
-}
-
-static void
-gst_gl_overlay_calc_ratio_video (GstGLOverlay * o, gfloat * video_ratio_w,
-    gfloat * video_ratio_h)
-{
-  if (o->ratio_video == 0) {
-    o->ratio_texture = (gfloat) o->ratio_window;
-    *video_ratio_w = (gfloat) o->width_window;
-    *video_ratio_h = (gfloat) o->height_window;
-  } else if (o->ratio_video == 1) {
-    o->ratio_texture = (gfloat) 1.33;
-    *video_ratio_w = 4.0;
-    *video_ratio_h = 3.0;
-  } else if (o->ratio_video == 2) {
-    o->ratio_texture = (gfloat) 1.77;
-    *video_ratio_w = 16.0;
-    *video_ratio_h = 9.0;
-  } else {
-    o->ratio_texture = (gfloat) 1.6;
-    *video_ratio_w = 16.0;
-    *video_ratio_h = 10.0;
-  }
-}
-
-static void
-gst_gl_overlay_init_texture (GstGLOverlay * o, GLuint tex, int flag)
-{
-  GstGLFilter *filter = GST_GL_FILTER (o);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
-
-  if (flag == 0 && o->type_file == 2) {
-    gl->Enable (GL_TEXTURE_2D);
-    gl->BindTexture (GL_TEXTURE_2D, tex);
-  } else {
-    gl->Enable (GL_TEXTURE_2D);
-    gl->BindTexture (GL_TEXTURE_2D, tex);
-  }
-}
-
-static void
-gst_gl_overlay_draw (GstGLOverlay * o, int flag)
-{
-  GstGLFilter *filter = GST_GL_FILTER (o);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
-
-  float y = 0.0f;
-  float width = 0.0f;
-  float height = 0.0f;
-
-/* *INDENT-OFF* */
-  float v_vertices[] = {
- /*|            Vertex             | TexCoord  |*/
-    -o->ratio_x + o->posx, y, 0.0f, 0.0f,  0.0f,
-     o->ratio_x + o->posx, y, 0.0f, width, 0.0f,
-     o->ratio_x + o->posx, y, 0.0f, width, height,
-    -o->ratio_x + o->posx, y, 0.0f, 0.0,   height,
-  };
-
-  GLushort indices[] = {
-    0, 1, 2,
-    0, 2, 3,
-  };
-/* *INDENT-ON* */
-
-  if (flag == 1) {
-    width = 1.0f;
-    height = 1.0f;
-  } else if (flag == 0 && o->type_file == 1) {
-    width = (gfloat) o->width;
-    height = (gfloat) o->height;
-  } else if (flag == 0 && o->type_file == 2) {
-    width = 1.0f;
-    height = 1.0f;
-  }
-
-  v_vertices[8] = width;
-  v_vertices[13] = width;
-  v_vertices[14] = height;
-  v_vertices[19] = height;
-
-  y = (o->type_file == 2 && flag == 0 ? o->ratio_y : -o->ratio_y) + o->posy;
-  v_vertices[1] = y;
-  v_vertices[6] = y;
-  y = (o->type_file == 2 && flag == 0 ? -o->ratio_y : o->ratio_y) + o->posy;
-  v_vertices[11] = y;
-  v_vertices[16] = y;
-
-  gst_gl_context_clear_shader (filter->context);
-
-  gl->ClientActiveTexture (GL_TEXTURE0);
-  gl->EnableClientState (GL_TEXTURE_COORD_ARRAY);
-  gl->EnableClientState (GL_VERTEX_ARRAY);
-
-  gl->VertexPointer (3, GL_FLOAT, 5 * sizeof (float), v_vertices);
-  gl->TexCoordPointer (2, GL_FLOAT, 5 * sizeof (float), &v_vertices[3]);
-
-  gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, indices);
-
-  gl->DisableClientState (GL_TEXTURE_COORD_ARRAY);
-  gl->DisableClientState (GL_VERTEX_ARRAY);
-}
-
-static void
-gst_gl_overlay_calc_proportion (GstGLOverlay * o, int flag, float size_texture,
-    float width, float height)
-{
-  if ((1.59f < o->ratio_window && o->ratio_window < 1.61f
-          && 1.77f < o->ratio_texture && o->ratio_texture < 1.78f)
-      || (1.3f < o->ratio_window && o->ratio_window < 1.34f
-          && ((1.7f < o->ratio_texture && o->ratio_texture < 1.78f)
-              || (1.59f < o->ratio_texture && o->ratio_texture < 1.61f)))) {
-    o->ratio_x = o->ratio_window * (gfloat) size_texture / 100.0f;
-    o->ratio_y =
-        (o->ratio_window / width) * height * (gfloat) size_texture / 100.0f;
-  } else {
-    o->ratio_x = o->ratio_texture * (gfloat) size_texture / 100.0f;
-    o->ratio_y = 1.0f * size_texture / 100.0f;
-  }
-  o->posx =
-      ((o->ratio_window - o->ratio_x) * ((flag ==
-              1 ? o->pos_x_video : o->pos_x_png) - 50.0f) / 50.0f);
-  o->posy =
-      (1.0f - o->ratio_y) * (((flag ==
-              1 ? o->pos_y_video : o->pos_y_png) - 50.0f) / 50.0f);
-}
-
-static void
-gst_gl_overlay_load_texture (GstGLOverlay * o, GLuint tex, int flag)
-{
-  GstGLFilter *filter = GST_GL_FILTER (o);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
-
-  gfloat video_ratio_w;
-  gfloat video_ratio_h;
-
-  o->ratio_window = (gfloat) o->width_window / (gfloat) o->height_window;
-
-  gl->MatrixMode (GL_MODELVIEW);
-  gl->ActiveTexture (GL_TEXTURE0);
-
-  gst_gl_overlay_init_texture (o, tex, flag);
-
-  gl->BlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-  gl->Enable (GL_BLEND);
-  gl->Translatef (0.0f, 0.0f, -1.43f);
-
-  if (flag == 1) {
-    if (o->rotate_video)
-      gl->Rotatef (o->angle_video, 0, 1, 0);
-    gst_gl_overlay_calc_ratio_video (o, &video_ratio_w, &video_ratio_h);
-    gst_gl_overlay_calc_proportion (o, flag, o->size_video, video_ratio_w,
-        video_ratio_h);
-  } else {
-    o->ratio_texture = (gfloat) o->width / (gfloat) o->height;
-    if (o->rotate_png == 2)
-      gl->Rotatef (o->angle_png, 0, 1, 0);
-    gst_gl_overlay_calc_proportion (o, flag, o->size_png, (gfloat) o->width,
-        (gfloat) o->height);
-  }
-
-  gst_gl_overlay_draw (o, flag);
-  if (flag == 1)
-    gl->Disable (GL_TEXTURE_2D);
+  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api =
+      GST_GL_API_OPENGL | GST_GL_API_GLES2 | GST_GL_API_OPENGL3;
 }
 
 static void
 gst_gl_overlay_init (GstGLOverlay * overlay)
 {
-  overlay->location = NULL;
-  overlay->pixbuf = NULL;
-  overlay->pbuftexture = 0;
-  overlay->pbuftexture = 0;
-  overlay->width = 0;
-  overlay->height = 0;
-  overlay->pos_x_png = 0;
-  overlay->pos_y_png = 0;
-  overlay->size_png = 100;
-  overlay->pos_x_video = 0;
-  overlay->pos_y_video = 0;
-  overlay->size_video = 100;
-  overlay->video_top = FALSE;
-  overlay->rotate_png = 0;
-  overlay->rotate_video = 0;
-  overlay->angle_png = 0;
-  overlay->angle_video = 0;
-  overlay->ratio_video = 0;
-  //  overlay->stretch = TRUE;
-  overlay->pbuf_has_changed = FALSE;
-}
+  overlay->offset_x = 0;
+  overlay->offset_y = 0;
 
-static void
-gst_gl_overlay_reset_resources (GstGLFilter * filter)
-{
-  // GstGLOverlay* overlay = GST_GL_OVERLAY(filter);
+  overlay->relative_x = 0.0;
+  overlay->relative_y = 0.0;
+
+  overlay->overlay_width = 0;
+  overlay->overlay_height = 0;
+
+  overlay->alpha = 1.0;
 }
 
 static void
@@ -446,49 +279,36 @@ gst_gl_overlay_set_property (GObject * object, guint prop_id,
     case PROP_LOCATION:
       if (overlay->location != NULL)
         g_free (overlay->location);
-      overlay->pbuf_has_changed = TRUE;
+      overlay->location_has_changed = TRUE;
       overlay->location = g_value_dup_string (value);
       break;
-    case PROP_XPOS_PNG:
-      overlay->pos_x_png = g_value_get_int (value);
+    case PROP_OFFSET_X:
+      overlay->offset_x = g_value_get_int (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_YPOS_PNG:
-      overlay->pos_y_png = g_value_get_int (value);
+    case PROP_OFFSET_Y:
+      overlay->offset_y = g_value_get_int (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_SIZE_PNG:
-      overlay->size_png = g_value_get_int (value);
+    case PROP_RELATIVE_X:
+      overlay->relative_x = g_value_get_double (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_XPOS_VIDEO:
-      overlay->pos_x_video = g_value_get_int (value);
+    case PROP_RELATIVE_Y:
+      overlay->relative_y = g_value_get_double (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_YPOS_VIDEO:
-      overlay->pos_y_video = g_value_get_int (value);
+    case PROP_OVERLAY_WIDTH:
+      overlay->overlay_width = g_value_get_int (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_SIZE_VIDEO:
-      overlay->size_video = g_value_get_int (value);
+    case PROP_OVERLAY_HEIGHT:
+      overlay->overlay_height = g_value_get_int (value);
+      overlay->geometry_change = TRUE;
       break;
-    case PROP_VIDEOTOP:
-      overlay->video_top = g_value_get_boolean (value);
+    case PROP_ALPHA:
+      overlay->alpha = g_value_get_double (value);
       break;
-    case PROP_ROTATE_PNG:
-      overlay->rotate_png = g_value_get_int (value);
-      break;
-    case PROP_ROTATE_VIDEO:
-      overlay->rotate_video = g_value_get_int (value);
-      break;
-    case PROP_ANGLE_PNG:
-      overlay->angle_png = g_value_get_int (value);
-      break;
-    case PROP_ANGLE_VIDEO:
-      overlay->angle_video = g_value_get_int (value);
-      break;
-    case PROP_RATIO_VIDEO:
-      overlay->ratio_video = (gfloat) g_value_get_int (value);
-      break;
-      /*  case PROP_STRETCH:
-         overlay->stretch = g_value_get_boolean (value);
-         break;
-       */
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -505,46 +325,27 @@ gst_gl_overlay_get_property (GObject * object, guint prop_id,
     case PROP_LOCATION:
       g_value_set_string (value, overlay->location);
       break;
-    case PROP_XPOS_PNG:
-      g_value_set_int (value, overlay->pos_x_png);
+    case PROP_OFFSET_X:
+      g_value_set_int (value, overlay->offset_x);
       break;
-    case PROP_YPOS_PNG:
-      g_value_set_int (value, overlay->pos_y_png);
+    case PROP_OFFSET_Y:
+      g_value_set_int (value, overlay->offset_y);
       break;
-    case PROP_SIZE_PNG:
-      g_value_set_int (value, overlay->size_png);
+    case PROP_RELATIVE_X:
+      g_value_set_double (value, overlay->relative_x);
       break;
-    case PROP_XPOS_VIDEO:
-      g_value_set_int (value, overlay->pos_x_video);
+    case PROP_RELATIVE_Y:
+      g_value_set_double (value, overlay->relative_y);
       break;
-    case PROP_YPOS_VIDEO:
-      g_value_set_int (value, overlay->pos_y_video);
+    case PROP_OVERLAY_WIDTH:
+      g_value_set_int (value, overlay->overlay_width);
       break;
-    case PROP_SIZE_VIDEO:
-      g_value_set_int (value, overlay->size_video);
+    case PROP_OVERLAY_HEIGHT:
+      g_value_set_int (value, overlay->overlay_height);
       break;
-    case PROP_VIDEOTOP:
-      g_value_set_boolean (value, overlay->video_top);
+    case PROP_ALPHA:
+      g_value_set_double (value, overlay->alpha);
       break;
-    case PROP_ROTATE_PNG:
-      g_value_set_int (value, overlay->rotate_png);
-      break;
-    case PROP_ROTATE_VIDEO:
-      g_value_set_int (value, overlay->rotate_video);
-      break;
-    case PROP_ANGLE_PNG:
-      g_value_set_int (value, overlay->angle_png);
-      break;
-    case PROP_ANGLE_VIDEO:
-      g_value_set_int (value, overlay->angle_video);
-      break;
-    case PROP_RATIO_VIDEO:
-      g_value_set_int (value, (gint) overlay->ratio_video);
-      break;
-      /*  case PROP_STRETCH:
-         g_value_set_boolean (value, overlay->stretch);
-         break;
-       */
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -563,78 +364,264 @@ gst_gl_overlay_set_caps (GstGLFilter * filter, GstCaps * incaps,
   gst_structure_get_int (s, "width", &width);
   gst_structure_get_int (s, "height", &height);
 
-  overlay->width_window = (gfloat) width;
-  overlay->height_window = (gfloat) height;
+  overlay->window_width = width;
+  overlay->window_height = height;
 
   return TRUE;
 }
 
 static void
-gst_gl_overlay_init_resources (GstGLFilter * filter)
+_unbind_buffer (GstGLOverlay * overlay)
 {
-//  GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
+  const GstGLFuncs *gl = GST_GL_BASE_FILTER (overlay)->context->gl_vtable;
+
+  gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+  gl->BindBuffer (GL_ARRAY_BUFFER, 0);
+
+  gl->DisableVertexAttribArray (overlay->attr_position);
+  gl->DisableVertexAttribArray (overlay->attr_texture);
 }
+
+static void
+_bind_buffer (GstGLOverlay * overlay, GLuint vbo)
+{
+  const GstGLFuncs *gl = GST_GL_BASE_FILTER (overlay)->context->gl_vtable;
+
+  gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, overlay->vbo_indices);
+  gl->BindBuffer (GL_ARRAY_BUFFER, vbo);
+
+  gl->EnableVertexAttribArray (overlay->attr_position);
+  gl->EnableVertexAttribArray (overlay->attr_texture);
+
+  gl->VertexAttribPointer (overlay->attr_position, 3, GL_FLOAT,
+      GL_FALSE, 5 * sizeof (GLfloat), (void *) 0);
+  gl->VertexAttribPointer (overlay->attr_texture, 2, GL_FLOAT,
+      GL_FALSE, 5 * sizeof (GLfloat), (void *) (3 * sizeof (GLfloat)));
+}
+
+/* *INDENT-OFF* */
+float v_vertices[] = {
+/*|      Vertex     | TexCoord  |*/
+  -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+   1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+   1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+  -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+};
+
+static const GLushort indices[] = { 0, 1, 2, 0, 2, 3, };
+/* *INDENT-ON* */
 
 static void
 gst_gl_overlay_callback (gint width, gint height, guint texture, gpointer stuff)
 {
   GstGLOverlay *overlay = GST_GL_OVERLAY (stuff);
   GstGLFilter *filter = GST_GL_FILTER (overlay);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
+  GstMapInfo map_info;
+  guint image_tex;
+  gboolean memory_mapped = FALSE;
+  const GstGLFuncs *gl = GST_GL_BASE_FILTER (filter)->context->gl_vtable;
 
-  gl->MatrixMode (GL_PROJECTION);
-  gl->LoadIdentity ();
-  gluPerspective (70.0f,
-      (GLfloat) overlay->width_window / (GLfloat) overlay->height_window, 1.0f,
-      1000.0f);
-  gl->Enable (GL_DEPTH_TEST);
-  gluLookAt (0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-  if (!overlay->video_top) {
-    if (overlay->pbuftexture != 0)
-      gst_gl_overlay_load_texture (overlay, overlay->pbuftexture, 0);
-    // if (overlay->stretch) {
-    //   width = (gfloat) overlay->width;
-    //   height = (gfloat) overlay->height;
-    // }
+#if GST_GL_HAVE_OPENGL
+  if (gst_gl_context_get_gl_api (GST_GL_BASE_FILTER (filter)->context) &
+      GST_GL_API_OPENGL) {
+
+    gl->MatrixMode (GL_PROJECTION);
     gl->LoadIdentity ();
-    gst_gl_overlay_load_texture (overlay, texture, 1);
-  } else {
-    gst_gl_overlay_load_texture (overlay, texture, 1);
-    if (overlay->pbuftexture == 0)
-      return;
-    // if (overlay->stretch) {
-    //   width = (gfloat) overlay->width;
-    //   height = (gfloat) overlay->height;
-    // }
-    gl->LoadIdentity ();
-    gst_gl_overlay_load_texture (overlay, overlay->pbuftexture, 0);
   }
+#endif
+
+  gl->ActiveTexture (GL_TEXTURE0);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+
+  gst_gl_shader_use (overlay->shader);
+
+  gst_gl_shader_set_uniform_1f (overlay->shader, "alpha", 1.0f);
+  gst_gl_shader_set_uniform_1i (overlay->shader, "texture", 0);
+
+  overlay->attr_position =
+      gst_gl_shader_get_attribute_location (overlay->shader, "a_position");
+  overlay->attr_texture =
+      gst_gl_shader_get_attribute_location (overlay->shader, "a_texcoord");
+
+  if (!overlay->vbo) {
+    if (gl->GenVertexArrays) {
+      gl->GenVertexArrays (1, &overlay->vao);
+      gl->BindVertexArray (overlay->vao);
+    }
+
+    gl->GenBuffers (1, &overlay->vbo);
+    gl->BindBuffer (GL_ARRAY_BUFFER, overlay->vbo);
+    gl->BufferData (GL_ARRAY_BUFFER, 4 * 5 * sizeof (GLfloat), v_vertices,
+        GL_STATIC_DRAW);
+
+    gl->GenBuffers (1, &overlay->vbo_indices);
+    gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, overlay->vbo_indices);
+    gl->BufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (indices), indices,
+        GL_STATIC_DRAW);
+
+    if (gl->GenVertexArrays) {
+      _bind_buffer (overlay, overlay->vbo);
+      gl->BindVertexArray (0);
+    }
+
+    gl->BindBuffer (GL_ARRAY_BUFFER, 0);
+    gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+  }
+
+  if (gl->GenVertexArrays)
+    gl->BindVertexArray (overlay->vao);
+  else
+    _bind_buffer (overlay, overlay->vbo);
+
+  gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+
+  if (!overlay->image_memory)
+    goto out;
+
+  if (!gst_memory_map ((GstMemory *) overlay->image_memory, &map_info,
+          GST_MAP_READ | GST_MAP_GL) || map_info.data == NULL)
+    goto out;
+
+  memory_mapped = TRUE;
+  image_tex = *(guint *) map_info.data;
+
+  if (!overlay->overlay_vbo) {
+    if (gl->GenVertexArrays) {
+      gl->GenVertexArrays (1, &overlay->overlay_vao);
+      gl->BindVertexArray (overlay->overlay_vao);
+    }
+
+    gl->GenBuffers (1, &overlay->overlay_vbo);
+    gl->BindBuffer (GL_ARRAY_BUFFER, overlay->overlay_vbo);
+    gl->BindBuffer (GL_ELEMENT_ARRAY_BUFFER, overlay->vbo_indices);
+    overlay->geometry_change = TRUE;
+  }
+
+  if (gl->GenVertexArrays) {
+    gl->BindVertexArray (overlay->overlay_vao);
+  }
+
+  if (overlay->geometry_change) {
+    gint render_width, render_height;
+    gfloat x, y, image_width, image_height;
+
+    /* *INDENT-OFF* */
+    float vertices[] = {
+     -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+      1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+      1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+     -1.0f,  1.0f, 0.0f, 0.0,  1.0f,
+    };
+    /* *INDENT-ON* */
+
+    /* scale from [0, 1] -> [-1, 1] */
+    x = ((gfloat) overlay->offset_x / (gfloat) overlay->window_width +
+        overlay->relative_x) * 2.0f - 1.0;
+    y = ((gfloat) overlay->offset_y / (gfloat) overlay->window_height +
+        overlay->relative_y) * 2.0f - 1.0;
+    /* scale from [0, 1] -> [0, 2] */
+    render_width =
+        overlay->overlay_width >
+        0 ? overlay->overlay_width : overlay->image_width;
+    render_height =
+        overlay->overlay_height >
+        0 ? overlay->overlay_height : overlay->image_height;
+    image_width =
+        ((gfloat) render_width / (gfloat) overlay->window_width) * 2.0f;
+    image_height =
+        ((gfloat) render_height / (gfloat) overlay->window_height) * 2.0f;
+
+    vertices[0] = vertices[15] = x;
+    vertices[5] = vertices[10] = x + image_width;
+    vertices[1] = vertices[6] = y;
+    vertices[11] = vertices[16] = y + image_height;
+
+    gl->BufferData (GL_ARRAY_BUFFER, 4 * 5 * sizeof (GLfloat), vertices,
+        GL_STATIC_DRAW);
+  }
+
+  if (!gl->GenVertexArrays || overlay->geometry_change) {
+    _bind_buffer (overlay, overlay->overlay_vbo);
+  }
+
+  gl->BindTexture (GL_TEXTURE_2D, image_tex);
+  gst_gl_shader_set_uniform_1f (overlay->shader, "alpha", overlay->alpha);
+
+  gl->Enable (GL_BLEND);
+  gl->BlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  gl->BlendEquation (GL_FUNC_ADD);
+
+  gl->DrawElements (GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+
+  gl->Disable (GL_BLEND);
+
+out:
+  if (gl->GenVertexArrays) {
+    gl->BindVertexArray (0);
+  } else {
+    _unbind_buffer (overlay);
+  }
+
+  gst_gl_context_clear_shader (GST_GL_BASE_FILTER (filter)->context);
+
+  if (memory_mapped)
+    gst_memory_unmap ((GstMemory *) overlay->image_memory, &map_info);
+
+  overlay->geometry_change = FALSE;
 }
 
-static void
-init_pixbuf_texture (GstGLContext * context, gpointer data)
+static gboolean
+load_file (GstGLOverlay * overlay)
 {
-  GstGLOverlay *overlay = GST_GL_OVERLAY (data);
-  GstGLFilter *filter = GST_GL_FILTER (overlay);
-  const GstGLFuncs *gl = filter->context->gl_vtable;
+  FILE *fp;
+  guint8 buff[16];
+  gsize n_read;
+  GstCaps *caps;
+  GstStructure *structure;
+  gboolean success = FALSE;
 
-  if (overlay->pixbuf) {
-    gl->DeleteTextures (1, &overlay->pbuftexture);
-    gl->GenTextures (1, &overlay->pbuftexture);
-    if (overlay->type_file == 1) {
-      gl->BindTexture (GL_TEXTURE_2D, overlay->pbuftexture);
-      gl->TexImage2D (GL_TEXTURE_2D, 0, GL_RGBA,
-          (gint) overlay->width, (gint) overlay->height, 0,
-          GL_RGBA, GL_UNSIGNED_BYTE, overlay->pixbuf);
-    } else if (overlay->type_file == 2) {
-      gl->BindTexture (GL_TEXTURE_2D, overlay->pbuftexture);
-      gl->TexImage2D (GL_TEXTURE_2D, 0, overlay->internalFormat,
-          overlay->width, overlay->height, 0, overlay->format,
-          GL_UNSIGNED_BYTE, overlay->pixbuf);
-      gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      gl->TexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    }
+  if (overlay->location == NULL)
+    return TRUE;
+
+  if ((fp = fopen (overlay->location, "rb")) == NULL) {
+    GST_ELEMENT_ERROR (overlay, RESOURCE, NOT_FOUND, ("Can't open file"),
+        ("File: %s", overlay->location));
+    return FALSE;
   }
+
+  n_read = fread (buff, 1, sizeof (buff), fp);
+  if (n_read != sizeof (buff)) {
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE, ("Can't read file header"),
+        ("File: %s", overlay->location));
+    goto out;
+  }
+
+  caps = gst_type_find_helper_for_data (GST_OBJECT (overlay), buff,
+      sizeof (buff), NULL);
+
+  if (caps == NULL) {
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE, ("Can't find file type"),
+        ("File: %s", overlay->location));
+    goto out;
+  }
+
+  fseek (fp, 0, SEEK_SET);
+
+  structure = gst_caps_get_structure (caps, 0);
+  if (gst_structure_has_name (structure, "image/jpeg")) {
+    success = gst_gl_overlay_load_jpeg (overlay, fp);
+  } else if (gst_structure_has_name (structure, "image/png")) {
+    success = gst_gl_overlay_load_png (overlay, fp);
+  } else {
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE, ("Image type not supported"),
+        ("File: %s", overlay->location));
+  }
+
+out:
+  fclose (fp);
+  gst_caps_replace (&caps, NULL);
+
+  return success;
 }
 
 static gboolean
@@ -643,18 +630,16 @@ gst_gl_overlay_filter_texture (GstGLFilter * filter, guint in_tex,
 {
   GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
 
-  if (overlay->pbuf_has_changed && (overlay->location != NULL)) {
-    if ((overlay->type_file = gst_gl_overlay_load_png (filter)) == 0)
-      if ((overlay->type_file = gst_gl_overlay_load_jpeg (filter)) == 0)
-        overlay->pixbuf = NULL;
-    /* if loader failed then context is turned off */
-    gst_gl_context_thread_add (filter->context, init_pixbuf_texture, overlay);
-    if (overlay->pixbuf) {
-      free (overlay->pixbuf);
-      overlay->pixbuf = NULL;
+  if (overlay->location_has_changed) {
+    if (overlay->image_memory) {
+      gst_memory_unref ((GstMemory *) overlay->image_memory);
+      overlay->image_memory = NULL;
     }
 
-    overlay->pbuf_has_changed = FALSE;
+    if (!load_file (overlay))
+      return FALSE;
+
+    overlay->location_has_changed = FALSE;
   }
 
   gst_gl_filter_render_to_target (filter, TRUE, in_tex, out_tex,
@@ -664,58 +649,80 @@ gst_gl_overlay_filter_texture (GstGLFilter * filter, guint in_tex,
 }
 
 static void
+gst_gl_overlay_before_transform (GstBaseTransform * trans, GstBuffer * outbuf)
+{
+  GstClockTime stream_time;
+
+  stream_time = gst_segment_to_stream_time (&trans->segment, GST_FORMAT_TIME,
+      GST_BUFFER_TIMESTAMP (outbuf));
+
+  if (GST_CLOCK_TIME_IS_VALID (stream_time))
+    gst_object_sync_values (GST_OBJECT (trans), stream_time);
+}
+
+static void
 user_warning_fn (png_structp png_ptr, png_const_charp warning_msg)
 {
   g_warning ("%s\n", warning_msg);
 }
 
-#define LOAD_ERROR(msg) { GST_WARNING ("unable to load %s: %s", overlay->location, msg); return FALSE; }
-
-static gint
-gst_gl_overlay_load_jpeg (GstGLFilter * filter)
+static gboolean
+gst_gl_overlay_load_jpeg (GstGLOverlay * overlay, FILE * fp)
 {
-  GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
-  FILE *fp = NULL;
+  GstVideoInfo v_info;
+  GstVideoAlignment v_align;
+  GstMapInfo map_info;
   struct jpeg_decompress_struct cinfo;
   struct jpeg_error_mgr jerr;
   JSAMPROW j;
   int i;
 
-  fp = fopen (overlay->location, "rb");
-  if (!fp) {
-    g_error ("error: couldn't open file!\n");
-    return 0;
-  }
   jpeg_create_decompress (&cinfo);
   cinfo.err = jpeg_std_error (&jerr);
   jpeg_stdio_src (&cinfo, fp);
   jpeg_read_header (&cinfo, TRUE);
   jpeg_start_decompress (&cinfo);
-  overlay->width = cinfo.image_width;
-  overlay->height = cinfo.image_height;
-  overlay->internalFormat = cinfo.num_components;
+  overlay->image_width = cinfo.image_width;
+  overlay->image_height = cinfo.image_height;
+
   if (cinfo.num_components == 1)
-    overlay->format = GL_LUMINANCE;
+    gst_video_info_set_format (&v_info, GST_VIDEO_FORMAT_Y444,
+        overlay->image_width, overlay->image_height);
   else
-    overlay->format = GL_RGB;
-  overlay->pixbuf = (GLubyte *) malloc (sizeof (GLubyte) * overlay->width
-      * overlay->height * overlay->internalFormat);
-  for (i = 0; i < overlay->height; ++i) {
-    j = (overlay->pixbuf +
-        (((int) overlay->height - (i +
-                    1)) * (int) overlay->width * overlay->internalFormat));
+    gst_video_info_set_format (&v_info, GST_VIDEO_FORMAT_RGB,
+        overlay->image_width, overlay->image_height);
+
+  gst_video_alignment_reset (&v_align);
+  v_align.stride_align[0] = 32 - 1;
+  gst_video_info_align (&v_info, &v_align);
+
+  overlay->image_memory = (GstGLMemory *)
+      gst_gl_memory_alloc (GST_GL_BASE_FILTER (overlay)->context,
+      NULL, &v_info, 0, &v_align);
+
+  if (!gst_memory_map ((GstMemory *) overlay->image_memory, &map_info,
+          GST_MAP_WRITE)) {
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE, ("failed to map memory"),
+        ("File: %s", overlay->location));
+    return FALSE;
+  }
+
+  for (i = 0; i < overlay->image_height; ++i) {
+    j = map_info.data + v_info.stride[0] * i;
     jpeg_read_scanlines (&cinfo, &j, 1);
   }
   jpeg_finish_decompress (&cinfo);
   jpeg_destroy_decompress (&cinfo);
-  fclose (fp);
-  return 2;
+  gst_memory_unmap ((GstMemory *) overlay->image_memory, &map_info);
+
+  return TRUE;
 }
 
-static gint
-gst_gl_overlay_load_png (GstGLFilter * filter)
+static gboolean
+gst_gl_overlay_load_png (GstGLOverlay * overlay, FILE * fp)
 {
-  GstGLOverlay *overlay = GST_GL_OVERLAY (filter);
+  GstVideoInfo v_info;
+  GstMapInfo map_info;
 
   png_structp png_ptr;
   png_infop info_ptr;
@@ -724,46 +731,48 @@ gst_gl_overlay_load_png (GstGLFilter * filter)
   gint bit_depth = 0;
   gint color_type = 0;
   gint interlace_type = 0;
-  png_FILE_p fp = NULL;
   guint y = 0;
   guchar **rows = NULL;
   gint filler;
   png_byte magic[8];
   gint n_read;
 
-  if (!filter->context)
-    return 1;
-
-  if ((fp = fopen (overlay->location, "rb")) == NULL)
-    LOAD_ERROR ("file not found");
+  if (!GST_GL_BASE_FILTER (overlay)->context)
+    return FALSE;
 
   /* Read magic number */
   n_read = fread (magic, 1, sizeof (magic), fp);
   if (n_read != sizeof (magic)) {
-    fclose (fp);
-    LOAD_ERROR ("can't read PNG magic number");
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("can't read PNG magic number"), ("File: %s", overlay->location));
+    return FALSE;
   }
 
   /* Check for valid magic number */
   if (png_sig_cmp (magic, 0, sizeof (magic))) {
-    fclose (fp);
-    LOAD_ERROR ("not a valid PNG image");
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("not a valid PNG image"), ("File: %s", overlay->location));
+    return FALSE;
   }
 
   png_ptr = png_create_read_struct (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
   if (png_ptr == NULL) {
-    fclose (fp);
-    LOAD_ERROR ("failed to initialize the png_struct");
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("failed to initialize the png_struct"), ("File: %s",
+            overlay->location));
+    return FALSE;
   }
 
   png_set_error_fn (png_ptr, NULL, NULL, user_warning_fn);
 
   info_ptr = png_create_info_struct (png_ptr);
   if (info_ptr == NULL) {
-    fclose (fp);
     png_destroy_read_struct (&png_ptr, png_infopp_NULL, png_infopp_NULL);
-    LOAD_ERROR ("failed to initialize the memory for image information");
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("failed to initialize the memory for image information"),
+        ("File: %s", overlay->location));
+    return FALSE;
   }
 
   png_init_io (png_ptr, fp);
@@ -782,28 +791,39 @@ gst_gl_overlay_load_png (GstGLFilter * filter)
   }
 
   if (color_type != PNG_COLOR_TYPE_RGB_ALPHA) {
-    fclose (fp);
     png_destroy_read_struct (&png_ptr, png_infopp_NULL, png_infopp_NULL);
-    LOAD_ERROR ("color type is not rgb");
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("color type is not rgb"), ("File: %s", overlay->location));
+    return FALSE;
   }
 
-  overlay->width = width;
-  overlay->height = height;
+  overlay->image_width = width;
+  overlay->image_height = height;
 
-  overlay->pixbuf = (guchar *) malloc (sizeof (guchar) * width * height * 4);
+  gst_video_info_set_format (&v_info, GST_VIDEO_FORMAT_RGBA, width, height);
+  overlay->image_memory = (GstGLMemory *)
+      gst_gl_memory_alloc (GST_GL_BASE_FILTER (overlay)->context,
+      NULL, &v_info, 0, NULL);
 
+  if (!gst_memory_map ((GstMemory *) overlay->image_memory, &map_info,
+          GST_MAP_WRITE)) {
+    png_destroy_read_struct (&png_ptr, &info_ptr, png_infopp_NULL);
+    GST_ELEMENT_ERROR (overlay, STREAM, DECODE,
+        ("failed to map memory"), ("File: %s", overlay->location));
+    return FALSE;
+  }
   rows = (guchar **) malloc (sizeof (guchar *) * height);
 
   for (y = 0; y < height; ++y)
-    rows[y] = (guchar *) (overlay->pixbuf + y * width * 4);
+    rows[y] = (guchar *) (map_info.data + y * width * 4);
 
   png_read_image (png_ptr, rows);
 
   free (rows);
+  gst_memory_unmap ((GstMemory *) overlay->image_memory, &map_info);
 
   png_read_end (png_ptr, info_ptr);
   png_destroy_read_struct (&png_ptr, &info_ptr, png_infopp_NULL);
-  fclose (fp);
 
-  return 1;
+  return TRUE;
 }

@@ -96,16 +96,17 @@ gst_opus_enc_create_metadata_buffer (const GstTagList * tags)
 /*
  * (really really) FIXME: move into core (dixit tpm)
  */
-/**
+/*
  * _gst_caps_set_buffer_array:
- * @caps: a #GstCaps
+ * @caps: (transfer full): a #GstCaps
  * @field: field in caps to set
  * @buf: header buffers
  *
  * Adds given buffers to an array of buffers set as the given @field
  * on the given @caps.  List of buffer arguments must be NULL-terminated.
  *
- * Returns: input caps with a streamheader field added, or NULL if some error
+ * Returns: (transfer full): input caps with a streamheader field added, or NULL
+ *     if some error occurred
  */
 static GstCaps *
 _gst_caps_set_buffer_array (GstCaps * caps, const gchar * field,
@@ -156,16 +157,20 @@ gst_opus_header_create_caps_from_headers (GstCaps ** caps, GSList ** headers,
     GstBuffer * buf1, GstBuffer * buf2)
 {
   int n_streams, family;
+  gint channels, rate;
   gboolean multistream;
   GstMapInfo map;
   guint8 *data;
 
   g_return_if_fail (caps);
-  g_return_if_fail (headers && !*headers);
+  g_return_if_fail (!headers || !*headers);
   g_return_if_fail (gst_buffer_get_size (buf1) >= 19);
 
   gst_buffer_map (buf1, &map, GST_MAP_READ);
   data = map.data;
+
+  channels = data[9];
+  rate = GST_READ_UINT32_LE (data + 12);
 
   /* work out the number of streams */
   family = data[18];
@@ -182,16 +187,27 @@ gst_opus_header_create_caps_from_headers (GstCaps ** caps, GSList ** headers,
     }
   }
 
+  /* TODO: should probably also put the channel mapping into the caps too once
+   * we actually support multi channel, and pre-skip and other fields */
+
   gst_buffer_unmap (buf1, &map);
 
   /* mark and put on caps */
   multistream = n_streams > 1;
   *caps = gst_caps_new_simple ("audio/x-opus",
-      "multistream", G_TYPE_BOOLEAN, multistream, NULL);
+      "multistream", G_TYPE_BOOLEAN, multistream,
+      "channels", G_TYPE_INT, channels, NULL);
+
+  if (rate > 0) {
+    gst_caps_set_simple (*caps, "rate", G_TYPE_INT, rate, NULL);
+  }
+
   *caps = _gst_caps_set_buffer_array (*caps, "streamheader", buf1, buf2, NULL);
 
-  *headers = g_slist_prepend (*headers, gst_buffer_ref (buf2));
-  *headers = g_slist_prepend (*headers, gst_buffer_ref (buf1));
+  if (headers) {
+    *headers = g_slist_prepend (*headers, gst_buffer_ref (buf2));
+    *headers = g_slist_prepend (*headers, gst_buffer_ref (buf1));
+  }
 }
 
 void
@@ -202,7 +218,7 @@ gst_opus_header_create_caps (GstCaps ** caps, GSList ** headers, gint nchannels,
   GstBuffer *buf1, *buf2;
 
   g_return_if_fail (caps);
-  g_return_if_fail (headers && !*headers);
+  g_return_if_fail (!headers || !*headers);
   g_return_if_fail (nchannels > 0);
   g_return_if_fail (sample_rate >= 0);  /* 0 -> unset */
   g_return_if_fail (channel_mapping_family == 0 || channel_mapping);

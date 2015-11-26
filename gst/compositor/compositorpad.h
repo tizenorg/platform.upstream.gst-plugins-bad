@@ -50,8 +50,12 @@ struct _GstCompositorPad
 
   /* properties */
   gint xpos, ypos;
-  guint zorder;
+  gint width, height;
   gdouble alpha;
+
+  GstVideoConverter *convert;
+  GstVideoInfo conversion_info;
+  GstBuffer *converted_buffer;
 };
 
 struct _GstCompositorPadClass

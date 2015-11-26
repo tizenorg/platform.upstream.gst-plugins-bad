@@ -59,8 +59,7 @@ enum
 {
   PROP_0,
   PROP_DROP,
-  PROP_GOP_SPLIT,
-  PROP_LAST
+  PROP_GOP_SPLIT
 };
 
 #define parent_class gst_mpegv_parse_parent_class
@@ -178,6 +177,7 @@ gst_mpegv_parse_init (GstMpegvParse * parse)
 
   gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (parse), FALSE);
   GST_PAD_SET_ACCEPT_INTERSECT (GST_BASE_PARSE_SINK_PAD (parse));
+  GST_PAD_SET_ACCEPT_TEMPLATE (GST_BASE_PARSE_SINK_PAD (parse));
 }
 
 static void
@@ -575,8 +575,8 @@ gst_mpegv_parse_process_sc (GstMpegvParse * mpvparse,
 }
 
 /* FIXME move into baseparse, or anything equivalent;
- * see https://bugzilla.gnome.org/show_bug.cgi?id=650093 */
-#define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x10000
+ * see https://bugzilla.gnome.org/show_bug.cgi?id=650093
+ * #define GST_BASE_PARSE_FRAME_FLAG_PARSING   0x100000 */
 
 static inline void
 update_frame_parsing_status (GstMpegvParse * mpvparse,
@@ -619,7 +619,7 @@ retry:
 
   /* if already found a previous start code, e.g. start of frame, go for next */
   if (mpvparse->last_sc >= 0) {
-    off = packet.offset = mpvparse->last_sc;
+    packet.offset = mpvparse->last_sc;
     packet.size = 0;
     goto next;
   }
@@ -954,8 +954,8 @@ gst_mpegv_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
         GST_TAG_VIDEO_CODEC, caps);
     gst_caps_unref (caps);
 
-    gst_pad_push_event (GST_BASE_PARSE_SRC_PAD (parse),
-        gst_event_new_tag (taglist));
+    gst_base_parse_merge_tags (parse, taglist, GST_TAG_MERGE_REPLACE);
+    gst_tag_list_unref (taglist);
 
     mpvparse->send_codec_tag = FALSE;
   }

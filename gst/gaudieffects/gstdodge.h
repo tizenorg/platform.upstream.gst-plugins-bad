@@ -53,7 +53,6 @@
 
 G_BEGIN_DECLS
 
-/* #defines don't like whitespacey bits */
 #define GST_TYPE_DODGE \
   (gst_dodge_get_type())
 #define GST_DODGE(obj) \
@@ -71,10 +70,6 @@ typedef struct _GstDodgeClass GstDodgeClass;
 struct _GstDodge
 {
   GstVideoFilter videofilter;
-
-  /* < private > */
-
-  gboolean silent;
 };
 
 struct _GstDodgeClass

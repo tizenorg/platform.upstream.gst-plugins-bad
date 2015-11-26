@@ -2,7 +2,8 @@ plugin_LTLIBRARIES = libgstwaylandsink.la
 
 libgstwaylandsink_la_SOURCES =  \
 	gstwaylandsink.c \
-	waylandpool.c \
+	wlshmallocator.c \
+	wlbuffer.c \
 	wldisplay.c \
 	wlwindow.c \
 	wlvideoformat.c \
@@ -21,7 +22,8 @@ libgstwaylandsink_la_LIBTOOLFLAGS = $(GST_PLUGIN_LIBTOOLFLAGS)
 
 noinst_HEADERS = \
 	gstwaylandsink.h \
-	waylandpool.h \
+	wlshmallocator.h \
+	wlbuffer.h \
 	wldisplay.h \
 	wlwindow.h \
 	wlvideoformat.h \
@@ -39,7 +41,9 @@ CLEANFILES = scaler-protocol.c scaler-client-protocol.h
 
 gstwaylandsink.c: scaler-client-protocol.h
 
-waylandpool.c: scaler-client-protocol.h
+wlshmallocator.c: scaler-client-protocol.h
+
+wlbuffer.c: scaler-client-protocol.h
 
 wldisplay.c: scaler-client-protocol.h
 

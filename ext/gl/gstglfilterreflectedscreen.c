@@ -77,9 +77,9 @@ static void gst_gl_filter_reflected_screen_draw_separated_screen (GstGLFilter *
 static void gst_gl_filter_reflected_screen_callback (gint width, gint height,
     guint texture, gpointer stuff);
 
-static GLfloat LightPos[] = { 4.0f, -4.0f, 6.0f, 1.0f };        // Light Position
-static GLfloat LightAmb[] = { 4.0f, 4.0f, 4.0f, 1.0f }; // Ambient Light
-static GLfloat LightDif[] = { 1.0f, 1.0f, 1.0f, 1.0f }; // Diffuse Light
+static const GLfloat LightPos[] = { 4.0f, -4.0f, 6.0f, 1.0f };  // Light Position
+static const GLfloat LightAmb[] = { 4.0f, 4.0f, 4.0f, 1.0f };   // Ambient Light
+static const GLfloat LightDif[] = { 1.0f, 1.0f, 1.0f, 1.0f };   // Diffuse Light
 
 static void
 gst_gl_filter_reflected_screen_class_init (GstGLFilterReflectedScreenClass *
@@ -138,6 +138,8 @@ gst_gl_filter_reflected_screen_class_init (GstGLFilterReflectedScreenClass *
   gst_element_class_set_metadata (element_class,
       "OpenGL Reflected Screen filter", "Filter/Effect/Video",
       "Reflected Screen Filter", "Pierre POUZOL <pierre.pouzol@hotmail.fr>");
+
+  GST_GL_BASE_FILTER_CLASS (klass)->supported_gl_api = GST_GL_API_OPENGL;
 }
 
 static void

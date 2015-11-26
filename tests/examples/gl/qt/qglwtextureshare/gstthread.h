@@ -26,7 +26,6 @@
 
 #include <gst/gl/gstglcontext.h>
 
-#include "glcontextid.h"
 
 class Pipeline;
 
@@ -35,7 +34,8 @@ class GstThread : public QThread
     Q_OBJECT
 
 public:
-    GstThread(GstGLContext *context,
+    GstThread(GstGLDisplay *display,
+            GstGLContext *context,
             const QString &videoLocation,
             const char *renderer_slot,
             QObject *parent = 0);
@@ -51,7 +51,6 @@ protected:
     void run();
 
 private:
-    GstGLContext *context;
     const QString m_videoLocation;
     Pipeline* m_pipeline;
 };

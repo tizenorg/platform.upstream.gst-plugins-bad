@@ -763,6 +763,8 @@ struct _GstH265SPS
   /* calculated values */
   guint8 chroma_array_type;
   gint width, height;
+  gint crop_rect_width, crop_rect_height;
+  gint crop_rect_x, crop_rect_y;
   gint fps_num, fps_den;
   gboolean valid;
 };
@@ -825,6 +827,9 @@ struct _GstH265PPS
 
   guint8 pps_extension_flag;
 
+  /* calculated values */
+  guint32 PicWidthInCtbsY;
+  guint32 PicHeightInCtbsY;
   gboolean valid;
 };
 
@@ -1035,7 +1040,7 @@ GstH265ParserResult gst_h265_parser_parse_pps       (GstH265Parser   * parser,
 
 GstH265ParserResult gst_h265_parser_parse_sei       (GstH265Parser   * parser,
                                                      GstH265NalUnit  * nalu,
-                                                     GstH265SEIMessage * sei);
+                                                     GArray **messages);
 
 void                gst_h265_parser_free            (GstH265Parser  * parser);
 
@@ -1060,6 +1065,48 @@ gboolean            gst_h265_sei_copy       (GstH265SEIMessage       * dest_sei,
                                              const GstH265SEIMessage * src_sei);
 
 void                gst_h265_sei_free       (GstH265SEIMessage * sei);
+
+void    gst_h265_quant_matrix_4x4_get_zigzag_from_raster (guint8 out_quant[16],
+                                                          const guint8 quant[16]);
+
+void    gst_h265_quant_matrix_4x4_get_raster_from_zigzag (guint8 out_quant[16],
+                                                          const guint8 quant[16]);
+
+void    gst_h265_quant_matrix_8x8_get_zigzag_from_raster (guint8 out_quant[64],
+                                                          const guint8 quant[64]);
+
+void    gst_h265_quant_matrix_8x8_get_raster_from_zigzag (guint8 out_quant[64],
+                                                          const guint8 quant[64]);
+
+#define gst_h265_quant_matrix_16x16_get_zigzag_from_raster \
+        gst_h265_quant_matrix_8x8_get_zigzag_from_raster
+#define gst_h265_quant_matrix_16x16_get_raster_from_zigzag \
+        gst_h265_quant_matrix_8x8_get_raster_from_zigzag
+#define gst_h265_quant_matrix_32x32_get_zigzag_from_raster \
+        gst_h265_quant_matrix_8x8_get_zigzag_from_raster
+#define gst_h265_quant_matrix_32x32_get_raster_from_zigzag \
+        gst_h265_quant_matrix_8x8_get_raster_from_zigzag
+
+void    gst_h265_quant_matrix_4x4_get_uprightdiagonal_from_raster (guint8 out_quant[16],
+                                                          const guint8 quant[16]);
+
+void    gst_h265_quant_matrix_4x4_get_raster_from_uprightdiagonal (guint8 out_quant[16],
+                                                          const guint8 quant[16]);
+
+void    gst_h265_quant_matrix_8x8_get_uprightdiagonal_from_raster (guint8 out_quant[64],
+                                                          const guint8 quant[64]);
+
+void    gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal (guint8 out_quant[64],
+                                                          const guint8 quant[64]);
+
+#define gst_h265_quant_matrix_16x16_get_uprightdiagonal_from_raster \
+        gst_h265_quant_matrix_8x8_get_uprightdiagonal_from_raster
+#define gst_h265_quant_matrix_16x16_get_raster_from_uprightdiagonal\
+        gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal
+#define gst_h265_quant_matrix_32x32_get_uprightdiagonal_from_raster \
+        gst_h265_quant_matrix_8x8_get_uprightdiagonal_from_raster
+#define gst_h265_quant_matrix_32x32_get_raster_from_uprightdiagonal\
+        gst_h265_quant_matrix_8x8_get_raster_from_uprightdiagonal
 
 G_END_DECLS
 #endif

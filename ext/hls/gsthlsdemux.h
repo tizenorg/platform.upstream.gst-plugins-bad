@@ -25,11 +25,12 @@
 #define __GST_HLS_DEMUX_H__
 
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include "m3u8.h"
 #include "gstfragmented.h"
-#include <gst/uridownloader/gsturidownloader.h>
-#ifdef HAVE_NETTLE
+#include <gst/adaptivedemux/gstadaptivedemux.h>
+#if defined(HAVE_OPENSSL)
+#include <openssl/evp.h>
+#elif defined(HAVE_NETTLE)
 #include <nettle/aes.h>
 #include <nettle/cbc.h>
 #else
@@ -61,91 +62,39 @@ typedef struct _GstHLSDemuxClass GstHLSDemuxClass;
  */
 struct _GstHLSDemux
 {
-  GstBin parent;
+  GstAdaptiveDemux parent;
 
-  GstPad *sinkpad;
-  GstPad *srcpad;
   gint srcpad_counter;
 
-  gboolean have_group_id;
-  guint group_id;
-
-  GstBuffer *playlist;
-  GstCaps *input_caps;
-  GstUriDownloader *downloader;
   gchar *uri;                   /* Original playlist URI */
   GstM3U8Client *client;        /* M3U8 client */
   gboolean do_typefind;         /* Whether we need to typefind the next buffer */
-  gboolean new_playlist;        /* Whether a new playlist is about to start and pads should be switched */
-
-  /* Properties */
-  guint fragments_cache;        /* number of fragments needed to be cached to start playing */
-  gfloat bitrate_limit;         /* limit of the available bitrate to use */
-  guint connection_speed;       /* Network connection speed in kbps (0 = unknown) */
-
-  /* Streaming task */
-  GstTask *stream_task;
-  GRecMutex stream_lock;
-  gboolean stop_stream_task;
-  GMutex download_lock;         /* Used for protecting queue and the two conds */
-  GCond download_cond;          /* Signalled when something is added to the queue */
-  gboolean end_of_playlist;
-  gint download_failed_count;
-  gint64 next_download;
-
-  /* Updates task */
-  GstTask *updates_task;
-  GRecMutex updates_lock;
-  gint64 next_update;           /* Time of the next update */
-  gboolean stop_updates_task;
-  GMutex updates_timed_lock;
-  GCond updates_timed_cond;     /* Signalled when the playlist should be updated */
-
-  /* Position in the stream */
-  GstSegment segment;
-  gboolean need_segment;
-  gboolean discont;
 
   /* Cache for the last key */
   gchar *key_url;
   GstFragment *key_fragment;
 
-  /* Current download rate (bps) */
-  gint current_download_rate;
-
-  /* fragment download tooling */
-  GstElement *src;
-  GstPad *src_srcpad; /* handy link to src's src pad */
-  GMutex fragment_download_lock;
-  GCond fragment_download_cond;
-  GstClockTime current_timestamp;
-  GstClockTime current_duration;
-  gboolean starting_fragment;
-  gboolean reset_crypto;
-  gint64 download_start_time;
-  gint64 download_total_time;
-  gint64 download_total_bytes;
-  GstFlowReturn last_ret;
-  GError *last_error;
-
   /* decryption tooling */
-#ifdef HAVE_NETTLE
+#if defined(HAVE_OPENSSL)
+  EVP_CIPHER_CTX aes_ctx;
+#elif defined(HAVE_NETTLE)
   struct CBC_CTX (struct aes_ctx, AES_BLOCK_SIZE) aes_ctx;
 #else
   gcry_cipher_hd_t aes_ctx;
 #endif
-  const gchar *current_key;
-  const guint8 *current_iv;
-  GstAdapter *adapter; /* used to accumulate 16 bytes multiple chunks */
+  gchar *current_key;
+  guint8 *current_iv;
   GstBuffer *pending_buffer; /* decryption scenario:
                               * the last buffer can only be pushed when
                               * resized, so need to store and wait for
                               * EOS to know it is the last */
+
+  gboolean reset_pts;
 };
 
 struct _GstHLSDemuxClass
 {
-  GstBinClass parent_class;
+  GstAdaptiveDemuxClass parent_class;
 };
 
 GType gst_hls_demux_get_type (void);

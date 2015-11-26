@@ -23,20 +23,15 @@
 
 #include "../gstgleffects.h"
 
-#define USING_OPENGL(context) (gst_gl_context_check_gl_version (context, GST_GL_API_OPENGL, 1, 0))
-#define USING_OPENGL3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_OPENGL3, 3, 1))
-#define USING_GLES(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES, 1, 0))
-#define USING_GLES2(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 2, 0))
-#define USING_GLES3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 3, 0))
-
 static void
 gst_gl_effects_identity_callback (gint width, gint height, guint texture,
     gpointer data)
 {
   GstGLEffects *effects = GST_GL_EFFECTS (data);
   GstGLFilter *filter = GST_GL_FILTER (effects);
-  GstGLContext *context = filter->context;
+  GstGLContext *context = GST_GL_BASE_FILTER (filter)->context;
   GstGLFuncs *gl = context->gl_vtable;
+  GstGLShader *shader;
 
 #if GST_GL_HAVE_OPENGL
   if (USING_OPENGL (context)) {
@@ -44,35 +39,27 @@ gst_gl_effects_identity_callback (gint width, gint height, guint texture,
     gl->LoadIdentity ();
   }
 #endif
-#if GST_GL_HAVE_GLES2
-  if (USING_GLES2 (context)) {
-    GstGLShader *shader =
-        g_hash_table_lookup (effects->shaderstable, "identity0");
 
-    if (!shader) {
-      shader = gst_gl_shader_new (context);
-      g_hash_table_insert (effects->shaderstable, (gchar *) "identity0",
-          shader);
+  shader = g_hash_table_lookup (effects->shaderstable, "identity0");
+  if (!shader) {
+    shader = gst_gl_shader_new (context);
+    g_hash_table_insert (effects->shaderstable, (gchar *) "identity0", shader);
 
-      if (!gst_gl_shader_compile_with_default_vf_and_check (shader,
-              &filter->draw_attr_position_loc,
-              &filter->draw_attr_texture_loc)) {
-        /* gst gl context error is already set */
-        GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
-            ("Failed to initialize identity shader, %s",
-                gst_gl_context_get_error ()), (NULL));
-        return;
-      }
+    if (!gst_gl_shader_compile_with_default_vf_and_check (shader,
+            &filter->draw_attr_position_loc, &filter->draw_attr_texture_loc)) {
+      /* gst gl context error is already set */
+      GST_ELEMENT_ERROR (effects, RESOURCE, NOT_FOUND,
+          ("Failed to initialize identity shader, %s",
+              gst_gl_context_get_error ()), (NULL));
+      return;
     }
-    gst_gl_shader_use (shader);
-
-    gl->ActiveTexture (GL_TEXTURE0);
-    gl->Enable (GL_TEXTURE_2D);
-    gl->BindTexture (GL_TEXTURE_2D, texture);
-
-    gst_gl_shader_set_uniform_1i (shader, "tex", 0);
   }
-#endif
+  gst_gl_shader_use (shader);
+
+  gl->ActiveTexture (GL_TEXTURE0);
+  gl->BindTexture (GL_TEXTURE_2D, texture);
+
+  gst_gl_shader_set_uniform_1i (shader, "tex", 0);
 
   gst_gl_filter_draw_texture (filter, texture, width, height);
 }

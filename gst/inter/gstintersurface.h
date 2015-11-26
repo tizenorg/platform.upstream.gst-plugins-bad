@@ -21,6 +21,7 @@
 #define _GST_INTER_SURFACE_H_
 
 #include <gst/base/gstadapter.h>
+#include <gst/audio/audio.h>
 #include <gst/video/video.h>
 
 G_BEGIN_DECLS
@@ -30,25 +31,28 @@ typedef struct _GstInterSurface GstInterSurface;
 struct _GstInterSurface
 {
   GMutex mutex;
+  gint ref_count;
+
   char *name;
 
   /* video */
-  GstVideoFormat format;
-  int fps_n;
-  int fps_d;
-  int width;
-  int height;
-  int n_frames;
+  GstVideoInfo video_info;
   int video_buffer_count;
 
   /* audio */
-  int sample_rate;
-  int n_channels;
+  GstAudioInfo audio_info;
+  guint64 audio_buffer_time;
+  guint64 audio_latency_time;
+  guint64 audio_period_time;
 
   GstBuffer *video_buffer;
   GstBuffer *sub_buffer;
   GstAdapter *audio_adapter;
 };
+
+#define DEFAULT_AUDIO_BUFFER_TIME  (GST_SECOND)
+#define DEFAULT_AUDIO_LATENCY_TIME (100 * GST_MSECOND)
+#define DEFAULT_AUDIO_PERIOD_TIME  (25 * GST_MSECOND)
 
 
 GstInterSurface * gst_inter_surface_get (const char *name);

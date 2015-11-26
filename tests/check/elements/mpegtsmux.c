@@ -54,6 +54,10 @@ static GstPad *mysrcpad, *mysinkpad;
                           "alignment = (string) nal, " \
                           "parsed = (boolean) true "
 
+#define KEYFRAME_DISTANCE 10
+
+typedef void (CheckOutputBuffersFunc) (GList * buffers);
+
 /* setup and teardown needs some special handling for muxer */
 static GstPad *
 setup_src_pad (GstElement * element,
@@ -146,8 +150,10 @@ cleanup_tsmux (GstElement * mux, const gchar * sinkname)
 static void
 check_tsmux_pad (GstStaticPadTemplate * srctemplate,
     const gchar * src_caps_string, gint pes_id, gint pmt_id,
-    const gchar * sinkname)
+    const gchar * sinkname, CheckOutputBuffersFunc check_func, guint n_bufs,
+    gssize input_buf_size, guint alignment)
 {
+  GstClockTime ts;
   GstElement *mux;
   GstBuffer *inbuffer, *outbuffer;
   GstCaps *caps;
@@ -157,17 +163,46 @@ check_tsmux_pad (GstStaticPadTemplate * srctemplate,
   gchar *padname;
 
   mux = setup_tsmux (srctemplate, sinkname, &padname);
+
+  if (alignment != 0)
+    g_object_set (mux, "alignment", alignment, NULL);
+
   fail_unless (gst_element_set_state (mux,
           GST_STATE_PLAYING) == GST_STATE_CHANGE_SUCCESS,
       "could not set to playing");
 
-  inbuffer = gst_buffer_new_and_alloc (1);
   caps = gst_caps_from_string (src_caps_string);
   gst_check_setup_events (mysrcpad, mux, caps, GST_FORMAT_TIME);
   gst_caps_unref (caps);
-  GST_BUFFER_TIMESTAMP (inbuffer) = 0;
-  ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
-  fail_unless (gst_pad_push (mysrcpad, inbuffer) == GST_FLOW_OK);
+
+  ts = 0;
+  for (i = 0; i < n_bufs; ++i) {
+    GstFlowReturn flow;
+
+    if (input_buf_size >= 0)
+      inbuffer = gst_buffer_new_and_alloc (input_buf_size);
+    else
+      inbuffer = gst_buffer_new_and_alloc (g_random_int_range (0, 49141));
+
+    GST_BUFFER_TIMESTAMP (inbuffer) = ts;
+    ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
+
+    if (i % KEYFRAME_DISTANCE == 0 && pes_id == 0xe0) {
+      GST_TRACE ("input keyframe");
+      GST_BUFFER_FLAG_UNSET (inbuffer, GST_BUFFER_FLAG_DELTA_UNIT);
+    } else {
+      GST_TRACE ("input delta");
+      GST_BUFFER_FLAG_SET (inbuffer, GST_BUFFER_FLAG_DELTA_UNIT);
+    }
+    flow = gst_pad_push (mysrcpad, inbuffer);
+    if (flow != GST_FLOW_OK)
+      fail ("Got %s flow instead of OK", gst_flow_get_name (flow));
+    ts += 40 * GST_MSECOND;
+  }
+
+  if (check_func)
+    check_func (buffers);
+
   num_buffers = g_list_length (buffers);
   /* all output might get aggregated */
   fail_unless (num_buffers >= 1);
@@ -199,12 +234,12 @@ check_tsmux_pad (GstStaticPadTemplate * srctemplate,
       y = GST_READ_UINT16_BE (data);
       pid = y & (0x1FFF);
       data += 2;
-      GST_DEBUG ("pid: %d", pid);
+      GST_TRACE ("pid: %d", pid);
 
       y = (y >> 14) & 0x1;
       /* only check packets with payload_start_indicator == 1 */
       if (!y) {
-        GST_DEBUG ("not at start");
+        GST_TRACE ("not at start");
         continue;
       }
 
@@ -216,7 +251,7 @@ check_tsmux_pad (GstStaticPadTemplate * srctemplate,
         y = *data;
         data++;
         data += y;
-        GST_DEBUG ("adaptation %d", y);
+        GST_TRACE ("adaptation %d", y);
       }
 
       if (pid == 0) {
@@ -317,7 +352,7 @@ check_tsmux_pad (GstStaticPadTemplate * srctemplate,
 GST_START_TEST (test_video)
 {
   check_tsmux_pad (&video_src_template, VIDEO_CAPS_STRING, 0xE0, 0x1b,
-      "sink_%d");
+      "sink_%d", NULL, 1, 1, 0);
 }
 
 GST_END_TEST;
@@ -326,7 +361,7 @@ GST_END_TEST;
 GST_START_TEST (test_audio)
 {
   check_tsmux_pad (&audio_src_template, AUDIO_CAPS_STRING, 0xC0, 0x03,
-      "sink_%d");
+      "sink_%d", NULL, 1, 1, 0);
 }
 
 GST_END_TEST;
@@ -716,6 +751,58 @@ GST_START_TEST (test_multiple_state_change)
 
 GST_END_TEST;
 
+static void
+test_align_check_output (GList * bufs)
+{
+  GST_LOG ("%u buffers", g_list_length (bufs));
+  while (bufs != NULL) {
+    GstBuffer *buf = bufs->data;
+    gsize size;
+
+    size = gst_buffer_get_size (buf);
+    GST_LOG ("buffer, size = %5u", (guint) size);
+    fail_unless_equals_int (size, 7 * 188);
+    bufs = bufs->next;
+  }
+}
+
+GST_START_TEST (test_align)
+{
+  check_tsmux_pad (&video_src_template, VIDEO_CAPS_STRING, 0xE0, 0x1b,
+      "sink_%d", test_align_check_output, 817, -1, 7);
+}
+
+GST_END_TEST;
+
+static void
+test_keyframe_propagation_check_output (GList * bufs)
+{
+  guint keyframe_count = 0;
+
+  GST_LOG ("%u buffers", g_list_length (bufs));
+  while (bufs != NULL) {
+    GstBuffer *buf = bufs->data;
+    gboolean keyunit;
+
+    keyunit = !GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DELTA_UNIT);
+
+    if (keyunit)
+      ++keyframe_count;
+
+    GST_LOG ("buffer, keyframe=%d", keyunit);
+    bufs = bufs->next;
+  }
+  fail_unless_equals_int (keyframe_count, 50 / KEYFRAME_DISTANCE);
+}
+
+GST_START_TEST (test_keyframe_flag_propagation)
+{
+  check_tsmux_pad (&video_src_template, VIDEO_CAPS_STRING, 0xE0, 0x1b,
+      "sink_%d", test_keyframe_propagation_check_output, 50, -1, 0);
+}
+
+GST_END_TEST;
+
 static Suite *
 mpegtsmux_suite (void)
 {
@@ -730,6 +817,8 @@ mpegtsmux_suite (void)
   tcase_add_test (tc_chain, test_force_key_unit_event_upstream);
   tcase_add_test (tc_chain, test_propagate_flow_status);
   tcase_add_test (tc_chain, test_multiple_state_change);
+  tcase_add_test (tc_chain, test_align);
+  tcase_add_test (tc_chain, test_keyframe_flag_propagation);
 
   return s;
 }

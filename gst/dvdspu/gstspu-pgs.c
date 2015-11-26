@@ -484,8 +484,8 @@ parse_set_palette (GstDVDSpu * dvdspu, guint8 type, guint8 * payload,
     guint8 n, Y, U, V, A;
     n = payload[0];
     Y = payload[1];
-    U = payload[2];
-    V = payload[3];
+    V = payload[2];
+    U = payload[3];
     A = payload[4];
 
 #if DUMP_FULL_PALETTE
@@ -592,14 +592,14 @@ parse_set_object_data (GstDVDSpu * dvdspu, guint8 type, guint8 * payload,
     payload += 3;
 
     PGS_DUMP ("%d bytes of RLE data, of %d bytes total.\n",
-        end - payload, obj->rle_data_size);
+        (int) (end - payload), obj->rle_data_size);
 
     obj->rle_data = g_realloc (obj->rle_data, obj->rle_data_size);
     obj->rle_data_used = end - payload;
     memcpy (obj->rle_data, payload, end - payload);
     payload = end;
   } else {
-    PGS_DUMP ("%d bytes of additional RLE data\n", end - payload);
+    PGS_DUMP ("%d bytes of additional RLE data\n", (int) (end - payload));
     /* Check that the data chunk is for this object version, and fits in the buffer */
     if (obj->rle_data_ver == obj_ver &&
         obj->rle_data_used + end - payload <= obj->rle_data_size) {
@@ -683,6 +683,7 @@ gstspu_exec_pgs_buffer (GstDVDSpu * dvdspu, GstBuffer * buf)
   guint8 *pos, *end;
   guint8 type;
   guint16 packet_len;
+  gint remaining;
 
   gst_buffer_map (buf, &map, GST_MAP_READ);
 
@@ -696,16 +697,15 @@ gstspu_exec_pgs_buffer (GstDVDSpu * dvdspu, GstBuffer * buf)
   }
 
   PGS_DUMP ("Begin dumping command buffer of size %u ts %" GST_TIME_FORMAT "\n",
-      end - pos, GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)));
+      (guint) (end - pos), GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)));
   do {
     type = *pos++;
     packet_len = GST_READ_UINT16_BE (pos);
     pos += 2;
 
     if (pos + packet_len > end) {
-      gst_buffer_unmap (buf, &map);
       PGS_DUMP ("Invalid packet length %u (only have %u bytes)\n", packet_len,
-          end - pos);
+          (guint) (end - pos));
       goto error;
     }
 
@@ -715,8 +715,11 @@ gstspu_exec_pgs_buffer (GstDVDSpu * dvdspu, GstBuffer * buf)
     pos += packet_len;
   } while (pos + 3 <= end);
 
-  PGS_DUMP ("End dumping command buffer with %u bytes remaining\n", end - pos);
-  return (pos - map.data);
+  PGS_DUMP ("End dumping command buffer with %u bytes remaining\n",
+      (guint) (end - pos));
+  remaining = (gint) (pos - map.data);
+  gst_buffer_unmap (buf, &map);
+  return remaining;
 
   /* ERRORS */
 error:
@@ -777,6 +780,7 @@ gstspu_pgs_render (GstDVDSpu * dvdspu, GstVideoFrame * frame)
 gboolean
 gstspu_pgs_handle_dvd_event (GstDVDSpu * dvdspu, GstEvent * event)
 {
+  gst_event_unref (event);
   return FALSE;
 }
 

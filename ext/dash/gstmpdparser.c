@@ -35,8 +35,13 @@
 /* Property parsing */
 static gboolean gst_mpdparser_get_xml_prop_string (xmlNode * a_node,
     const gchar * property_name, gchar ** property_value);
+static gboolean gst_mpdparser_get_xml_ns_prop_string (xmlNode * a_node,
+    const gchar * ns_name, const gchar * property_name,
+    gchar ** property_value);
 static gboolean gst_mpdparser_get_xml_prop_string_vector_type (xmlNode * a_node,
     const gchar * property_name, gchar *** property_value);
+static gboolean gst_mpdparser_get_xml_prop_signed_integer (xmlNode * a_node,
+    const gchar * property_name, gint default_val, gint * property_value);
 static gboolean gst_mpdparser_get_xml_prop_unsigned_integer (xmlNode * a_node,
     const gchar * property_name, guint default_val, guint * property_value);
 static gboolean gst_mpdparser_get_xml_prop_unsigned_integer_64 (xmlNode *
@@ -69,6 +74,8 @@ static gboolean gst_mpdparser_get_xml_node_content (xmlNode * a_node,
     gchar ** content);
 static gchar *gst_mpdparser_get_xml_node_namespace (xmlNode * a_node,
     const gchar * prefix);
+static gboolean gst_mpdparser_get_xml_node_as_string (xmlNode * a_node,
+    gchar ** content);
 
 /* XML node parsing */
 static void gst_mpdparser_parse_baseURL_node (GList ** list, xmlNode * a_node);
@@ -110,6 +117,8 @@ static void gst_mpdparser_parse_metrics_range_node (GList ** list,
 static void gst_mpdparser_parse_metrics_node (GList ** list, xmlNode * a_node);
 static void gst_mpdparser_parse_root_node (GstMPDNode ** pointer,
     xmlNode * a_node);
+static void gst_mpdparser_parse_utctiming_node (GList ** list,
+    xmlNode * a_node);
 
 /* Helper functions */
 static gint convert_to_millisecs (gint decimals, gint pos);
@@ -131,11 +140,11 @@ static const gchar *gst_mpdparser_get_initializationURL (GstActiveStream *
 static gchar *gst_mpdparser_build_URL_from_template (const gchar * url_template,
     const gchar * id, guint number, guint bandwidth, guint64 time);
 static gboolean gst_mpd_client_add_media_segment (GstActiveStream * stream,
-    GstSegmentURLNode * url_node, guint number, guint64 start,
-    GstClockTime start_time, GstClockTime duration);
+    GstSegmentURLNode * url_node, guint number, gint repeat, gint64 scale_start,
+    gint64 scale_duration, GstClockTime start, GstClockTime duration);
 static const gchar *gst_mpdparser_mimetype_to_caps (const gchar * mimeType);
 static GstClockTime gst_mpd_client_get_segment_duration (GstMpdClient * client,
-    GstActiveStream * stream);
+    GstActiveStream * stream, gint64 * scale_duration);
 static GstDateTime *gst_mpd_client_get_availability_start_time (GstMpdClient *
     client);
 
@@ -152,12 +161,13 @@ static GstRepresentationNode
 static GstSegmentBaseType *gst_mpdparser_get_segment_base (GstPeriodNode *
     Period, GstAdaptationSetNode * AdaptationSet,
     GstRepresentationNode * Representation);
-static GstSegmentListNode *gst_mpdparser_get_segment_list (GstPeriodNode *
-    Period, GstAdaptationSetNode * AdaptationSet,
+static GstSegmentListNode *gst_mpdparser_get_segment_list (GstMpdClient *
+    client, GstPeriodNode * Period, GstAdaptationSetNode * AdaptationSet,
     GstRepresentationNode * Representation);
 
 /* Segments */
-static guint gst_mpd_client_get_segments_counts (GstActiveStream * stream);
+static guint gst_mpd_client_get_segments_counts (GstMpdClient * client,
+    GstActiveStream * stream);
 
 /* Memory management */
 static GstSegmentTimelineNode *gst_mpdparser_segment_timeline_node_new (void);
@@ -197,9 +207,49 @@ static void gst_mpdparser_free_descriptor_type_node (GstDescriptorType *
     descriptor_type);
 static void gst_mpdparser_free_content_component_node (GstContentComponentNode *
     content_component_node);
+static void gst_mpdparser_free_utctiming_node (GstUTCTimingNode * timing_type);
 static void gst_mpdparser_free_stream_period (GstStreamPeriod * stream_period);
 static void gst_mpdparser_free_media_segment (GstMediaSegment * media_segment);
 static void gst_mpdparser_free_active_stream (GstActiveStream * active_stream);
+
+static GstUri *combine_urls (GstUri * base, GList * list, gchar ** query,
+    guint idx);
+
+static GList *gst_mpd_client_fetch_external_period (GstMpdClient * client,
+    GstPeriodNode * period_node, gboolean * error);
+static GList *gst_mpd_client_fetch_external_adaptation_set (GstMpdClient *
+    client, GstPeriodNode * period, GstAdaptationSetNode * adapt_set,
+    gboolean * error);
+
+struct GstMpdParserUtcTimingMethod
+{
+  const gchar *name;
+  GstMPDUTCTimingType method;
+};
+
+static const struct GstMpdParserUtcTimingMethod
+    gst_mpdparser_utc_timing_methods[] = {
+  {"urn:mpeg:dash:utc:ntp:2014", GST_MPD_UTCTIMING_TYPE_NTP},
+  {"urn:mpeg:dash:utc:sntp:2014", GST_MPD_UTCTIMING_TYPE_SNTP},
+  {"urn:mpeg:dash:utc:http-head:2014", GST_MPD_UTCTIMING_TYPE_HTTP_HEAD},
+  {"urn:mpeg:dash:utc:http-xsdate:2014", GST_MPD_UTCTIMING_TYPE_HTTP_XSDATE},
+  {"urn:mpeg:dash:utc:http-iso:2014", GST_MPD_UTCTIMING_TYPE_HTTP_ISO},
+  {"urn:mpeg:dash:utc:http-ntp:2014", GST_MPD_UTCTIMING_TYPE_HTTP_NTP},
+  {"urn:mpeg:dash:utc:direct:2014", GST_MPD_UTCTIMING_TYPE_DIRECT},
+  /*
+   * Early working drafts used the :2012 namespace and this namespace is
+   * used by some DASH packagers. To work-around these packagers, we also
+   * accept the early draft scheme names.
+   */
+  {"urn:mpeg:dash:utc:ntp:2012", GST_MPD_UTCTIMING_TYPE_NTP},
+  {"urn:mpeg:dash:utc:sntp:2012", GST_MPD_UTCTIMING_TYPE_SNTP},
+  {"urn:mpeg:dash:utc:http-head:2012", GST_MPD_UTCTIMING_TYPE_HTTP_HEAD},
+  {"urn:mpeg:dash:utc:http-xsdate:2012", GST_MPD_UTCTIMING_TYPE_HTTP_XSDATE},
+  {"urn:mpeg:dash:utc:http-iso:2012", GST_MPD_UTCTIMING_TYPE_HTTP_ISO},
+  {"urn:mpeg:dash:utc:http-ntp:2012", GST_MPD_UTCTIMING_TYPE_HTTP_NTP},
+  {"urn:mpeg:dash:utc:direct:2012", GST_MPD_UTCTIMING_TYPE_DIRECT},
+  {NULL, 0}
+};
 
 /* functions to parse node namespaces, content and properties */
 static gboolean
@@ -214,6 +264,25 @@ gst_mpdparser_get_xml_prop_string (xmlNode * a_node,
     *property_value = (gchar *) prop_string;
     exists = TRUE;
     GST_LOG (" - %s: %s", property_name, prop_string);
+  }
+
+  return exists;
+}
+
+static gboolean
+gst_mpdparser_get_xml_ns_prop_string (xmlNode * a_node,
+    const gchar * ns_name, const gchar * property_name, gchar ** property_value)
+{
+  xmlChar *prop_string;
+  gboolean exists = FALSE;
+
+  prop_string =
+      xmlGetNsProp (a_node, (const xmlChar *) property_name,
+      (const xmlChar *) ns_name);
+  if (prop_string) {
+    *property_value = (gchar *) prop_string;
+    exists = TRUE;
+    GST_LOG (" - %s:%s: %s", ns_name, property_name, prop_string);
   }
 
   return exists;
@@ -249,6 +318,30 @@ gst_mpdparser_get_xml_prop_string_vector_type (xmlNode * a_node,
 }
 
 static gboolean
+gst_mpdparser_get_xml_prop_signed_integer (xmlNode * a_node,
+    const gchar * property_name, gint default_val, gint * property_value)
+{
+  xmlChar *prop_string;
+  gboolean exists = FALSE;
+
+  *property_value = default_val;
+  prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
+  if (prop_string) {
+    if (sscanf ((const gchar *) prop_string, "%d", property_value) == 1) {
+      exists = TRUE;
+      GST_LOG (" - %s: %d", property_name, *property_value);
+    } else {
+      GST_WARNING
+          ("failed to parse signed integer property %s from xml string %s",
+          property_name, prop_string);
+    }
+    xmlFree (prop_string);
+  }
+
+  return exists;
+}
+
+static gboolean
 gst_mpdparser_get_xml_prop_unsigned_integer (xmlNode * a_node,
     const gchar * property_name, guint default_val, guint * property_value)
 {
@@ -258,7 +351,7 @@ gst_mpdparser_get_xml_prop_unsigned_integer (xmlNode * a_node,
   *property_value = default_val;
   prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
   if (prop_string) {
-    if (sscanf ((gchar *) prop_string, "%u", property_value)) {
+    if (sscanf ((gchar *) prop_string, "%u", property_value) == 1) {
       exists = TRUE;
       GST_LOG (" - %s: %u", property_name, *property_value);
     } else {
@@ -282,7 +375,8 @@ gst_mpdparser_get_xml_prop_unsigned_integer_64 (xmlNode * a_node,
   *property_value = default_val;
   prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
   if (prop_string) {
-    if (sscanf ((gchar *) prop_string, "%" G_GUINT64_FORMAT, property_value)) {
+    if (sscanf ((gchar *) prop_string, "%" G_GUINT64_FORMAT,
+            property_value) == 1) {
       exists = TRUE;
       GST_LOG (" - %s: %" G_GUINT64_FORMAT, property_name, *property_value);
     } else {
@@ -315,7 +409,7 @@ gst_mpdparser_get_xml_prop_uint_vector_type (xmlNode * a_node,
         exists = TRUE;
         GST_LOG (" - %s:", property_name);
         for (i = 0; i < *value_size; i++) {
-          if (sscanf ((gchar *) str_vector[i], "%u", &prop_uint_vector[i])) {
+          if (sscanf ((gchar *) str_vector[i], "%u", &prop_uint_vector[i]) == 1) {
             GST_LOG ("    %u", prop_uint_vector[i]);
           } else {
             GST_WARNING
@@ -346,7 +440,7 @@ gst_mpdparser_get_xml_prop_double (xmlNode * a_node,
 
   prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
   if (prop_string) {
-    if (sscanf ((gchar *) prop_string, "%lf", property_value)) {
+    if (sscanf ((gchar *) prop_string, "%lf", property_value) == 1) {
       exists = TRUE;
       GST_LOG (" - %s: %lf", property_name, *property_value);
     } else {
@@ -428,7 +522,7 @@ gst_mpdparser_get_xml_prop_SAP_type (xmlNode * a_node,
 
   prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
   if (prop_string) {
-    if (sscanf ((gchar *) prop_string, "%u", &prop_SAP_type)
+    if (sscanf ((gchar *) prop_string, "%u", &prop_SAP_type) == 1
         && prop_SAP_type <= 6) {
       exists = TRUE;
       *property_value = (GstSAPType) prop_SAP_type;
@@ -449,7 +543,7 @@ gst_mpdparser_get_xml_prop_range (xmlNode * a_node, const gchar * property_name,
     GstRange ** property_value)
 {
   xmlChar *prop_string;
-  guint64 first_byte_pos = 0, last_byte_pos = 0;
+  guint64 first_byte_pos = 0, last_byte_pos = -1;
   guint len, pos;
   gchar *str;
   gboolean exists = FALSE;
@@ -480,10 +574,6 @@ gst_mpdparser_get_xml_prop_range (xmlNode * a_node, const gchar * property_name,
     }
     /* malloc return data structure */
     *property_value = g_slice_new0 (GstRange);
-    if (*property_value == NULL) {
-      GST_WARNING ("Allocation of GstRange failed!");
-      goto error;
-    }
     exists = TRUE;
     (*property_value)->first_byte_pos = first_byte_pos;
     (*property_value)->last_byte_pos = last_byte_pos;
@@ -495,9 +585,9 @@ gst_mpdparser_get_xml_prop_range (xmlNode * a_node, const gchar * property_name,
   return exists;
 
 error:
-  xmlFree (prop_string);
   GST_WARNING ("failed to parse property %s from xml string %s", property_name,
       prop_string);
+  xmlFree (prop_string);
   return FALSE;
 }
 
@@ -537,10 +627,6 @@ gst_mpdparser_get_xml_prop_ratio (xmlNode * a_node,
     }
     /* malloc return data structure */
     *property_value = g_slice_new0 (GstRatio);
-    if (*property_value == NULL) {
-      GST_WARNING ("Allocation of GstRatio failed!");
-      goto error;
-    }
     exists = TRUE;
     (*property_value)->num = num;
     (*property_value)->den = den;
@@ -551,9 +637,9 @@ gst_mpdparser_get_xml_prop_ratio (xmlNode * a_node,
   return exists;
 
 error:
-  xmlFree (prop_string);
   GST_WARNING ("failed to parse property %s from xml string %s", property_name,
       prop_string);
+  xmlFree (prop_string);
   return FALSE;
 }
 
@@ -589,10 +675,6 @@ gst_mpdparser_get_xml_prop_framerate (xmlNode * a_node,
     }
     /* alloc return data structure */
     *property_value = g_slice_new0 (GstFrameRate);
-    if (*property_value == NULL) {
-      GST_WARNING ("Allocation of GstFrameRate failed!");
-      goto error;
-    }
     exists = TRUE;
     (*property_value)->num = num;
     (*property_value)->den = den;
@@ -606,9 +688,9 @@ gst_mpdparser_get_xml_prop_framerate (xmlNode * a_node,
   return exists;
 
 error:
-  xmlFree (prop_string);
   GST_WARNING ("failed to parse property %s from xml string %s", property_name,
       prop_string);
+  xmlFree (prop_string);
   return FALSE;
 }
 
@@ -641,10 +723,6 @@ gst_mpdparser_get_xml_prop_cond_uint (xmlNode * a_node,
 
     /* alloc return data structure */
     *property_value = g_slice_new0 (GstConditionalUintType);
-    if (*property_value == NULL) {
-      GST_WARNING ("Allocation of GstConditionalUintType failed!");
-      goto error;
-    }
     exists = TRUE;
     (*property_value)->flag = flag;
     (*property_value)->value = val;
@@ -656,9 +734,9 @@ gst_mpdparser_get_xml_prop_cond_uint (xmlNode * a_node,
   return exists;
 
 error:
-  xmlFree (prop_string);
   GST_WARNING ("failed to parse property %s from xml string %s", property_name,
       prop_string);
+  xmlFree (prop_string);
   return FALSE;
 }
 
@@ -746,9 +824,9 @@ gst_mpdparser_get_xml_prop_dateTime (xmlNode * a_node,
   return exists;
 
 error:
-  xmlFree (prop_string);
   GST_WARNING ("failed to parse property %s from xml string %s", property_name,
       prop_string);
+  xmlFree (prop_string);
   return FALSE;
 }
 
@@ -801,6 +879,7 @@ gst_mpdparser_get_xml_prop_duration (xmlNode * a_node,
   gboolean have_ms = FALSE;
   gboolean exists = FALSE;
 
+  *property_value = default_value;
   prop_string = xmlGetProp (a_node, (const xmlChar *) property_name);
   if (prop_string) {
     len = xmlStrlen (prop_string);
@@ -923,9 +1002,6 @@ gst_mpdparser_get_xml_prop_duration (xmlNode * a_node,
     GST_LOG (" - %s: %" G_GINT64_FORMAT, property_name, *property_value);
   }
 
-  if (!exists) {
-    *property_value = default_value;
-  }
   return exists;
 
 error:
@@ -949,6 +1025,44 @@ gst_mpdparser_get_xml_node_content (xmlNode * a_node, gchar ** content)
   return exists;
 }
 
+static gboolean
+gst_mpdparser_get_xml_node_as_string (xmlNode * a_node, gchar ** content)
+{
+  gboolean exists = FALSE;
+  const char *txt_encoding;
+  xmlOutputBufferPtr out_buf;
+
+  txt_encoding = (const char *) a_node->doc->encoding;
+  out_buf = xmlAllocOutputBuffer (NULL);
+  g_assert (out_buf != NULL);
+  xmlNodeDumpOutput (out_buf, a_node->doc, a_node, 0, 0, txt_encoding);
+  xmlOutputBufferFlush (out_buf);
+#ifdef LIBXML2_NEW_BUFFER
+  if (xmlOutputBufferGetSize (out_buf) > 0) {
+    *content =
+        (gchar *) xmlStrndup (xmlOutputBufferGetContent (out_buf),
+        xmlOutputBufferGetSize (out_buf));
+    exists = TRUE;
+  }
+#else
+  if (out_buf->conv && out_buf->conv->use > 0) {
+    *content =
+        (gchar *) xmlStrndup (out_buf->conv->content, out_buf->conv->use);
+    exists = TRUE;
+  } else if (out_buf->buffer && out_buf->buffer->use > 0) {
+    *content =
+        (gchar *) xmlStrndup (out_buf->buffer->content, out_buf->buffer->use);
+    exists = TRUE;
+  }
+#endif // LIBXML2_NEW_BUFFER
+  (void) xmlOutputBufferClose (out_buf);
+
+  if (exists) {
+    GST_LOG (" - %s: %s", a_node->name, *content);
+  }
+  return exists;
+}
+
 static gchar *
 gst_mpdparser_get_xml_node_namespace (xmlNode * a_node, const gchar * prefix)
 {
@@ -957,9 +1071,11 @@ gst_mpdparser_get_xml_node_namespace (xmlNode * a_node, const gchar * prefix)
 
   if (prefix == NULL) {
     /* return the default namespace */
-    namespace = xmlMemStrdup ((const gchar *) a_node->ns->href);
-    if (namespace) {
-      GST_LOG (" - default namespace: %s", namespace);
+    if (a_node->ns) {
+      namespace = xmlMemStrdup ((const gchar *) a_node->ns->href);
+      if (namespace) {
+        GST_LOG (" - default namespace: %s", namespace);
+      }
     }
   } else {
     /* look for the specified prefix in the namespace list */
@@ -982,10 +1098,6 @@ gst_mpdparser_parse_baseURL_node (GList ** list, xmlNode * a_node)
   GstBaseURL *new_base_url;
 
   new_base_url = g_slice_new0 (GstBaseURL);
-  if (new_base_url == NULL) {
-    GST_WARNING ("Allocation of BaseURL node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_base_url);
 
   GST_LOG ("content of BaseURL node:");
@@ -1004,16 +1116,16 @@ gst_mpdparser_parse_descriptor_type_node (GList ** list, xmlNode * a_node)
   GstDescriptorType *new_descriptor;
 
   new_descriptor = g_slice_new0 (GstDescriptorType);
-  if (new_descriptor == NULL) {
-    GST_WARNING ("Allocation of DescriptorType node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_descriptor);
 
   GST_LOG ("attributes of %s node:", a_node->name);
   gst_mpdparser_get_xml_prop_string (a_node, "schemeIdUri",
       &new_descriptor->schemeIdUri);
-  gst_mpdparser_get_xml_prop_string (a_node, "value", &new_descriptor->value);
+  if (!gst_mpdparser_get_xml_prop_string (a_node, "value",
+          &new_descriptor->value)) {
+    /* if no value attribute, use XML string representation of the node */
+    gst_mpdparser_get_xml_node_as_string (a_node, &new_descriptor->value);
+  }
 }
 
 static void
@@ -1023,10 +1135,6 @@ gst_mpdparser_parse_content_component_node (GList ** list, xmlNode * a_node)
   GstContentComponentNode *new_content_component;
 
   new_content_component = g_slice_new0 (GstContentComponentNode);
-  if (new_content_component == NULL) {
-    GST_WARNING ("Allocation of ContentComponent node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_content_component);
 
   GST_LOG ("attributes of ContentComponent node:");
@@ -1074,10 +1182,6 @@ gst_mpdparser_parse_subrepresentation_node (GList ** list, xmlNode * a_node)
   GstSubRepresentationNode *new_subrep;
 
   new_subrep = g_slice_new0 (GstSubRepresentationNode);
-  if (new_subrep == NULL) {
-    GST_WARNING ("Allocation of SubRepresentation node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_subrep);
 
   GST_LOG ("attributes of SubRepresentation node:");
@@ -1102,14 +1206,10 @@ gst_mpdparser_clone_segment_url (GstSegmentURLNode * seg_url)
 
   if (seg_url) {
     clone = g_slice_new0 (GstSegmentURLNode);
-    if (clone) {
-      clone->media = xmlMemStrdup (seg_url->media);
-      clone->mediaRange = gst_mpdparser_clone_range (seg_url->mediaRange);
-      clone->index = xmlMemStrdup (seg_url->index);
-      clone->indexRange = gst_mpdparser_clone_range (seg_url->indexRange);
-    } else {
-      GST_WARNING ("Allocation of SegmentURL node failed!");
-    }
+    clone->media = xmlMemStrdup (seg_url->media);
+    clone->mediaRange = gst_mpdparser_clone_range (seg_url->mediaRange);
+    clone->index = xmlMemStrdup (seg_url->index);
+    clone->indexRange = gst_mpdparser_clone_range (seg_url->indexRange);
   }
 
   return clone;
@@ -1121,10 +1221,6 @@ gst_mpdparser_parse_segment_url_node (GList ** list, xmlNode * a_node)
   GstSegmentURLNode *new_segment_url;
 
   new_segment_url = g_slice_new0 (GstSegmentURLNode);
-  if (new_segment_url == NULL) {
-    GST_WARNING ("Allocation of SegmentURL node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_segment_url);
 
   GST_LOG ("attributes of SegmentURL node:");
@@ -1143,10 +1239,6 @@ gst_mpdparser_parse_url_type_node (GstURLType ** pointer, xmlNode * a_node)
 
   gst_mpdparser_free_url_type_node (*pointer);
   *pointer = new_url_type = g_slice_new0 (GstURLType);
-  if (new_url_type == NULL) {
-    GST_WARNING ("Allocation of URLType node failed!");
-    return;
-  }
 
   GST_LOG ("attributes of URLType node:");
   gst_mpdparser_get_xml_prop_string (a_node, "sourceURL",
@@ -1161,18 +1253,16 @@ gst_mpdparser_parse_seg_base_type_ext (GstSegmentBaseType ** pointer,
   xmlNode *cur_node;
   GstSegmentBaseType *seg_base_type;
   guint intval;
+  guint64 int64val;
   gboolean boolval;
   GstRange *rangeval;
 
   gst_mpdparser_free_seg_base_type_ext (*pointer);
   *pointer = seg_base_type = g_slice_new0 (GstSegmentBaseType);
-  if (seg_base_type == NULL) {
-    GST_WARNING ("Allocation of SegmentBaseType node failed!");
-    return;
-  }
 
   /* Initialize values that have defaults */
   seg_base_type->indexRangeExact = FALSE;
+  seg_base_type->timescale = 1;
 
   /* Inherit attribute values from parent */
   if (parent) {
@@ -1189,13 +1279,13 @@ gst_mpdparser_parse_seg_base_type_ext (GstSegmentBaseType ** pointer,
   /* We must retrieve each value first to see if it exists.  If it does not
    * exist, we do not want to overwrite an inherited value */
   GST_LOG ("attributes of SegmentBaseType extension:");
-  if (gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "timescale", 0,
+  if (gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "timescale", 1,
           &intval)) {
     seg_base_type->timescale = intval;
   }
-  if (gst_mpdparser_get_xml_prop_unsigned_integer (a_node,
-          "presentationTimeOffset", 0, &intval)) {
-    seg_base_type->presentationTimeOffset = intval;
+  if (gst_mpdparser_get_xml_prop_unsigned_integer_64 (a_node,
+          "presentationTimeOffset", 0, &int64val)) {
+    seg_base_type->presentationTimeOffset = int64val;
   }
   if (gst_mpdparser_get_xml_prop_range (a_node, "indexRange", &rangeval)) {
     if (seg_base_type->indexRange) {
@@ -1233,13 +1323,9 @@ gst_mpdparser_clone_s_node (GstSNode * pointer)
 
   if (pointer) {
     clone = g_slice_new0 (GstSNode);
-    if (clone) {
-      clone->t = pointer->t;
-      clone->d = pointer->d;
-      clone->r = pointer->r;
-    } else {
-      GST_WARNING ("Allocation of S node failed!");
-    }
+    clone->t = pointer->t;
+    clone->d = pointer->d;
+    clone->r = pointer->r;
   }
 
   return clone;
@@ -1251,10 +1337,6 @@ gst_mpdparser_parse_s_node (GQueue * queue, xmlNode * a_node)
   GstSNode *new_s_node;
 
   new_s_node = g_slice_new0 (GstSNode);
-  if (new_s_node == NULL) {
-    GST_WARNING ("Allocation of S node failed!");
-    return;
-  }
   g_queue_push_tail (queue, new_s_node);
 
   GST_LOG ("attributes of S node:");
@@ -1262,7 +1344,7 @@ gst_mpdparser_parse_s_node (GQueue * queue, xmlNode * a_node)
       &new_s_node->t);
   gst_mpdparser_get_xml_prop_unsigned_integer_64 (a_node, "d", 0,
       &new_s_node->d);
-  gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "r", 0, &new_s_node->r);
+  gst_mpdparser_get_xml_prop_signed_integer (a_node, "r", 0, &new_s_node->r);
 }
 
 static GstSegmentTimelineNode *
@@ -1324,10 +1406,9 @@ gst_mpdparser_parse_mult_seg_base_type_ext (GstMultSegmentBaseType ** pointer,
 
   gst_mpdparser_free_mult_seg_base_type_ext (*pointer);
   *pointer = mult_seg_base_type = g_slice_new0 (GstMultSegmentBaseType);
-  if (mult_seg_base_type == NULL) {
-    GST_WARNING ("Allocation of MultipleSegmentBaseType node failed!");
-    return;
-  }
+
+  mult_seg_base_type->duration = 0;
+  mult_seg_base_type->startNumber = 1;
 
   /* Inherit attribute values from parent */
   if (parent) {
@@ -1344,6 +1425,7 @@ gst_mpdparser_parse_mult_seg_base_type_ext (GstMultSegmentBaseType ** pointer,
           &intval)) {
     mult_seg_base_type->duration = intval;
   }
+
   if (gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "startNumber", 1,
           &intval)) {
     mult_seg_base_type->startNumber = intval;
@@ -1376,13 +1458,10 @@ gst_mpdparser_parse_segment_list_node (GstSegmentListNode ** pointer,
 {
   xmlNode *cur_node;
   GstSegmentListNode *new_segment_list;
+  gchar *actuate;
 
   gst_mpdparser_free_segment_list_node (*pointer);
   *pointer = new_segment_list = g_slice_new0 (GstSegmentListNode);
-  if (new_segment_list == NULL) {
-    GST_WARNING ("Allocation of SegmentList node failed!");
-    return;
-  }
 
   /* Inherit attribute values from parent */
   if (parent) {
@@ -1395,6 +1474,16 @@ gst_mpdparser_parse_segment_list_node (GstSegmentListNode ** pointer,
           g_list_append (new_segment_list->SegmentURL,
           gst_mpdparser_clone_segment_url (seg_url));
     }
+  }
+
+  new_segment_list->actuate = GST_XLINK_ACTUATE_ON_REQUEST;
+  if (gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "href", &new_segment_list->xlink_href)
+      && gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "actuate", &actuate)) {
+    if (strcmp (actuate, "onLoad") == 0)
+      new_segment_list->actuate = GST_XLINK_ACTUATE_ON_LOAD;
+    xmlFree (actuate);
   }
 
   GST_LOG ("extension of SegmentList node:");
@@ -1422,10 +1511,6 @@ gst_mpdparser_parse_representation_base_type (GstRepresentationBaseType **
 
   gst_mpdparser_free_representation_base_type (*pointer);
   *pointer = representation_base = g_slice_new0 (GstRepresentationBaseType);
-  if (representation_base == NULL) {
-    GST_WARNING ("Allocation of RepresentationBaseType node failed!");
-    return;
-  }
 
   GST_LOG ("attributes of RepresentationBaseType extension:");
   gst_mpdparser_get_xml_prop_string (a_node, "profiles",
@@ -1483,10 +1568,6 @@ gst_mpdparser_parse_representation_node (GList ** list, xmlNode * a_node,
   GstRepresentationNode *new_representation;
 
   new_representation = g_slice_new0 (GstRepresentationNode);
-  if (new_representation == NULL) {
-    GST_WARNING ("Allocation of Representation node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_representation);
 
   GST_LOG ("attributes of Representation node:");
@@ -1535,15 +1616,23 @@ gst_mpdparser_parse_adaptation_set_node (GList ** list, xmlNode * a_node,
 {
   xmlNode *cur_node;
   GstAdaptationSetNode *new_adap_set;
+  gchar *actuate;
 
   new_adap_set = g_slice_new0 (GstAdaptationSetNode);
-  if (new_adap_set == NULL) {
-    GST_WARNING ("Allocation of AdaptationSet node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_adap_set);
 
   GST_LOG ("attributes of AdaptationSet node:");
+
+  new_adap_set->actuate = GST_XLINK_ACTUATE_ON_REQUEST;
+  if (gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "href", &new_adap_set->xlink_href)
+      && gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "actuate", &actuate)) {
+    if (strcmp (actuate, "onLoad") == 0)
+      new_adap_set->actuate = GST_XLINK_ACTUATE_ON_LOAD;
+    xmlFree (actuate);
+  }
+
   gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "id", 0,
       &new_adap_set->id);
   gst_mpdparser_get_xml_prop_unsigned_integer (a_node, "group", 0,
@@ -1570,6 +1659,8 @@ gst_mpdparser_parse_adaptation_set_node (GList ** list, xmlNode * a_node,
       &new_adap_set->maxFrameRate);
   gst_mpdparser_get_xml_prop_cond_uint (a_node, "segmentAlignment",
       &new_adap_set->segmentAlignment);
+  gst_mpdparser_get_xml_prop_boolean (a_node, "bitstreamSwitching",
+      FALSE, &new_adap_set->bitstreamSwitching);
   gst_mpdparser_get_xml_prop_cond_uint (a_node, "subsegmentAlignment",
       &new_adap_set->subsegmentAlignment);
   gst_mpdparser_get_xml_prop_SAP_type (a_node, "subsegmentStartsWithSAP",
@@ -1633,10 +1724,6 @@ gst_mpdparser_parse_subset_node (GList ** list, xmlNode * a_node)
   GstSubsetNode *new_subset;
 
   new_subset = g_slice_new0 (GstSubsetNode);
-  if (new_subset == NULL) {
-    GST_WARNING ("Allocation of Subset node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_subset);
 
   GST_LOG ("attributes of Subset node:");
@@ -1653,38 +1740,38 @@ gst_mpdparser_parse_segment_template_node (GstSegmentTemplateNode ** pointer,
 
   gst_mpdparser_free_segment_template_node (*pointer);
   *pointer = new_segment_template = g_slice_new0 (GstSegmentTemplateNode);
-  if (new_segment_template == NULL) {
-    GST_WARNING ("Allocation of SegmentTemplate node failed!");
-    return;
-  }
-
-  /* Inherit attribute values from parent */
-  if (parent) {
-    new_segment_template->media = xmlMemStrdup (parent->media);
-    new_segment_template->index = xmlMemStrdup (parent->index);
-    new_segment_template->initialization =
-        xmlMemStrdup (parent->initialization);
-    new_segment_template->bitstreamSwitching =
-        xmlMemStrdup (parent->bitstreamSwitching);
-  }
 
   GST_LOG ("extension of SegmentTemplate node:");
   gst_mpdparser_parse_mult_seg_base_type_ext
       (&new_segment_template->MultSegBaseType, a_node,
       (parent ? parent->MultSegBaseType : NULL));
 
+  /* Inherit attribute values from parent when the value isn't found */
   GST_LOG ("attributes of SegmentTemplate node:");
   if (gst_mpdparser_get_xml_prop_string (a_node, "media", &strval)) {
     new_segment_template->media = strval;
+  } else if (parent) {
+    new_segment_template->media = xmlMemStrdup (parent->media);
   }
+
   if (gst_mpdparser_get_xml_prop_string (a_node, "index", &strval)) {
     new_segment_template->index = strval;
+  } else if (parent) {
+    new_segment_template->index = xmlMemStrdup (parent->index);
   }
+
   if (gst_mpdparser_get_xml_prop_string (a_node, "initialization", &strval)) {
     new_segment_template->initialization = strval;
+  } else if (parent) {
+    new_segment_template->initialization =
+        xmlMemStrdup (parent->initialization);
   }
+
   if (gst_mpdparser_get_xml_prop_string (a_node, "bitstreamSwitching", &strval)) {
     new_segment_template->bitstreamSwitching = strval;
+  } else if (parent) {
+    new_segment_template->bitstreamSwitching =
+        xmlMemStrdup (parent->bitstreamSwitching);
   }
 }
 
@@ -1693,17 +1780,23 @@ gst_mpdparser_parse_period_node (GList ** list, xmlNode * a_node)
 {
   xmlNode *cur_node;
   GstPeriodNode *new_period;
+  gchar *actuate;
 
   new_period = g_slice_new0 (GstPeriodNode);
-  if (new_period == NULL) {
-    GST_WARNING ("Allocation of Period node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_period);
 
-  new_period->start = GST_CLOCK_TIME_NONE;
-
   GST_LOG ("attributes of Period node:");
+
+  new_period->actuate = GST_XLINK_ACTUATE_ON_REQUEST;
+  if (gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "href", &new_period->xlink_href)
+      && gst_mpdparser_get_xml_ns_prop_string (a_node,
+          "http://www.w3.org/1999/xlink", "actuate", &actuate)) {
+    if (strcmp (actuate, "onLoad") == 0)
+      new_period->actuate = GST_XLINK_ACTUATE_ON_LOAD;
+    xmlFree (actuate);
+  }
+
   gst_mpdparser_get_xml_prop_string (a_node, "id", &new_period->id);
   gst_mpdparser_get_xml_prop_duration (a_node, "start", -1, &new_period->start);
   gst_mpdparser_get_xml_prop_duration (a_node, "duration", -1,
@@ -1752,10 +1845,6 @@ gst_mpdparser_parse_program_info_node (GList ** list, xmlNode * a_node)
   GstProgramInformationNode *new_prog_info;
 
   new_prog_info = g_slice_new0 (GstProgramInformationNode);
-  if (new_prog_info == NULL) {
-    GST_WARNING ("Allocation of ProgramInfo node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_prog_info);
 
   GST_LOG ("attributes of ProgramInformation node:");
@@ -1785,10 +1874,6 @@ gst_mpdparser_parse_metrics_range_node (GList ** list, xmlNode * a_node)
   GstMetricsRangeNode *new_metrics_range;
 
   new_metrics_range = g_slice_new0 (GstMetricsRangeNode);
-  if (new_metrics_range == NULL) {
-    GST_WARNING ("Allocation of Metrics Range node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_metrics_range);
 
   GST_LOG ("attributes of Metrics Range node:");
@@ -1805,10 +1890,6 @@ gst_mpdparser_parse_metrics_node (GList ** list, xmlNode * a_node)
   GstMetricsNode *new_metrics;
 
   new_metrics = g_slice_new0 (GstMetricsNode);
-  if (new_metrics == NULL) {
-    GST_WARNING ("Allocation of Metrics node failed!");
-    return;
-  }
   *list = g_list_append (*list, new_metrics);
 
   GST_LOG ("attributes of Metrics node:");
@@ -1831,6 +1912,46 @@ gst_mpdparser_parse_metrics_node (GList ** list, xmlNode * a_node)
   }
 }
 
+/* The UTCTiming element is defined in
+ * ISO/IEC 23009-1:2014/PDAM 1 "Information technology — Dynamic adaptive streaming over HTTP (DASH) — Part 1: Media presentation description and segment formats / Amendment 1: High Profile and Availability Time Synchronization"
+ */
+static void
+gst_mpdparser_parse_utctiming_node (GList ** list, xmlNode * a_node)
+{
+  GstUTCTimingNode *new_timing;
+  gchar *method = NULL;
+  gchar *value = NULL;
+
+  new_timing = g_slice_new0 (GstUTCTimingNode);
+
+  GST_LOG ("attributes of UTCTiming node:");
+  if (gst_mpdparser_get_xml_prop_string (a_node, "schemeIdUri", &method)) {
+    for (int i = 0; gst_mpdparser_utc_timing_methods[i].name; ++i) {
+      if (g_ascii_strncasecmp (gst_mpdparser_utc_timing_methods[i].name,
+              method, strlen (gst_mpdparser_utc_timing_methods[i].name)) == 0) {
+        new_timing->method = gst_mpdparser_utc_timing_methods[i].method;
+        break;
+      }
+    }
+    xmlFree (method);
+  }
+
+  if (gst_mpdparser_get_xml_prop_string (a_node, "value", &value)) {
+    int max_tokens = 0;
+    if (GST_MPD_UTCTIMING_TYPE_DIRECT == new_timing->method) {
+      /* The GST_MPD_UTCTIMING_TYPE_DIRECT method is a special case
+       * that is not a space separated list.
+       */
+      max_tokens = 1;
+    }
+    new_timing->urls = g_strsplit (value, " ", max_tokens);
+    xmlFree (value);
+    *list = g_list_append (*list, new_timing);
+  } else {
+    gst_mpdparser_free_utctiming_node (new_timing);
+  }
+}
+
 static void
 gst_mpdparser_parse_root_node (GstMPDNode ** pointer, xmlNode * a_node)
 {
@@ -1839,10 +1960,6 @@ gst_mpdparser_parse_root_node (GstMPDNode ** pointer, xmlNode * a_node)
 
   gst_mpdparser_free_mpd_node (*pointer);
   *pointer = new_mpd = g_slice_new0 (GstMPDNode);
-  if (new_mpd == NULL) {
-    GST_WARNING ("Allocation of MPD node failed!");
-    return;
-  }
 
   GST_LOG ("namespaces of root MPD node:");
   new_mpd->default_namespace =
@@ -1889,6 +2006,8 @@ gst_mpdparser_parse_root_node (GstMPDNode ** pointer, xmlNode * a_node)
         gst_mpdparser_parse_location_node (&new_mpd->Locations, cur_node);
       } else if (xmlStrcmp (cur_node->name, (xmlChar *) "Metrics") == 0) {
         gst_mpdparser_parse_metrics_node (&new_mpd->Metrics, cur_node);
+      } else if (xmlStrcmp (cur_node->name, (xmlChar *) "UTCTiming") == 0) {
+        gst_mpdparser_parse_utctiming_node (&new_mpd->UTCTiming, cur_node);
       }
     }
   }
@@ -1919,11 +2038,11 @@ gst_mpdparser_representation_get_mimetype (GstAdaptationSetNode * adapt_set,
     mime = adapt_set->RepresentationBase->mimeType;
   }
 
-  if (strncmp_ext (mime, "audio"))
+  if (strncmp_ext (mime, "audio") == 0)
     return GST_STREAM_AUDIO;
-  if (strncmp_ext (mime, "video"))
+  if (strncmp_ext (mime, "video") == 0)
     return GST_STREAM_VIDEO;
-  if (strncmp_ext (mime, "application"))
+  if (strncmp_ext (mime, "application") == 0)
     return GST_STREAM_APPLICATION;
 
   return GST_STREAM_UNKNOWN;
@@ -1994,34 +2113,26 @@ gst_mpdparser_get_segment_base (GstPeriodNode * Period,
 {
   GstSegmentBaseType *SegmentBase = NULL;
 
-  if (Representation && Representation->SegmentBase
-      && Representation->SegmentBase->Initialization) {
+  if (Representation && Representation->SegmentBase) {
     SegmentBase = Representation->SegmentBase;
-  } else if (AdaptationSet && AdaptationSet->SegmentBase
-      && AdaptationSet->SegmentBase->Initialization) {
+  } else if (AdaptationSet && AdaptationSet->SegmentBase) {
     SegmentBase = AdaptationSet->SegmentBase;
-  } else if (Period && Period->SegmentBase
-      && Period->SegmentBase->Initialization) {
+  } else if (Period && Period->SegmentBase) {
     SegmentBase = Period->SegmentBase;
   }
   /* the SegmentBase element could be encoded also inside a SegmentList element */
   if (SegmentBase == NULL) {
     if (Representation && Representation->SegmentList
         && Representation->SegmentList->MultSegBaseType
-        && Representation->SegmentList->MultSegBaseType->SegBaseType
-        && Representation->SegmentList->MultSegBaseType->
-        SegBaseType->Initialization) {
+        && Representation->SegmentList->MultSegBaseType->SegBaseType) {
       SegmentBase = Representation->SegmentList->MultSegBaseType->SegBaseType;
     } else if (AdaptationSet && AdaptationSet->SegmentList
         && AdaptationSet->SegmentList->MultSegBaseType
-        && AdaptationSet->SegmentList->MultSegBaseType->SegBaseType
-        && AdaptationSet->SegmentList->MultSegBaseType->
-        SegBaseType->Initialization) {
+        && AdaptationSet->SegmentList->MultSegBaseType->SegBaseType) {
       SegmentBase = AdaptationSet->SegmentList->MultSegBaseType->SegBaseType;
     } else if (Period && Period->SegmentList
         && Period->SegmentList->MultSegBaseType
-        && Period->SegmentList->MultSegBaseType->SegBaseType
-        && Period->SegmentList->MultSegBaseType->SegBaseType->Initialization) {
+        && Period->SegmentList->MultSegBaseType->SegBaseType) {
       SegmentBase = Period->SegmentList->MultSegBaseType->SegBaseType;
     }
   }
@@ -2064,7 +2175,7 @@ gst_mpdparser_get_rep_idx_with_max_bandwidth (GList * Representations,
     return -1;
 
   if (max_bandwidth <= 0)       /* 0 => get lowest representation available */
-    return 0;
+    return gst_mpdparser_get_rep_idx_with_min_bandwidth (Representations);
 
   for (list = g_list_first (Representations); list; list = g_list_next (list)) {
     representation = (GstRepresentationNode *) list->data;
@@ -2079,21 +2190,152 @@ gst_mpdparser_get_rep_idx_with_max_bandwidth (GList * Representations,
 }
 
 static GstSegmentListNode *
-gst_mpdparser_get_segment_list (GstPeriodNode * Period,
+gst_mpd_client_fetch_external_segment_list (GstMpdClient * client,
+    GstPeriodNode * Period,
+    GstAdaptationSetNode * AdaptationSet,
+    GstRepresentationNode * Representation,
+    GstSegmentListNode * parent, GstSegmentListNode * segment_list,
+    gboolean * error)
+{
+  GstFragment *download;
+  GstBuffer *segment_list_buffer;
+  GstMapInfo map;
+  GError *err = NULL;
+  xmlDocPtr doc;
+  GstUri *base_uri, *uri;
+  gchar *query = NULL;
+  gchar *uri_string;
+  GstSegmentListNode *new_segment_list = NULL;
+
+  *error = FALSE;
+
+  /* ISO/IEC 23009-1:2014 5.5.3 4)
+   * Remove nodes that resolve to nothing when resolving
+   */
+  if (strcmp (segment_list->xlink_href,
+          "urn:mpeg:dash:resolve-to-zero:2013") == 0) {
+    return NULL;
+  }
+
+  if (!client->downloader) {
+    *error = TRUE;
+    return NULL;
+  }
+
+  /* Build absolute URI */
+
+  /* Get base URI at the MPD level */
+  base_uri =
+      gst_uri_from_string (client->
+      mpd_base_uri ? client->mpd_base_uri : client->mpd_uri);
+
+  /* combine a BaseURL at the MPD level with the current base url */
+  base_uri = combine_urls (base_uri, client->mpd_node->BaseURLs, &query, 0);
+
+  /* combine a BaseURL at the Period level with the current base url */
+  base_uri = combine_urls (base_uri, Period->BaseURLs, &query, 0);
+
+  if (AdaptationSet) {
+    /* combine a BaseURL at the AdaptationSet level with the current base url */
+    base_uri = combine_urls (base_uri, AdaptationSet->BaseURLs, &query, 0);
+
+    if (Representation) {
+      /* combine a BaseURL at the Representation level with the current base url */
+      base_uri = combine_urls (base_uri, Representation->BaseURLs, &query, 0);
+    }
+  }
+
+  uri = gst_uri_from_string_with_base (base_uri, segment_list->xlink_href);
+  if (query)
+    gst_uri_set_query_string (uri, query);
+  g_free (query);
+  uri_string = gst_uri_to_string (uri);
+  gst_uri_unref (base_uri);
+  gst_uri_unref (uri);
+
+  download =
+      gst_uri_downloader_fetch_uri (client->downloader,
+      uri_string, client->mpd_uri, TRUE, FALSE, TRUE, &err);
+  g_free (uri_string);
+
+  if (!download) {
+    GST_ERROR ("Failed to download external SegmentList node at '%s': %s",
+        segment_list->xlink_href, err->message);
+    g_clear_error (&err);
+    *error = TRUE;
+    return NULL;
+  }
+
+  segment_list_buffer = gst_fragment_get_buffer (download);
+  g_object_unref (download);
+
+  gst_buffer_map (segment_list_buffer, &map, GST_MAP_READ);
+
+  doc =
+      xmlReadMemory ((const gchar *) map.data, map.size, "noname.xml", NULL,
+      XML_PARSE_NONET);
+  if (doc) {
+    xmlNode *root_element = xmlDocGetRootElement (doc);
+
+    if (root_element->type != XML_ELEMENT_NODE ||
+        xmlStrcmp (root_element->name, (xmlChar *) "SegmentList") != 0) {
+      xmlFreeDoc (doc);
+      gst_buffer_unmap (segment_list_buffer, &map);
+      gst_buffer_unref (segment_list_buffer);
+      *error = TRUE;
+      return NULL;
+    }
+
+    gst_mpdparser_parse_segment_list_node (&new_segment_list, root_element,
+        parent);
+  } else {
+    GST_ERROR ("Failed to parse adaptation set node XML");
+    gst_buffer_unmap (segment_list_buffer, &map);
+    gst_buffer_unref (segment_list_buffer);
+    *error = TRUE;
+    return NULL;
+  }
+  gst_buffer_unmap (segment_list_buffer, &map);
+  gst_buffer_unref (segment_list_buffer);
+
+  return new_segment_list;
+}
+
+static GstSegmentListNode *
+gst_mpdparser_get_segment_list (GstMpdClient * client, GstPeriodNode * Period,
     GstAdaptationSetNode * AdaptationSet,
     GstRepresentationNode * Representation)
 {
-  GstSegmentListNode *SegmentList = NULL;
+  GstSegmentListNode **SegmentList;
+  GstSegmentListNode *ParentSegmentList = NULL;
 
   if (Representation && Representation->SegmentList) {
-    SegmentList = Representation->SegmentList;
+    SegmentList = &Representation->SegmentList;
+    ParentSegmentList = AdaptationSet->SegmentList;
   } else if (AdaptationSet && AdaptationSet->SegmentList) {
-    SegmentList = AdaptationSet->SegmentList;
+    SegmentList = &AdaptationSet->SegmentList;
+    ParentSegmentList = Period->SegmentList;
+    Representation = NULL;
   } else {
-    SegmentList = Period->SegmentList;
+    Representation = NULL;
+    AdaptationSet = NULL;
+    SegmentList = &Period->SegmentList;
   }
 
-  return SegmentList;
+  /* Resolve external segment list here. */
+  if (*SegmentList && (*SegmentList)->xlink_href) {
+    GstSegmentListNode *new_segment_list;
+    gboolean error;
+
+    new_segment_list =
+        gst_mpd_client_fetch_external_segment_list (client, Period,
+        AdaptationSet, Representation, ParentSegmentList, *SegmentList, &error);
+
+    gst_mpdparser_free_segment_list_node (*SegmentList);
+    *SegmentList = new_segment_list;
+  }
+
+  return *SegmentList;
 }
 
 /* memory management functions */
@@ -2126,6 +2368,8 @@ gst_mpdparser_free_mpd_node (GstMPDNode * mpd_node)
         (GDestroyNotify) gst_mpdparser_free_period_node);
     g_list_free_full (mpd_node->Metrics,
         (GDestroyNotify) gst_mpdparser_free_metrics_node);
+    g_list_free_full (mpd_node->UTCTiming,
+        (GDestroyNotify) gst_mpdparser_free_utctiming_node);
     g_slice_free (GstMPDNode, mpd_node);
   }
 }
@@ -2183,6 +2427,8 @@ gst_mpdparser_free_period_node (GstPeriodNode * period_node)
         (GDestroyNotify) gst_mpdparser_free_subset_node);
     g_list_free_full (period_node->BaseURLs,
         (GDestroyNotify) gst_mpdparser_free_base_url_node);
+    if (period_node->xlink_href)
+      xmlFree (period_node->xlink_href);
     g_slice_free (GstPeriodNode, period_node);
   }
 }
@@ -2282,6 +2528,8 @@ gst_mpdparser_free_adaptation_set_node (GstAdaptationSetNode *
         (GDestroyNotify) gst_mpdparser_free_representation_node);
     g_list_free_full (adaptation_set_node->ContentComponents,
         (GDestroyNotify) gst_mpdparser_free_content_component_node);
+    if (adaptation_set_node->xlink_href)
+      xmlFree (adaptation_set_node->xlink_href);
     g_slice_free (GstAdaptationSetNode, adaptation_set_node);
   }
 }
@@ -2397,6 +2645,8 @@ gst_mpdparser_free_segment_list_node (GstSegmentListNode * segment_list_node)
     /* MultipleSegmentBaseType extension */
     gst_mpdparser_free_mult_seg_base_type_ext
         (segment_list_node->MultSegBaseType);
+    if (segment_list_node->xlink_href)
+      xmlFree (segment_list_node->xlink_href);
     g_slice_free (GstSegmentListNode, segment_list_node);
   }
 }
@@ -2464,6 +2714,16 @@ gst_mpdparser_free_content_component_node (GstContentComponentNode *
 }
 
 static void
+gst_mpdparser_free_utctiming_node (GstUTCTimingNode * timing_type)
+{
+  if (timing_type) {
+    if (timing_type->urls)
+      g_strfreev (timing_type->urls);
+    g_slice_free (GstUTCTimingNode, timing_type);
+  }
+}
+
+static void
 gst_mpdparser_free_stream_period (GstStreamPeriod * stream_period)
 {
   if (stream_period) {
@@ -2524,19 +2784,95 @@ gst_mpdparser_get_initializationURL (GstActiveStream * stream,
   const gchar *url_prefix;
 
   g_return_val_if_fail (stream != NULL, NULL);
-  g_return_val_if_fail (InitializationURL != NULL, NULL);
 
-  url_prefix = InitializationURL->sourceURL ? InitializationURL->sourceURL :
-      stream->baseURL;
+  url_prefix = (InitializationURL
+      && InitializationURL->sourceURL) ? InitializationURL->
+      sourceURL : stream->baseURL;
 
   return url_prefix;
+}
+
+/* ISO/IEC 23009-1:2004 5.3.9.4.4 */
+static gboolean
+validate_format (const gchar * format)
+{
+  gchar *p;
+
+  /* Check if there is a % at all */
+  p = strchr (format, '%');
+  if (!p)
+    return TRUE;
+  p++;
+
+  /* Following the % must be a 0, or any of d, x or u.
+   * x and u are not part of the spec, but don't hurt us
+   */
+  if (p[0] == '0') {
+    p++;
+
+    while (g_ascii_isdigit (*p))
+      p++;
+  }
+
+  /* After any 0 and alphanumeric values, there must be
+   * an d, x or u.
+   */
+  if (p[0] != 'd' && p[0] != 'x' && p[0] != 'u')
+    return FALSE;
+  p++;
+
+  /* And then potentially more characters without any
+   * further %, even if the spec does not mention this
+   */
+  p = strchr (p, '%');
+  if (p)
+    return FALSE;
+
+  return TRUE;
+}
+
+static gchar *
+promote_format_to_uint64 (const gchar * format)
+{
+  gchar *p;
+  gchar *promoted_format;
+
+  /* Must be called with a validated format! */
+  g_return_val_if_fail (validate_format (format), NULL);
+
+  /* Check if there is a % at all */
+  p = strchr (format, '%');
+  if (!p)
+    return g_strdup (format);
+  p++;
+
+  /* Following the % must be a 0, or any of d, x or u.
+   * x and u are not part of the spec, but don't hurt us
+   */
+  if (p[0] == '0') {
+    p++;
+
+    while (g_ascii_isdigit (*p))
+      p++;
+  }
+
+  /* After any 0 and alphanumeric values, there must be
+   * an d, x or u. Otherwise validation would have failed
+   */
+  g_assert (p[0] == 'd' || p[0] == 'x' || p[0] == 'u');
+
+  promoted_format =
+      g_strdup_printf ("%.*s" G_GINT64_MODIFIER "%s", (gint) (p - format),
+      format, p);
+
+  return promoted_format;
 }
 
 static gchar *
 gst_mpdparser_build_URL_from_template (const gchar * url_template,
     const gchar * id, guint number, guint bandwidth, guint64 time)
 {
-  static gchar default_format[] = "%01d";
+  static const gchar default_format[] = "%01d";
   gchar **tokens, *token, *ret;
   const gchar *format;
   gint i, num_tokens;
@@ -2562,6 +2898,9 @@ gst_mpdparser_build_URL_from_template (const gchar * url_template,
       if (strlen (token) > 6) {
         format = token + 6;     /* format tag */
       }
+      if (!validate_format (format))
+        goto invalid_format;
+
       tokens[i] = g_strdup_printf (format, number);
       g_free (token);
       last_token_par = TRUE;
@@ -2569,16 +2908,24 @@ gst_mpdparser_build_URL_from_template (const gchar * url_template,
       if (strlen (token) > 9) {
         format = token + 9;     /* format tag */
       }
+      if (!validate_format (format))
+        goto invalid_format;
+
       tokens[i] = g_strdup_printf (format, bandwidth);
       g_free (token);
       last_token_par = TRUE;
     } else if (!strncmp (token, "Time", 4)) {
+      gchar *promoted_format;
+
       if (strlen (token) > 4) {
         format = token + 4;     /* format tag */
-      } else {
-        format = "%" G_GUINT64_FORMAT;
       }
-      tokens[i] = g_strdup_printf (format, time);
+      if (!validate_format (format))
+        goto invalid_format;
+
+      promoted_format = promote_format_to_uint64 (format);
+      tokens[i] = g_strdup_printf (promoted_format, time);
+      g_free (promoted_format);
       g_free (token);
       last_token_par = TRUE;
     } else if (!g_strcmp0 (token, "")) {
@@ -2586,6 +2933,8 @@ gst_mpdparser_build_URL_from_template (const gchar * url_template,
         tokens[i] = g_strdup_printf ("%s", "$");
         g_free (token);
         last_token_par = TRUE;
+      } else {
+        last_token_par = FALSE;
       }
     } else {
       last_token_par = FALSE;
@@ -2593,9 +2942,55 @@ gst_mpdparser_build_URL_from_template (const gchar * url_template,
   }
 
   ret = g_strjoinv (NULL, tokens);
+
   g_strfreev (tokens);
 
   return ret;
+
+invalid_format:
+  {
+    GST_ERROR ("Invalid format '%s' in '%s'", format, token);
+
+    g_strfreev (tokens);
+
+    return NULL;
+  }
+}
+
+guint
+gst_mpd_client_get_period_index_at_time (GstMpdClient * client,
+    GstDateTime * time)
+{
+  GList *iter;
+  guint period_idx = G_MAXUINT;
+  guint idx;
+  gint64 time_offset;
+  GstDateTime *avail_start =
+      gst_mpd_client_get_availability_start_time (client);
+  GstStreamPeriod *stream_period;
+
+  if (avail_start == NULL)
+    return 0;
+
+  time_offset = gst_mpd_client_calculate_time_difference (avail_start, time);
+  gst_date_time_unref (avail_start);
+
+  if (time_offset < 0)
+    return 0;
+
+  if (!gst_mpd_client_setup_media_presentation (client, time_offset, -1, NULL))
+    return 0;
+
+  for (idx = 0, iter = client->periods; iter; idx++, iter = g_list_next (iter)) {
+    stream_period = iter->data;
+    if (stream_period->start <= time_offset
+        && stream_period->start + stream_period->duration > time_offset) {
+      period_idx = idx;
+      break;
+    }
+  }
+
+  return period_idx;
 }
 
 static GstStreamPeriod *
@@ -2614,12 +3009,8 @@ gst_mpdparser_clone_range (GstRange * range)
 
   if (range) {
     clone = g_slice_new0 (GstRange);
-    if (clone) {
-      clone->first_byte_pos = range->first_byte_pos;
-      clone->last_byte_pos = range->last_byte_pos;
-    } else {
-      GST_WARNING ("Allocation of GstRange failed!");
-    }
+    clone->first_byte_pos = range->first_byte_pos;
+    clone->last_byte_pos = range->last_byte_pos;
   }
 
   return clone;
@@ -2633,17 +3024,46 @@ gst_mpdparser_clone_URL (GstURLType * url)
 
   if (url) {
     clone = g_slice_new0 (GstURLType);
-    if (clone) {
-      if (url->sourceURL) {
-        clone->sourceURL = xmlMemStrdup (url->sourceURL);
-      }
-      clone->range = gst_mpdparser_clone_range (url->range);
-    } else {
-      GST_WARNING ("Allocation of URLType node failed!");
+    if (url->sourceURL) {
+      clone->sourceURL = xmlMemStrdup (url->sourceURL);
     }
+    clone->range = gst_mpdparser_clone_range (url->range);
   }
 
   return clone;
+}
+
+/*
+ * Combine a base url with the current stream base url from the list of
+ * baseURLs. Takes ownership of base and returns a new base.
+ */
+static GstUri *
+combine_urls (GstUri * base, GList * list, gchar ** query, guint idx)
+{
+  GstBaseURL *baseURL;
+  GstUri *ret = base;
+
+  if (list != NULL) {
+    baseURL = g_list_nth_data (list, idx);
+    if (!baseURL) {
+      baseURL = list->data;
+    }
+
+    ret = gst_uri_from_string_with_base (base, baseURL->baseURL);
+    gst_uri_unref (base);
+
+    if (ret && query) {
+      if (*query)
+        g_free (*query);
+      *query = gst_uri_get_query_string (ret);
+      if (*query) {
+        ret = gst_uri_make_writable (ret);
+        gst_uri_set_query_table (ret, NULL);
+      }
+    }
+  }
+
+  return ret;
 }
 
 /* select a stream and extract the baseURL (if present) */
@@ -2652,107 +3072,59 @@ gst_mpdparser_parse_baseURL (GstMpdClient * client, GstActiveStream * stream,
     gchar ** query)
 {
   GstStreamPeriod *stream_period;
-  GstBaseURL *baseURL;
-  gchar *mpd_uri;
-  GList *list;
-  static gchar *baseURL_array[5];
-  static gchar empty[] = "";
+  static const gchar empty[] = "";
   gchar *ret = NULL;
+  GstUri *abs_url;
 
-  g_return_val_if_fail (stream != NULL, empty);
+  g_return_val_if_fail (stream != NULL, g_strdup (empty));
   stream_period = gst_mpdparser_get_stream_period (client);
-  g_return_val_if_fail (stream_period != NULL, empty);
-  g_return_val_if_fail (stream_period->period != NULL, empty);
+  g_return_val_if_fail (stream_period != NULL, g_strdup (empty));
+  g_return_val_if_fail (stream_period->period != NULL, g_strdup (empty));
 
-  baseURL_array[0] = baseURL_array[1] = baseURL_array[2] = baseURL_array[3] =
-      empty;
-  baseURL_array[4] = NULL;
+  /* NULLify query return before we start */
+  if (query)
+    *query = NULL;
 
-  /* FIXME: this simple implementation is not fully compliant with RFC 3986 */
-  if ((list = client->mpd_node->BaseURLs) != NULL) {
-    baseURL = g_list_nth_data (list, stream->baseURL_idx);
-    if (!baseURL) {
-      baseURL = list->data;
-    }
-    baseURL_array[0] = baseURL->baseURL;
-  }
-  if ((list = stream_period->period->BaseURLs) != NULL) {
-    baseURL = g_list_nth_data (list, stream->baseURL_idx);
-    if (!baseURL) {
-      baseURL = list->data;
-    }
-    baseURL_array[1] = baseURL->baseURL;
-  }
+  /* initialise base url */
+  abs_url =
+      gst_uri_from_string (client->
+      mpd_base_uri ? client->mpd_base_uri : client->mpd_uri);
+
+  /* combine a BaseURL at the MPD level with the current base url */
+  abs_url =
+      combine_urls (abs_url, client->mpd_node->BaseURLs, query,
+      stream->baseURL_idx);
+
+  /* combine a BaseURL at the Period level with the current base url */
+  abs_url =
+      combine_urls (abs_url, stream_period->period->BaseURLs, query,
+      stream->baseURL_idx);
+
   GST_DEBUG ("Current adaptation set id %i (%s)", stream->cur_adapt_set->id,
       stream->cur_adapt_set->contentType);
+  /* combine a BaseURL at the AdaptationSet level with the current base url */
+  abs_url =
+      combine_urls (abs_url, stream->cur_adapt_set->BaseURLs, query,
+      stream->baseURL_idx);
 
-  if ((list = stream->cur_adapt_set->BaseURLs) != NULL) {
-    baseURL = g_list_nth_data (list, stream->baseURL_idx);
-    if (!baseURL) {
-      baseURL = list->data;
-    }
-    baseURL_array[2] = baseURL->baseURL;
-  }
+  /* combine a BaseURL at the Representation level with the current base url */
+  abs_url =
+      combine_urls (abs_url, stream->cur_representation->BaseURLs, query,
+      stream->baseURL_idx);
 
-  if ((list = stream->cur_representation->BaseURLs) != NULL) {
-    baseURL = g_list_nth_data (list, stream->baseURL_idx);
-    if (!baseURL) {
-      baseURL = list->data;
-    }
-    baseURL_array[3] = baseURL->baseURL;
-  }
-
-  ret = g_strjoinv (NULL, baseURL_array);
-
-  /* get base URI from MPD file URI, if the "http" scheme is missing */
-  mpd_uri = client->mpd_base_uri ? client->mpd_base_uri : client->mpd_uri;
-  if (mpd_uri != NULL && strncmp (ret, "http://", 7) != 0) {
-    gchar *last_sep, *tmp1, *tmp2;
-
-    if (ret[0] == '?') {
-      if (query)
-        *query = g_strdup (ret);
-      g_free (ret);
-      ret = NULL;
-    } else {
-      if (query)
-        *query = NULL;
-    }
-
-    last_sep = strrchr (mpd_uri, '/');
-    if (last_sep) {
-      tmp1 = g_strndup (mpd_uri, last_sep - mpd_uri + 1);
-      if (ret) {
-        tmp2 = ret;
-        ret = g_strconcat (tmp1, tmp2, NULL);
-        g_free (tmp1);
-        g_free (tmp2);
-      } else {
-        ret = tmp1;
-      }
-      GST_INFO ("Got base URI from MPD file URI %s", ret);
-    }
-  }
-
-  if (ret && *query == NULL) {
-    gchar *params = strchr (ret, '?');
-    if (params) {
-      *query = g_strdup (params);
-      params[0] = '\0';         /* can ignore the rest of the string */
-    }
-  }
+  ret = gst_uri_to_string (abs_url);
+  gst_uri_unref (abs_url);
 
   return ret;
 }
 
 static GstClockTime
 gst_mpd_client_get_segment_duration (GstMpdClient * client,
-    GstActiveStream * stream)
+    GstActiveStream * stream, gint64 * scale_dur)
 {
   GstStreamPeriod *stream_period;
   GstMultSegmentBaseType *base = NULL;
   GstClockTime duration = 0;
-  guint timescale;
 
   g_return_val_if_fail (stream != NULL, GST_CLOCK_TIME_NONE);
   stream_period = gst_mpdparser_get_stream_period (client);
@@ -2767,12 +3139,14 @@ gst_mpd_client_get_segment_duration (GstMpdClient * client,
   if (base == NULL || base->SegBaseType == NULL) {
     /* this may happen when we have a single segment */
     duration = stream_period->duration;
+    if (scale_dur)
+      *scale_dur = duration;
   } else {
+    /* duration is guint so this cannot overflow */
     duration = base->duration * GST_SECOND;
-    timescale = base->SegBaseType->timescale;
-
-    if (timescale > 1)
-      duration /= timescale;
+    if (scale_dur)
+      *scale_dur = duration;
+    duration /= base->SegBaseType->timescale;
   }
 
   return duration;
@@ -2788,7 +3162,6 @@ gst_mpd_client_new (void)
   GstMpdClient *client;
 
   client = g_new0 (GstMpdClient, 1);
-  g_mutex_init (&client->lock);
 
   return client;
 }
@@ -2819,14 +3192,200 @@ gst_mpd_client_free (GstMpdClient * client)
 
   gst_active_streams_free (client);
 
-  g_mutex_clear (&client->lock);
-
   g_free (client->mpd_uri);
   client->mpd_uri = NULL;
   g_free (client->mpd_base_uri);
   client->mpd_base_uri = NULL;
 
+  if (client->downloader)
+    gst_object_unref (client->downloader);
+  client->downloader = NULL;
+
   g_free (client);
+}
+
+void
+gst_mpd_client_set_uri_downloader (GstMpdClient * client,
+    GstUriDownloader * downloader)
+{
+  if (client->downloader)
+    gst_object_unref (client->downloader);
+  client->downloader = gst_object_ref (downloader);
+}
+
+static void
+gst_mpd_client_check_profiles (GstMpdClient * client)
+{
+  GST_DEBUG ("Profiles: %s", client->mpd_node->profiles);
+
+  if (g_strstr_len (client->mpd_node->profiles, -1,
+          "urn:mpeg:dash:profile:isoff-on-demand:2011")) {
+    client->profile_isoff_ondemand = TRUE;
+    GST_DEBUG ("Found ISOFF on demand profile (2011)");
+  }
+}
+
+static gboolean
+gst_mpd_client_fetch_on_load_external_resources (GstMpdClient * client)
+{
+  GList *l;
+
+  for (l = client->mpd_node->Periods; l; /* explicitly advanced below */ ) {
+    GstPeriodNode *period = l->data;
+    GList *m;
+
+    if (period->xlink_href && period->actuate == GST_XLINK_ACTUATE_ON_LOAD) {
+      GList *new_periods, *prev, *next;
+      gboolean error;
+
+      new_periods =
+          gst_mpd_client_fetch_external_period (client, period, &error);
+
+      if (!new_periods && error)
+        goto syntax_error;
+
+      prev = l->prev;
+      client->mpd_node->Periods =
+          g_list_delete_link (client->mpd_node->Periods, l);
+      gst_mpdparser_free_period_node (period);
+      period = NULL;
+
+      /* Get new next node, we will insert before this */
+      if (prev)
+        next = prev->next;
+      else
+        next = client->mpd_node->Periods;
+
+      while (new_periods) {
+        client->mpd_node->Periods =
+            g_list_insert_before (client->mpd_node->Periods, next,
+            new_periods->data);
+        new_periods = g_list_delete_link (new_periods, new_periods);
+      }
+      next = NULL;
+
+      /* Update our iterator to the first new period if any, or the next */
+      if (prev)
+        l = prev->next;
+      else
+        l = client->mpd_node->Periods;
+
+      continue;
+    }
+
+    if (period->SegmentList && period->SegmentList->xlink_href
+        && period->SegmentList->actuate == GST_XLINK_ACTUATE_ON_LOAD) {
+      GstSegmentListNode *new_segment_list;
+      gboolean error;
+
+      new_segment_list =
+          gst_mpd_client_fetch_external_segment_list (client, period, NULL,
+          NULL, NULL, period->SegmentList, &error);
+
+      if (!new_segment_list && error)
+        goto syntax_error;
+
+      gst_mpdparser_free_segment_list_node (period->SegmentList);
+      period->SegmentList = new_segment_list;
+    }
+
+    for (m = period->AdaptationSets; m; /* explicitly advanced below */ ) {
+      GstAdaptationSetNode *adapt_set = m->data;
+      GList *n;
+
+      if (adapt_set->xlink_href
+          && adapt_set->actuate == GST_XLINK_ACTUATE_ON_LOAD) {
+        GList *new_adapt_sets, *prev, *next;
+        gboolean error;
+
+        new_adapt_sets =
+            gst_mpd_client_fetch_external_adaptation_set (client, period,
+            adapt_set, &error);
+
+        if (!new_adapt_sets && error)
+          goto syntax_error;
+
+        prev = l->prev;
+        period->AdaptationSets = g_list_delete_link (period->AdaptationSets, l);
+        gst_mpdparser_free_adaptation_set_node (adapt_set);
+        adapt_set = NULL;
+
+        /* Get new next node, we will insert before this */
+        if (prev)
+          next = prev->next;
+        else
+          next = period->AdaptationSets;
+
+        while (new_adapt_sets) {
+          period->AdaptationSets =
+              g_list_insert_before (period->AdaptationSets, next,
+              new_adapt_sets->data);
+          new_adapt_sets = g_list_delete_link (new_adapt_sets, new_adapt_sets);
+        }
+        next = NULL;
+
+        /* Update our iterator to the first new adapt_set if any, or the next */
+        if (prev)
+          l = prev->next;
+        else
+          l = period->AdaptationSets;
+
+        continue;
+      }
+
+      if (adapt_set->SegmentList && adapt_set->SegmentList->xlink_href
+          && adapt_set->SegmentList->actuate == GST_XLINK_ACTUATE_ON_LOAD) {
+        GstSegmentListNode *new_segment_list;
+        gboolean error;
+
+        new_segment_list =
+            gst_mpd_client_fetch_external_segment_list (client, period,
+            adapt_set, NULL, period->SegmentList, adapt_set->SegmentList,
+            &error);
+
+        if (!new_segment_list && error)
+          goto syntax_error;
+
+        gst_mpdparser_free_segment_list_node (adapt_set->SegmentList);
+        adapt_set->SegmentList = new_segment_list;
+      }
+
+      for (n = adapt_set->Representations; n; n = n->next) {
+        GstRepresentationNode *representation = n->data;
+
+        if (representation->SegmentList
+            && representation->SegmentList->xlink_href
+            && representation->SegmentList->actuate ==
+            GST_XLINK_ACTUATE_ON_LOAD) {
+
+          GstSegmentListNode *new_segment_list;
+          gboolean error;
+
+          new_segment_list =
+              gst_mpd_client_fetch_external_segment_list (client, period,
+              adapt_set, representation, adapt_set->SegmentList,
+              representation->SegmentList, &error);
+
+          if (!new_segment_list && error)
+            goto syntax_error;
+
+          gst_mpdparser_free_segment_list_node (representation->SegmentList);
+          representation->SegmentList = new_segment_list;
+
+        }
+      }
+
+      m = m->next;
+    }
+
+    l = l->next;
+  }
+
+  return TRUE;
+
+syntax_error:
+
+  return FALSE;
 }
 
 gboolean
@@ -2838,19 +3397,18 @@ gst_mpd_parse (GstMpdClient * client, const gchar * data, gint size)
 
     GST_DEBUG ("MPD file fully buffered, start parsing...");
 
-    GST_MPD_CLIENT_LOCK (client);
     /* parse the complete MPD file into a tree (using the libxml2 default parser API) */
 
     /* this initialize the library and check potential ABI mismatches
      * between the version it was compiled for and the actual shared
      * library used
      */
-    LIBXML_TEST_VERSION
-        /* parse "data" into a document (which is a libxml2 tree structure xmlDoc) */
-        doc = xmlReadMemory (data, size, "noname.xml", NULL, 0);
+    LIBXML_TEST_VERSION;
+
+    /* parse "data" into a document (which is a libxml2 tree structure xmlDoc) */
+    doc = xmlReadMemory (data, size, "noname.xml", NULL, XML_PARSE_NONET);
     if (doc == NULL) {
       GST_ERROR ("failed to parse the MPD file");
-      GST_MPD_CLIENT_UNLOCK (client);
       return FALSE;
     } else {
       /* get the root element node */
@@ -2867,7 +3425,11 @@ gst_mpd_parse (GstMpdClient * client, const gchar * data, gint size)
       /* free the document */
       xmlFreeDoc (doc);
     }
-    GST_MPD_CLIENT_UNLOCK (client);
+
+    gst_mpd_client_check_profiles (client);
+
+    if (!gst_mpd_client_fetch_on_load_external_resources (client))
+      return FALSE;
 
     return TRUE;
   }
@@ -2888,6 +3450,61 @@ gst_mpdparser_get_baseURL (GstMpdClient * client, guint indexStream)
   return stream->baseURL;
 }
 
+static GstClockTime
+gst_mpdparser_get_segment_end_time (GstMpdClient * client, GPtrArray * segments,
+    const GstMediaSegment * segment, gint index)
+{
+  const GstStreamPeriod *stream_period;
+  GstClockTime end;
+
+  if (segment->repeat >= 0)
+    return segment->start + (segment->repeat + 1) * segment->duration;
+
+  if (index < segments->len - 1) {
+    const GstMediaSegment *next_segment =
+        g_ptr_array_index (segments, index + 1);
+    end = next_segment->start;
+  } else {
+    stream_period = gst_mpdparser_get_stream_period (client);
+    end = stream_period->start + stream_period->duration;
+  }
+  return end;
+}
+
+static gboolean
+gst_mpdparser_find_segment_by_index (GstMpdClient * client,
+    GPtrArray * segments, gint index, GstMediaSegment * result)
+{
+  gint i;
+  for (i = 0; i < segments->len; i++) {
+    GstMediaSegment *s;
+    gint repeat;
+
+    s = g_ptr_array_index (segments, i);
+    if (s->repeat >= 0) {
+      repeat = s->repeat;
+    } else {
+      GstClockTime start = s->start;
+      GstClockTime end =
+          gst_mpdparser_get_segment_end_time (client, segments, s, i);
+      repeat = (guint) (end - start) / s->duration;
+    }
+    if (s->number + repeat >= index) {
+      /* it is in this segment */
+      result->SegmentURL = s->SegmentURL;
+      result->number = index;
+      result->scale_start =
+          s->scale_start + (index - s->number) * s->scale_duration;
+      result->scale_duration = s->scale_duration;
+      result->start = s->start + (index - s->number) * s->duration;
+      result->duration = s->duration;
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
 gboolean
 gst_mpdparser_get_chunk_by_index (GstMpdClient * client, guint indexStream,
     guint indexChunk, GstMediaSegment * segment)
@@ -2900,26 +3517,20 @@ gst_mpdparser_get_chunk_by_index (GstMpdClient * client, guint indexStream,
   stream = g_list_nth_data (client->active_streams, indexStream);
   g_return_val_if_fail (stream != NULL, FALSE);
 
-  if (stream->segments) {
-    GstMediaSegment *list_segment;
-    /* fixed list of segments */
-    if (indexChunk >= stream->segments->len)
-      return FALSE;
+  indexChunk += 1;
 
-    list_segment = g_ptr_array_index (stream->segments, indexChunk);
-    segment->SegmentURL = list_segment->SegmentURL;
-    segment->number = list_segment->number;
-    segment->start = list_segment->start;
-    segment->start_time = list_segment->start_time;
-    segment->duration = list_segment->duration;
+  if (stream->segments) {
+    return gst_mpdparser_find_segment_by_index (client, stream->segments,
+        indexChunk, segment);
   } else {
     GstClockTime duration;
     GstStreamPeriod *stream_period;
+    gint64 scale_dur;
 
-    g_return_val_if_fail (stream->cur_seg_template->
-        MultSegBaseType->SegmentTimeline == NULL, FALSE);
+    g_return_val_if_fail (stream->cur_seg_template->MultSegBaseType->
+        SegmentTimeline == NULL, FALSE);
     /* segment template generator */
-    duration = gst_mpd_client_get_segment_duration (client, stream);
+    duration = gst_mpd_client_get_segment_duration (client, stream, &scale_dur);
     if (!GST_CLOCK_TIME_IS_VALID (duration))
       return FALSE;
 
@@ -2927,11 +3538,13 @@ gst_mpdparser_get_chunk_by_index (GstMpdClient * client, guint indexStream,
 
     segment->number = indexChunk
         + stream->cur_seg_template->MultSegBaseType->startNumber;
-    segment->start_time = duration * indexChunk;
+    segment->scale_start = indexChunk * scale_dur;
+    segment->scale_duration = scale_dur;
+    segment->start = duration * indexChunk;
     segment->duration = duration;
     segment->SegmentURL = NULL;
 
-    if (segment->start_time > stream_period->start + stream_period->duration) {
+    if (segment->start >= stream_period->duration) {
       return FALSE;
     }
   }
@@ -2940,26 +3553,29 @@ gst_mpdparser_get_chunk_by_index (GstMpdClient * client, guint indexStream,
 
 static gboolean
 gst_mpd_client_add_media_segment (GstActiveStream * stream,
-    GstSegmentURLNode * url_node, guint number, guint64 start,
-    GstClockTime start_time, GstClockTime duration)
+    GstSegmentURLNode * url_node, guint number, gint repeat,
+    gint64 scale_start, gint64 scale_duration,
+    GstClockTime start, GstClockTime duration)
 {
   GstMediaSegment *media_segment;
 
   g_return_val_if_fail (stream->segments != NULL, FALSE);
 
   media_segment = g_slice_new0 (GstMediaSegment);
-  if (media_segment == NULL) {
-    GST_WARNING ("Allocation of GstMediaSegment struct failed!");
-    return FALSE;
-  }
 
   media_segment->SegmentURL = url_node;
   media_segment->number = number;
+  media_segment->scale_start = scale_start;
+  media_segment->scale_duration = scale_duration;
   media_segment->start = start;
-  media_segment->start_time = start_time;
   media_segment->duration = duration;
+  media_segment->repeat = repeat;
 
   g_ptr_array_add (stream->segments, media_segment);
+  GST_LOG ("Added new segment: number %d, repeat %d, "
+      "ts: %" GST_TIME_FORMAT ", dur: %"
+      GST_TIME_FORMAT, number, repeat,
+      GST_TIME_ARGS (start), GST_TIME_ARGS (duration));
 
   return TRUE;
 }
@@ -3020,12 +3636,12 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
 
     /* get the first segment_list of the selected representation */
     if ((stream->cur_segment_list =
-            gst_mpdparser_get_segment_list (stream_period->period,
+            gst_mpdparser_get_segment_list (client, stream_period->period,
                 stream->cur_adapt_set, representation)) == NULL) {
       GST_DEBUG ("No useful SegmentList node for the current Representation");
       /* here we should have a single segment for each representation, whose URL is encoded in the baseURL element */
-      if (!gst_mpd_client_add_media_segment (stream, NULL, 1, 0, PeriodStart,
-              PeriodEnd)) {
+      if (!gst_mpd_client_add_media_segment (stream, NULL, 1, 0, 0,
+              PeriodEnd - PeriodStart, 0, PeriodEnd - PeriodStart)) {
         return FALSE;
       }
     } else {
@@ -3040,7 +3656,7 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
       /* build segment list */
       i = stream->cur_segment_list->MultSegBaseType->startNumber;
       start = 0;
-      start_time = PeriodStart;
+      start_time = 0;
 
       GST_LOG ("Building media segment list using a SegmentList node");
       if (stream->cur_segment_list->MultSegBaseType->SegmentTimeline) {
@@ -3051,45 +3667,44 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
         timeline = stream->cur_segment_list->MultSegBaseType->SegmentTimeline;
         for (list = g_queue_peek_head_link (&timeline->S); list;
             list = g_list_next (list)) {
-          guint j, timescale;
+          guint timescale;
 
           S = (GstSNode *) list->data;
           GST_LOG ("Processing S node: d=%" G_GUINT64_FORMAT " r=%d t=%"
               G_GUINT64_FORMAT, S->d, S->r, S->t);
-          duration = S->d * GST_SECOND;
           timescale =
               stream->cur_segment_list->MultSegBaseType->SegBaseType->timescale;
-          if (timescale > 1)
-            duration /= timescale;
+          duration = gst_util_uint64_scale (S->d, GST_SECOND, timescale);
+
           if (S->t > 0) {
             start = S->t;
-            start_time = S->t * GST_SECOND;
-            if (timescale > 1)
-              start_time /= timescale;
+            start_time = gst_util_uint64_scale (S->t, GST_SECOND, timescale);
           }
 
-          for (j = 0; j <= S->r && SegmentURL != NULL; j++) {
-            if (!gst_mpd_client_add_media_segment (stream, SegmentURL->data, i,
-                    start, start_time, duration)) {
-              return FALSE;
-            }
-            i++;
-            start += S->d;
-            start_time += duration;
-            SegmentURL = g_list_next (SegmentURL);
+          if (!gst_mpd_client_add_media_segment (stream, SegmentURL->data, i,
+                  S->r, start, S->d, start_time, duration)) {
+            return FALSE;
           }
+          i += S->r + 1;
+          start_time += duration * (S->r + 1);
+          start += S->d * (S->r + 1);
+          SegmentURL = g_list_next (SegmentURL);
         }
       } else {
-        duration = gst_mpd_client_get_segment_duration (client, stream);
+        gint64 scale_dur;
+
+        duration =
+            gst_mpd_client_get_segment_duration (client, stream, &scale_dur);
         if (!GST_CLOCK_TIME_IS_VALID (duration))
           return FALSE;
 
         while (SegmentURL) {
-          if (!gst_mpd_client_add_media_segment (stream, SegmentURL->data, i, 0,
-                  start_time, duration)) {
+          if (!gst_mpd_client_add_media_segment (stream, SegmentURL->data, i,
+                  0, start, scale_dur, start_time, duration)) {
             return FALSE;
           }
           i++;
+          start += scale_dur;
           start_time += duration;
           SegmentURL = g_list_next (SegmentURL);
         }
@@ -3109,52 +3724,56 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
 
       gst_mpdparser_init_active_stream_segments (stream);
       /* here we should have a single segment for each representation, whose URL is encoded in the baseURL element */
-      if (!gst_mpd_client_add_media_segment (stream, NULL, 1, 0, 0, PeriodEnd)) {
+      if (!gst_mpd_client_add_media_segment (stream, NULL, 1, 0, 0,
+              PeriodEnd - PeriodStart, 0, PeriodEnd - PeriodStart)) {
         return FALSE;
       }
     } else {
+      GstMultSegmentBaseType *mult_seg =
+          stream->cur_seg_template->MultSegBaseType;
       /* build segment list */
-      i = stream->cur_seg_template->MultSegBaseType->startNumber;
+      i = mult_seg->startNumber;
       start = 0;
-      start_time = PeriodStart;
+      start_time = 0;
 
       GST_LOG ("Building media segment list using this template: %s",
           stream->cur_seg_template->media);
-      if (stream->cur_seg_template->MultSegBaseType->SegmentTimeline) {
+
+      /* Avoid overflows */
+      stream->presentationTimeOffset =
+          gst_util_uint64_scale (mult_seg->SegBaseType->presentationTimeOffset,
+          GST_SECOND, mult_seg->SegBaseType->timescale);
+      GST_LOG ("Setting stream's presentation time offset to %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (stream->presentationTimeOffset));
+
+      if (mult_seg->SegmentTimeline) {
         GstSegmentTimelineNode *timeline;
         GstSNode *S;
         GList *list;
 
-        timeline = stream->cur_seg_template->MultSegBaseType->SegmentTimeline;
+        timeline = mult_seg->SegmentTimeline;
         gst_mpdparser_init_active_stream_segments (stream);
         for (list = g_queue_peek_head_link (&timeline->S); list;
             list = g_list_next (list)) {
-          guint j, timescale;
+          guint timescale;
 
           S = (GstSNode *) list->data;
           GST_LOG ("Processing S node: d=%" G_GUINT64_FORMAT " r=%u t=%"
               G_GUINT64_FORMAT, S->d, S->r, S->t);
-          duration = S->d * GST_SECOND;
-          timescale =
-              stream->cur_seg_template->MultSegBaseType->SegBaseType->timescale;
-          if (timescale > 1)
-            duration /= timescale;
+          timescale = mult_seg->SegBaseType->timescale;
+          duration = gst_util_uint64_scale (S->d, GST_SECOND, timescale);
           if (S->t > 0) {
             start = S->t;
-            start_time = S->t * GST_SECOND;
-            if (timescale > 1)
-              start_time /= timescale;
+            start_time = gst_util_uint64_scale (S->t, GST_SECOND, timescale);
           }
 
-          for (j = 0; j <= S->r; j++) {
-            if (!gst_mpd_client_add_media_segment (stream, NULL, i, start,
-                    start_time, duration)) {
-              return FALSE;
-            }
-            i++;
-            start += S->d;
-            start_time += duration;
+          if (!gst_mpd_client_add_media_segment (stream, NULL, i, S->r, start,
+                  S->d, start_time, duration)) {
+            return FALSE;
           }
+          i += S->r + 1;
+          start += S->d * (S->r + 1);
+          start_time += duration * (S->r + 1);
         }
       } else {
         /* NOP - The segment is created on demand with the template, no need
@@ -3168,9 +3787,9 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
       g_ptr_array_index (stream->segments, stream->segments->len - 1) : NULL;
 
   if (last_media_segment && GST_CLOCK_TIME_IS_VALID (PeriodEnd)) {
-    if (last_media_segment->start_time + last_media_segment->duration >
-        PeriodEnd) {
-      last_media_segment->duration = PeriodEnd - last_media_segment->start_time;
+    if (last_media_segment->start + last_media_segment->duration > PeriodEnd) {
+      last_media_segment->duration =
+          PeriodEnd - PeriodStart - last_media_segment->start;
       GST_LOG ("Fixed duration of last segment: %" GST_TIME_FORMAT,
           GST_TIME_ARGS (last_media_segment->duration));
     }
@@ -3185,11 +3804,103 @@ gst_mpd_client_setup_representation (GstMpdClient * client,
   return TRUE;
 }
 
+static GList *
+gst_mpd_client_fetch_external_period (GstMpdClient * client,
+    GstPeriodNode * period_node, gboolean * error)
+{
+  GstFragment *download;
+  GstBuffer *period_buffer;
+  GstMapInfo map;
+  GError *err = NULL;
+  xmlDocPtr doc;
+  GstUri *base_uri, *uri;
+  gchar *query = NULL;
+  gchar *uri_string;
+  GList *new_periods = NULL;
+
+  *error = FALSE;
+
+  /* ISO/IEC 23009-1:2014 5.5.3 4)
+   * Remove nodes that resolve to nothing when resolving
+   */
+  if (strcmp (period_node->xlink_href,
+          "urn:mpeg:dash:resolve-to-zero:2013") == 0) {
+    return NULL;
+  }
+
+  if (!client->downloader) {
+    *error = TRUE;
+    return NULL;
+  }
+
+  /* Build absolute URI */
+
+  /* Get base URI at the MPD level */
+  base_uri =
+      gst_uri_from_string (client->
+      mpd_base_uri ? client->mpd_base_uri : client->mpd_uri);
+
+  /* combine a BaseURL at the MPD level with the current base url */
+  base_uri = combine_urls (base_uri, client->mpd_node->BaseURLs, &query, 0);
+  uri = gst_uri_from_string_with_base (base_uri, period_node->xlink_href);
+  if (query)
+    gst_uri_set_query_string (uri, query);
+  g_free (query);
+  uri_string = gst_uri_to_string (uri);
+  gst_uri_unref (base_uri);
+  gst_uri_unref (uri);
+
+  download =
+      gst_uri_downloader_fetch_uri (client->downloader,
+      uri_string, client->mpd_uri, TRUE, FALSE, TRUE, &err);
+  g_free (uri_string);
+
+  if (!download) {
+    GST_ERROR ("Failed to download external Period node at '%s': %s",
+        period_node->xlink_href, err->message);
+    g_clear_error (&err);
+    *error = TRUE;
+    return NULL;
+  }
+
+  period_buffer = gst_fragment_get_buffer (download);
+  g_object_unref (download);
+
+  gst_buffer_map (period_buffer, &map, GST_MAP_READ);
+
+  doc =
+      xmlReadMemory ((const gchar *) map.data, map.size, "noname.xml", NULL,
+      XML_PARSE_NONET);
+  if (doc) {
+    xmlNode *root_element = xmlDocGetRootElement (doc);
+    if (root_element->type != XML_ELEMENT_NODE ||
+        xmlStrcmp (root_element->name, (xmlChar *) "Period") != 0) {
+      xmlFreeDoc (doc);
+      gst_buffer_unmap (period_buffer, &map);
+      gst_buffer_unref (period_buffer);
+      *error = TRUE;
+      return NULL;
+    }
+
+    gst_mpdparser_parse_period_node (&new_periods, root_element);
+  } else {
+    GST_ERROR ("Failed to parse period node XML");
+    gst_buffer_unmap (period_buffer, &map);
+    gst_buffer_unref (period_buffer);
+    *error = TRUE;
+    return NULL;
+  }
+  gst_buffer_unmap (period_buffer, &map);
+  gst_buffer_unref (period_buffer);
+
+  return new_periods;
+}
+
 gboolean
-gst_mpd_client_setup_media_presentation (GstMpdClient * client)
+gst_mpd_client_setup_media_presentation (GstMpdClient * client,
+    GstClockTime time, gint period_idx, const gchar * period_id)
 {
   GstStreamPeriod *stream_period;
-  GstPeriodNode *period_node;
   GstClockTime start, duration;
   GList *list, *next;
   guint idx;
@@ -3198,9 +3909,30 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
   g_return_val_if_fail (client != NULL, FALSE);
   g_return_val_if_fail (client->mpd_node != NULL, FALSE);
 
+  /* Check if we set up the media presentation far enough already */
+  for (list = client->periods; list; list = list->next) {
+    GstStreamPeriod *stream_period = list->data;
+
+    if ((time != GST_CLOCK_TIME_NONE
+            && stream_period->duration != GST_CLOCK_TIME_NONE
+            && stream_period->start + stream_period->duration >= time)
+        || (time != GST_CLOCK_TIME_NONE && stream_period->start >= time))
+      return TRUE;
+
+    if (period_idx != -1 && stream_period->number >= period_idx)
+      return TRUE;
+
+    if (period_id != NULL && stream_period->period->id != NULL
+        && strcmp (stream_period->period->id, period_id) == 0)
+      return TRUE;
+
+  }
+
   GST_DEBUG ("Building the list of Periods in the Media Presentation");
-  GST_MPD_CLIENT_LOCK (client);
   /* clean the old period list, if any */
+  /* TODO: In theory we could reuse the ones we have so far but that
+   * seems more complicated than the overhead caused here
+   */
   if (client->periods) {
     g_list_foreach (client->periods,
         (GFunc) gst_mpdparser_free_stream_period, NULL);
@@ -3211,11 +3943,59 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
   idx = 0;
   start = 0;
   duration = GST_CLOCK_TIME_NONE;
-  for (list = g_list_first (client->mpd_node->Periods); list;
-      list = g_list_next (list)) {
-    period_node = (GstPeriodNode *) list->data;
+  for (list = client->mpd_node->Periods; list; /* explicitly advanced below */ ) {
+    GstPeriodNode *period_node = list->data;
+    GstPeriodNode *next_period_node = NULL;
+
+    /* Download external period */
+    if (period_node->xlink_href) {
+      GList *new_periods;
+      gboolean error = FALSE;
+      GList *prev;
+
+      new_periods =
+          gst_mpd_client_fetch_external_period (client, period_node, &error);
+      if (!new_periods && error)
+        goto syntax_error;
+
+      prev = list->prev;
+      client->mpd_node->Periods =
+          g_list_delete_link (client->mpd_node->Periods, list);
+      gst_mpdparser_free_period_node (period_node);
+      period_node = NULL;
+
+      /* Get new next node, we will insert before this */
+      if (prev)
+        next = prev->next;
+      else
+        next = client->mpd_node->Periods;
+
+      while (new_periods) {
+        client->mpd_node->Periods =
+            g_list_insert_before (client->mpd_node->Periods, next,
+            new_periods->data);
+        new_periods = g_list_delete_link (new_periods, new_periods);
+      }
+      next = NULL;
+
+      /* Update our iterator to the first new period if any, or the next */
+      if (prev)
+        list = prev->next;
+      else
+        list = client->mpd_node->Periods;
+
+      /* And try again */
+      continue;
+    }
+
     if (period_node->start != -1) {
       /* we have a regular period */
+      /* start cannot be smaller than previous start */
+      if (list != g_list_first (client->mpd_node->Periods)
+          && start >= period_node->start * GST_MSECOND) {
+        /* Invalid MPD file: duration would be negative or zero */
+        goto syntax_error;
+      }
       start = period_node->start * GST_MSECOND;
     } else if (duration != GST_CLOCK_TIME_NONE) {
       /* start time inferred from previous period, this is still a regular period */
@@ -3230,13 +4010,61 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
       goto early;
     }
 
-    if (period_node->duration != -1) {
-      duration = period_node->duration * GST_MSECOND;
-    } else if ((next = g_list_next (list)) != NULL) {
+    /* compute duration.
+       If there is a start time for the next period, or this is the last period
+       and mediaPresentationDuration was set, those values will take precedence
+       over a configured period duration in computing this period's duration
+
+       ISO/IEC 23009-1:2014(E), chapter 5.3.2.1
+       "The Period extends until the PeriodStart of the next Period, or until
+       the end of the Media Presentation in the case of the last Period."
+     */
+
+    while ((next = g_list_next (list)) != NULL) {
       /* try to infer this period duration from the start time of the next period */
-      GstPeriodNode *next_period_node = next->data;
+      next_period_node = next->data;
+
+      if (next_period_node->xlink_href) {
+        gboolean next_error;
+        GList *new_periods;
+
+        new_periods =
+            gst_mpd_client_fetch_external_period (client, next_period_node,
+            &next_error);
+
+        if (!new_periods && next_error)
+          goto syntax_error;
+
+        client->mpd_node->Periods =
+            g_list_delete_link (client->mpd_node->Periods, next);
+        gst_mpdparser_free_period_node (next_period_node);
+        next_period_node = NULL;
+        /* Get new next node, we will insert before this */
+        next = g_list_next (list);
+        while (new_periods) {
+          client->mpd_node->Periods =
+              g_list_insert_before (client->mpd_node->Periods, next,
+              new_periods->data);
+          new_periods = g_list_delete_link (new_periods, new_periods);
+        }
+
+        /* And try again, getting the next list element which is now our newly
+         * inserted nodes. If any */
+      } else {
+        /* Got the next period and it doesn't have to be downloaded first */
+        break;
+      }
+    }
+
+    if (next_period_node) {
       if (next_period_node->start != -1) {
+        if (start >= next_period_node->start * GST_MSECOND) {
+          /* Invalid MPD file: duration would be negative or zero */
+          goto syntax_error;
+        }
         duration = next_period_node->start * GST_MSECOND - start;
+      } else if (period_node->duration != -1) {
+        duration = period_node->duration * GST_MSECOND;
       } else if (client->mpd_node->type == GST_MPD_FILE_TYPE_DYNAMIC) {
         /* might be a live file, ignore unspecified duration */
       } else {
@@ -3245,8 +4073,14 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
       }
     } else if (client->mpd_node->mediaPresentationDuration != -1) {
       /* last Period of the Media Presentation */
+      if (client->mpd_node->mediaPresentationDuration * GST_MSECOND <= start) {
+        /* Invalid MPD file: duration would be negative or zero */
+        goto syntax_error;
+      }
       duration =
           client->mpd_node->mediaPresentationDuration * GST_MSECOND - start;
+    } else if (period_node->duration != -1) {
+      duration = period_node->duration * GST_MSECOND;
     } else if (client->mpd_node->type == GST_MPD_FILE_TYPE_DYNAMIC) {
       /* might be a live file, ignore unspecified duration */
     } else {
@@ -3255,9 +4089,6 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
     }
 
     stream_period = g_slice_new0 (GstStreamPeriod);
-    if (stream_period == NULL) {
-      goto no_mem;
-    }
     client->periods = g_list_append (client->periods, stream_period);
     stream_period->period = period_node;
     stream_period->number = idx++;
@@ -3266,37 +4097,190 @@ gst_mpd_client_setup_media_presentation (GstMpdClient * client)
     ret = TRUE;
     GST_LOG (" - added Period %d start=%" GST_TIME_FORMAT " duration=%"
         GST_TIME_FORMAT, idx, GST_TIME_ARGS (start), GST_TIME_ARGS (duration));
+
+    if ((time != GST_CLOCK_TIME_NONE
+            && stream_period->duration != GST_CLOCK_TIME_NONE
+            && stream_period->start + stream_period->duration >= time)
+        || (time != GST_CLOCK_TIME_NONE && stream_period->start >= time))
+      break;
+
+    if (period_idx != -1 && stream_period->number >= period_idx)
+      break;
+
+    if (period_id != NULL && stream_period->period->id != NULL
+        && strcmp (stream_period->period->id, period_id) == 0)
+      break;
+
+    list = list->next;
   }
 
-  GST_MPD_CLIENT_UNLOCK (client);
-  GST_DEBUG ("Found a total of %d valid Periods in the Media Presentation",
+  GST_DEBUG
+      ("Found a total of %d valid Periods in the Media Presentation up to this point",
       idx);
   return ret;
 
 early:
-  GST_MPD_CLIENT_UNLOCK (client);
   GST_WARNING
       ("Found an Early Available Period, skipping the rest of the Media Presentation");
   return ret;
 
 syntax_error:
-  GST_MPD_CLIENT_UNLOCK (client);
   GST_WARNING
       ("Cannot get the duration of the Period %d, skipping the rest of the Media Presentation",
       idx);
   return ret;
+}
 
-no_mem:
-  GST_MPD_CLIENT_UNLOCK (client);
-  GST_WARNING ("Allocation of GstStreamPeriod struct failed!");
-  return FALSE;
+static GList *
+gst_mpd_client_fetch_external_adaptation_set (GstMpdClient * client,
+    GstPeriodNode * period, GstAdaptationSetNode * adapt_set, gboolean * error)
+{
+  GstFragment *download;
+  GstBuffer *adapt_set_buffer;
+  GstMapInfo map;
+  GError *err = NULL;
+  xmlDocPtr doc;
+  GstUri *base_uri, *uri;
+  gchar *query = NULL;
+  gchar *uri_string;
+  GList *new_adapt_sets = NULL;
+
+  *error = FALSE;
+
+  /* ISO/IEC 23009-1:2014 5.5.3 4)
+   * Remove nodes that resolve to nothing when resolving
+   */
+  if (strcmp (adapt_set->xlink_href, "urn:mpeg:dash:resolve-to-zero:2013") == 0) {
+    return NULL;
+  }
+
+  if (!client->downloader) {
+    *error = TRUE;
+    return NULL;
+  }
+
+  /* Build absolute URI */
+
+  /* Get base URI at the MPD level */
+  base_uri =
+      gst_uri_from_string (client->
+      mpd_base_uri ? client->mpd_base_uri : client->mpd_uri);
+
+  /* combine a BaseURL at the MPD level with the current base url */
+  base_uri = combine_urls (base_uri, client->mpd_node->BaseURLs, &query, 0);
+
+  /* combine a BaseURL at the Period level with the current base url */
+  base_uri = combine_urls (base_uri, period->BaseURLs, &query, 0);
+
+  uri = gst_uri_from_string_with_base (base_uri, adapt_set->xlink_href);
+  if (query)
+    gst_uri_set_query_string (uri, query);
+  g_free (query);
+  uri_string = gst_uri_to_string (uri);
+  gst_uri_unref (base_uri);
+  gst_uri_unref (uri);
+
+  download =
+      gst_uri_downloader_fetch_uri (client->downloader,
+      uri_string, client->mpd_uri, TRUE, FALSE, TRUE, &err);
+  g_free (uri_string);
+
+  if (!download) {
+    GST_ERROR ("Failed to download external AdaptationSet node at '%s': %s",
+        adapt_set->xlink_href, err->message);
+    g_clear_error (&err);
+    *error = TRUE;
+    return NULL;
+  }
+
+  adapt_set_buffer = gst_fragment_get_buffer (download);
+  g_object_unref (download);
+
+  gst_buffer_map (adapt_set_buffer, &map, GST_MAP_READ);
+
+  doc =
+      xmlReadMemory ((const gchar *) map.data, map.size, "noname.xml", NULL,
+      XML_PARSE_NONET);
+  if (doc) {
+    xmlNode *root_element = xmlDocGetRootElement (doc);
+
+    if (root_element->type != XML_ELEMENT_NODE ||
+        xmlStrcmp (root_element->name, (xmlChar *) "AdaptationSet") != 0) {
+      xmlFreeDoc (doc);
+      gst_buffer_unmap (adapt_set_buffer, &map);
+      gst_buffer_unref (adapt_set_buffer);
+      *error = TRUE;
+      return NULL;
+    }
+
+    gst_mpdparser_parse_adaptation_set_node (&new_adapt_sets, root_element,
+        period);
+  } else {
+    GST_ERROR ("Failed to parse adaptation set node XML");
+    gst_buffer_unmap (adapt_set_buffer, &map);
+    gst_buffer_unref (adapt_set_buffer);
+    *error = TRUE;
+    return NULL;
+  }
+  gst_buffer_unmap (adapt_set_buffer, &map);
+  gst_buffer_unref (adapt_set_buffer);
+
+  return new_adapt_sets;
 }
 
 static GList *
 gst_mpd_client_get_adaptation_sets_for_period (GstMpdClient * client,
     GstStreamPeriod * period)
 {
+  GList *list;
+
   g_return_val_if_fail (period != NULL, NULL);
+
+  /* Resolve all external adaptation sets of this period. Every user of
+   * the adaptation sets would need to know the content of all adaptation sets
+   * to decide which one to use, so we have to resolve them all here
+   */
+  for (list = period->period->AdaptationSets; list;
+      /* advanced explicitely below */ ) {
+    GstAdaptationSetNode *adapt_set = (GstAdaptationSetNode *) list->data;
+    GList *new_adapt_sets = NULL, *prev, *next;
+    gboolean error;
+
+    if (!adapt_set->xlink_href) {
+      list = list->next;
+      continue;
+    }
+
+    new_adapt_sets =
+        gst_mpd_client_fetch_external_adaptation_set (client, period->period,
+        adapt_set, &error);
+
+    prev = list->prev;
+    period->period->AdaptationSets =
+        g_list_delete_link (period->period->AdaptationSets, list);
+    gst_mpdparser_free_adaptation_set_node (adapt_set);
+    adapt_set = NULL;
+
+    /* Get new next node, we will insert before this */
+    if (prev)
+      next = prev->next;
+    else
+      next = period->period->AdaptationSets;
+
+    while (new_adapt_sets) {
+      period->period->AdaptationSets =
+          g_list_insert_before (period->period->AdaptationSets, next,
+          new_adapt_sets->data);
+      new_adapt_sets = g_list_delete_link (new_adapt_sets, new_adapt_sets);
+    }
+
+    /* Update our iterator to the first new adaptation set if any, or the next */
+    if (prev)
+      list = prev->next;
+    else
+      list = period->period->AdaptationSets;
+  }
+
   return period->period->AdaptationSets;
 }
 
@@ -3329,10 +4313,6 @@ gst_mpd_client_setup_streaming (GstMpdClient * client,
   }
 
   stream = g_slice_new0 (GstActiveStream);
-  if (stream == NULL) {
-    GST_WARNING ("Allocation of active stream struct failed!");
-    return FALSE;
-  }
   gst_mpdparser_init_active_stream_segments (stream);
 
   stream->baseURL_idx = 0;
@@ -3340,7 +4320,7 @@ gst_mpd_client_setup_streaming (GstMpdClient * client,
 
   GST_DEBUG ("0. Current stream %p", stream);
 
-  /* retrive representation list */
+  /* retrieve representation list */
   if (stream->cur_adapt_set != NULL)
     rep_list = stream->cur_adapt_set->Representations;
 
@@ -3368,13 +4348,16 @@ gst_mpd_client_setup_streaming (GstMpdClient * client,
   stream->mimeType =
       gst_mpdparser_representation_get_mimetype (adapt_set, representation);
   if (stream->mimeType == GST_STREAM_UNKNOWN) {
+    GST_WARNING ("Unknown mime type in the representation, aborting...");
     g_slice_free (GstActiveStream, stream);
     return FALSE;
   }
 
   client->active_streams = g_list_append (client->active_streams, stream);
-  if (!gst_mpd_client_setup_representation (client, stream, representation))
+  if (!gst_mpd_client_setup_representation (client, stream, representation)) {
+    GST_WARNING ("Failed to setup the representation, aborting...");
     return FALSE;
+  }
 
   GST_INFO ("Successfully setup the download pipeline for mimeType %d",
       stream->mimeType);
@@ -3387,42 +4370,71 @@ gst_mpd_client_stream_seek (GstMpdClient * client, GstActiveStream * stream,
     GstClockTime ts)
 {
   gint index = 0;
+  gint repeat_index = 0;
   GstMediaSegment *selectedChunk = NULL;
+  gboolean in_segment;
 
   g_return_val_if_fail (stream != NULL, 0);
 
-  GST_MPD_CLIENT_LOCK (client);
   if (stream->segments) {
     for (index = 0; index < stream->segments->len; index++) {
       GstMediaSegment *segment = g_ptr_array_index (stream->segments, index);
 
-      GST_DEBUG ("Looking at fragment sequence chunk %d", index);
-      if (segment->start_time <= ts
-          && ts < segment->start_time + segment->duration) {
-        selectedChunk = segment;
-        break;
+      GST_DEBUG ("Looking at fragment sequence chunk %d / %d", index,
+          stream->segments->len);
+      in_segment = FALSE;
+      if (segment->start <= ts) {
+        if (segment->repeat >= 0) {
+          in_segment =
+              ts < segment->start + (segment->repeat + 1) * segment->duration;
+        } else {
+          GstClockTime end =
+              gst_mpdparser_get_segment_end_time (client, stream->segments,
+              segment, index);
+          in_segment = ts < end;
+        }
+        if (in_segment) {
+          selectedChunk = segment;
+          repeat_index = (ts - segment->start) / segment->duration;
+          break;
+        }
       }
     }
 
     if (selectedChunk == NULL) {
-      GST_MPD_CLIENT_UNLOCK (client);
+      stream->segment_index = stream->segments->len;
+      stream->segment_repeat_index = 0;
+      GST_DEBUG ("Seek to after last segment");
       return FALSE;
     }
   } else {
     GstClockTime duration =
-        gst_mpd_client_get_segment_duration (client, stream);
-    g_return_val_if_fail (stream->cur_seg_template->MultSegBaseType->
-        SegmentTimeline == NULL, FALSE);
+        gst_mpd_client_get_segment_duration (client, stream, NULL);
+    GstStreamPeriod *stream_period = gst_mpdparser_get_stream_period (client);
+    guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
+
+    g_return_val_if_fail (stream->cur_seg_template->
+        MultSegBaseType->SegmentTimeline == NULL, FALSE);
     if (!GST_CLOCK_TIME_IS_VALID (duration)) {
-      GST_MPD_CLIENT_UNLOCK (client);
       return FALSE;
     }
+
+    if (ts > stream_period->start)
+      ts -= stream_period->start;
+    else
+      ts = 0;
+
     index = ts / duration;
+    if (segments_count > 0 && index >= segments_count) {
+      stream->segment_index = segments_count;
+      stream->segment_repeat_index = 0;
+      GST_DEBUG ("Seek to after last segment");
+      return FALSE;
+    }
   }
 
-  gst_mpd_client_set_segment_index (stream, index);
-
-  GST_MPD_CLIENT_UNLOCK (client);
+  stream->segment_repeat_index = repeat_index;
+  stream->segment_index = index;
 
   return TRUE;
 }
@@ -3465,42 +4477,6 @@ gst_mpd_client_add_time_difference (GstDateTime * t1, gint64 usecs)
   return rv;
 }
 
-gint
-gst_mpd_client_get_segment_index_at_time (GstMpdClient * client,
-    GstActiveStream * stream, const GstDateTime * time)
-{
-  GstClockTime seg_duration;
-  gint64 diff;
-  GstDateTime *avail_start =
-      gst_mpd_client_get_availability_start_time (client);
-  GstStreamPeriod *stream_period = gst_mpdparser_get_stream_period (client);
-
-  if (avail_start == NULL)
-    return -1;
-
-  if (stream_period && stream_period->period) {
-    GstDateTime *t;
-
-    t = gst_mpd_client_add_time_difference (avail_start,
-        stream_period->period->start * 1000);
-    gst_date_time_unref (avail_start);
-    avail_start = t;
-  }
-  diff = gst_mpd_client_calculate_time_difference (avail_start, time);
-  gst_date_time_unref (avail_start);
-
-  if (diff < 0)
-    return -2;
-  if (diff > gst_mpd_client_get_media_presentation_duration (client))
-    return -3;
-
-  /* TODO: Assumes all fragments are roughly the same duration */
-  seg_duration = gst_mpd_client_get_next_fragment_duration (client, stream);
-  if (seg_duration == 0)
-    return -1;
-  return diff / seg_duration;
-}
-
 static GstDateTime *
 gst_mpd_client_get_availability_start_time (GstMpdClient * client)
 {
@@ -3509,37 +4485,40 @@ gst_mpd_client_get_availability_start_time (GstMpdClient * client)
   if (client == NULL)
     return (GstDateTime *) NULL;
 
-  GST_MPD_CLIENT_LOCK (client);
   start_time = client->mpd_node->availabilityStartTime;
-  gst_date_time_ref (start_time);
-  GST_MPD_CLIENT_UNLOCK (client);
+  if (start_time)
+    gst_date_time_ref (start_time);
   return start_time;
 }
 
 gboolean
-gst_mpd_client_get_last_fragment_timestamp (GstMpdClient * client,
+gst_mpd_client_get_last_fragment_timestamp_end (GstMpdClient * client,
     guint stream_idx, GstClockTime * ts)
 {
   GstActiveStream *stream;
   gint segment_idx;
-  GstMediaSegment currentChunk;
+  GstMediaSegment *currentChunk;
+  GstStreamPeriod *stream_period;
 
   GST_DEBUG ("Stream index: %i", stream_idx);
   stream = g_list_nth_data (client->active_streams, stream_idx);
   g_return_val_if_fail (stream != NULL, 0);
 
-  GST_MPD_CLIENT_LOCK (client);
-  segment_idx = gst_mpd_client_get_segments_counts (stream) - 1;
-  GST_DEBUG ("Looking for fragment sequence chunk %d", segment_idx);
+  segment_idx = gst_mpd_client_get_segments_counts (client, stream) - 1;
+  currentChunk = g_ptr_array_index (stream->segments, segment_idx);
 
-  if (!gst_mpdparser_get_chunk_by_index (client, stream_idx, segment_idx,
-          &currentChunk)) {
-    GST_MPD_CLIENT_UNLOCK (client);
-    return FALSE;
+  if (currentChunk->repeat >= 0) {
+    *ts =
+        currentChunk->start + (currentChunk->duration * (1 +
+            currentChunk->repeat));
+  } else {
+    /* 5.3.9.6.1: negative repeat means repeat till the end of the
+     * period, or the next update of the MPD (which I think is
+     * implicit, as this will all get deleted/recreated), or the
+     * start of the next segment, if any. */
+    stream_period = gst_mpdparser_get_stream_period (client);
+    *ts = stream_period->start + stream_period->duration;
   }
-
-  *ts = currentChunk.start_time;
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return TRUE;
 }
@@ -3549,27 +4528,100 @@ gst_mpd_client_get_next_fragment_timestamp (GstMpdClient * client,
     guint stream_idx, GstClockTime * ts)
 {
   GstActiveStream *stream;
-  gint segment_idx;
-  GstMediaSegment currentChunk;
+  GstMediaSegment *currentChunk;
 
   GST_DEBUG ("Stream index: %i", stream_idx);
   stream = g_list_nth_data (client->active_streams, stream_idx);
   g_return_val_if_fail (stream != NULL, 0);
 
-  GST_MPD_CLIENT_LOCK (client);
-  segment_idx = gst_mpd_client_get_segment_index (stream);
-  GST_DEBUG ("Looking for fragment sequence chunk %d", segment_idx);
+  if (stream->segments) {
+    GST_DEBUG ("Looking for fragment sequence chunk %d / %d",
+        stream->segment_index, stream->segments->len);
+    if (stream->segment_index >= stream->segments->len)
+      return FALSE;
+    currentChunk = g_ptr_array_index (stream->segments, stream->segment_index);
 
-  if (!gst_mpdparser_get_chunk_by_index (client, stream_idx, segment_idx,
-          &currentChunk)) {
-    GST_MPD_CLIENT_UNLOCK (client);
-    return FALSE;
+    *ts =
+        currentChunk->start +
+        (currentChunk->duration * stream->segment_repeat_index);
+  } else {
+    GstClockTime duration =
+        gst_mpd_client_get_segment_duration (client, stream, NULL);
+    guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
+
+    g_return_val_if_fail (stream->cur_seg_template->
+        MultSegBaseType->SegmentTimeline == NULL, FALSE);
+    if (!GST_CLOCK_TIME_IS_VALID (duration) || (segments_count > 0
+            && stream->segment_index >= segments_count)) {
+      return FALSE;
+    }
+    *ts = stream->segment_index * duration;
   }
 
-  *ts = currentChunk.start_time;
-  GST_MPD_CLIENT_UNLOCK (client);
-
   return TRUE;
+}
+
+GstClockTime
+gst_mpd_parser_get_stream_presentation_offset (GstMpdClient * client,
+    guint stream_idx)
+{
+  GstActiveStream *stream = NULL;
+
+  g_return_val_if_fail (client != NULL, 0);
+  g_return_val_if_fail (client->active_streams != NULL, 0);
+  stream = g_list_nth_data (client->active_streams, stream_idx);
+  g_return_val_if_fail (stream != NULL, 0);
+
+  return stream->presentationTimeOffset;
+}
+
+GstClockTime
+gst_mpd_parser_get_period_start_time (GstMpdClient * client)
+{
+  GstStreamPeriod *stream_period = NULL;
+
+  g_return_val_if_fail (client != NULL, 0);
+  stream_period = gst_mpdparser_get_stream_period (client);
+  g_return_val_if_fail (stream_period != NULL, 0);
+
+  return stream_period->start;
+}
+
+/**
+ * gst_mpd_client_get_utc_timing_sources:
+ * @client: #GstMpdClient to check for UTCTiming elements
+ * @methods: A bit mask of #GstMPDUTCTimingType that specifies the methods
+ *     to search for.
+ * @selected_method: (nullable): The selected method
+ * Returns: (transfer none): A NULL terminated array of URLs of servers
+ *     that use @selected_method to provide a realtime clock.
+ *
+ * Searches the UTCTiming elements found in the manifest for an element
+ * that uses one of the UTC timing methods specified in @selected_method.
+ * If multiple UTCTiming elements are present that support one of the
+ * methods specified in @selected_method, the first one is returned.
+ *
+ * Since: 1.6
+ */
+gchar **
+gst_mpd_client_get_utc_timing_sources (GstMpdClient * client,
+    guint methods, GstMPDUTCTimingType * selected_method)
+{
+  GList *list;
+
+  g_return_val_if_fail (client != NULL, NULL);
+  g_return_val_if_fail (client->mpd_node != NULL, NULL);
+  for (list = g_list_first (client->mpd_node->UTCTiming); list;
+      list = g_list_next (list)) {
+    const GstUTCTimingNode *node = (const GstUTCTimingNode *) list->data;
+    if (node->method & methods) {
+      if (selected_method) {
+        *selected_method = node->method;
+      }
+      return node->urls;
+    }
+  }
+  return NULL;
 }
 
 gboolean
@@ -3577,10 +4629,10 @@ gst_mpd_client_get_next_fragment (GstMpdClient * client,
     guint indexStream, GstMediaFragmentInfo * fragment, gboolean forward)
 {
   GstActiveStream *stream = NULL;
-  GstMediaSegment currentChunk;
+  GstMediaSegment *currentChunk;
   gchar *mediaURL = NULL;
   gchar *indexURL = NULL;
-  guint segment_idx;
+  GstUri *base_url, *frag_url;
 
   /* select stream */
   g_return_val_if_fail (client != NULL, FALSE);
@@ -3589,84 +4641,128 @@ gst_mpd_client_get_next_fragment (GstMpdClient * client,
   g_return_val_if_fail (stream != NULL, FALSE);
   g_return_val_if_fail (stream->cur_representation != NULL, FALSE);
 
-  GST_MPD_CLIENT_LOCK (client);
-  segment_idx = gst_mpd_client_get_segment_index (stream);
-  GST_DEBUG ("Looking for fragment sequence chunk %d", segment_idx);
+  if (stream->segments) {
+    GST_DEBUG ("Looking for fragment sequence chunk %d / %d",
+        stream->segment_index, stream->segments->len);
+    if (stream->segment_index >= stream->segments->len)
+      return FALSE;
+  } else {
+    GstClockTime duration = gst_mpd_client_get_segment_duration (client,
+        stream, NULL);
+    guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
 
-  if (!gst_mpdparser_get_chunk_by_index (client, indexStream, segment_idx,
-          &currentChunk)) {
-    GST_MPD_CLIENT_UNLOCK (client);
-    return FALSE;
-  }
-
-  GST_DEBUG ("currentChunk->SegmentURL = %p", currentChunk.SegmentURL);
-  if (currentChunk.SegmentURL != NULL) {
-    mediaURL =
-        g_strdup (gst_mpdparser_get_mediaURL (stream, currentChunk.SegmentURL));
-    indexURL = currentChunk.SegmentURL->index;
-  } else if (stream->cur_seg_template != NULL) {
-    mediaURL =
-        gst_mpdparser_build_URL_from_template (stream->cur_seg_template->media,
-        stream->cur_representation->id, currentChunk.number,
-        stream->cur_representation->bandwidth, currentChunk.start);
-    if (stream->cur_seg_template->index) {
-      indexURL =
-          gst_mpdparser_build_URL_from_template (stream->cur_seg_template->
-          index, stream->cur_representation->id, currentChunk.number,
-          stream->cur_representation->bandwidth, currentChunk.start);
+    g_return_val_if_fail (stream->cur_seg_template->
+        MultSegBaseType->SegmentTimeline == NULL, FALSE);
+    if (!GST_CLOCK_TIME_IS_VALID (duration) || (segments_count > 0
+            && stream->segment_index >= segments_count)) {
+      return FALSE;
     }
+    fragment->duration = duration;
   }
-  GST_DEBUG ("mediaURL = %s", mediaURL);
-  GST_DEBUG ("indexURL = %s", indexURL);
 
-  fragment->timestamp = currentChunk.start_time;
-  fragment->duration = currentChunk.duration;
-  fragment->discontinuity = segment_idx != currentChunk.number;
+  /* FIXME rework discont checking */
+  /* fragment->discontinuity = segment_idx != currentChunk.number; */
   fragment->range_start = 0;
   fragment->range_end = -1;
   fragment->index_uri = NULL;
   fragment->index_range_start = 0;
   fragment->index_range_end = -1;
-  if (currentChunk.SegmentURL) {
-    if (currentChunk.SegmentURL->mediaRange) {
-      fragment->range_start =
-          currentChunk.SegmentURL->mediaRange->first_byte_pos;
-      fragment->range_end = currentChunk.SegmentURL->mediaRange->last_byte_pos;
+
+  if (stream->segments) {
+    currentChunk = g_ptr_array_index (stream->segments, stream->segment_index);
+
+    GST_DEBUG ("currentChunk->SegmentURL = %p", currentChunk->SegmentURL);
+    if (currentChunk->SegmentURL != NULL) {
+      mediaURL =
+          g_strdup (gst_mpdparser_get_mediaURL (stream,
+              currentChunk->SegmentURL));
+      indexURL = g_strdup (currentChunk->SegmentURL->index);
+    } else if (stream->cur_seg_template != NULL) {
+      mediaURL =
+          gst_mpdparser_build_URL_from_template (stream->
+          cur_seg_template->media, stream->cur_representation->id,
+          currentChunk->number + stream->segment_repeat_index,
+          stream->cur_representation->bandwidth,
+          currentChunk->scale_start +
+          stream->segment_repeat_index * currentChunk->scale_duration);
+      if (stream->cur_seg_template->index) {
+        indexURL =
+            gst_mpdparser_build_URL_from_template (stream->
+            cur_seg_template->index, stream->cur_representation->id,
+            currentChunk->number + stream->segment_repeat_index,
+            stream->cur_representation->bandwidth,
+            currentChunk->scale_start +
+            stream->segment_repeat_index * currentChunk->scale_duration);
+      }
     }
-    if (currentChunk.SegmentURL->indexRange) {
-      fragment->index_range_start =
-          currentChunk.SegmentURL->indexRange->first_byte_pos;
-      fragment->index_range_end =
-          currentChunk.SegmentURL->indexRange->last_byte_pos;
+    GST_DEBUG ("mediaURL = %s", mediaURL);
+    GST_DEBUG ("indexURL = %s", indexURL);
+
+    fragment->timestamp =
+        currentChunk->start +
+        stream->segment_repeat_index * currentChunk->duration;
+    fragment->duration = currentChunk->duration;
+    if (currentChunk->SegmentURL) {
+      if (currentChunk->SegmentURL->mediaRange) {
+        fragment->range_start =
+            currentChunk->SegmentURL->mediaRange->first_byte_pos;
+        fragment->range_end =
+            currentChunk->SegmentURL->mediaRange->last_byte_pos;
+      }
+      if (currentChunk->SegmentURL->indexRange) {
+        fragment->index_range_start =
+            currentChunk->SegmentURL->indexRange->first_byte_pos;
+        fragment->index_range_end =
+            currentChunk->SegmentURL->indexRange->last_byte_pos;
+      }
     }
+  } else {
+    if (stream->cur_seg_template != NULL) {
+      mediaURL =
+          gst_mpdparser_build_URL_from_template (stream->
+          cur_seg_template->media, stream->cur_representation->id,
+          stream->segment_index +
+          stream->cur_seg_template->MultSegBaseType->startNumber,
+          stream->cur_representation->bandwidth,
+          stream->segment_index * fragment->duration);
+      if (stream->cur_seg_template->index) {
+        indexURL =
+            gst_mpdparser_build_URL_from_template (stream->
+            cur_seg_template->index, stream->cur_representation->id,
+            stream->segment_index +
+            stream->cur_seg_template->MultSegBaseType->startNumber,
+            stream->cur_representation->bandwidth,
+            stream->segment_index * fragment->duration);
+      }
+    } else {
+      return FALSE;
+    }
+
+    GST_DEBUG ("mediaURL = %s", mediaURL);
+    GST_DEBUG ("indexURL = %s", indexURL);
+
+    fragment->timestamp = stream->segment_index * fragment->duration;
   }
 
-  if (mediaURL == NULL) {
-    /* single segment with URL encoded in the baseURL syntax element */
-    fragment->uri = g_strdup (stream->baseURL);
-  } else if (strncmp (mediaURL, "http://", 7) != 0) {
-    fragment->uri =
-        g_strconcat (stream->baseURL, mediaURL, stream->queryURL, NULL);
-    g_free (mediaURL);
-  } else if (stream->queryURL) {
-    fragment->uri = g_strconcat (mediaURL, stream->queryURL, NULL);
-    g_free (mediaURL);
-  } else {
-    fragment->uri = mediaURL;
+  base_url = gst_uri_from_string (stream->baseURL);
+  frag_url = gst_uri_from_string_with_base (base_url, mediaURL);
+  g_free (mediaURL);
+  if (stream->queryURL) {
+    frag_url = gst_uri_make_writable (frag_url);
+    gst_uri_set_query_string (frag_url, stream->queryURL);
   }
+  fragment->uri = gst_uri_to_string (frag_url);
+  gst_uri_unref (frag_url);
 
   if (indexURL != NULL) {
-    if (strncmp (indexURL, "http://", 7) != 0) {
-      fragment->index_uri =
-          g_strconcat (stream->baseURL, indexURL, stream->queryURL, NULL);
-      g_free (indexURL);
-    } else if (stream->queryURL) {
-      fragment->index_uri = g_strconcat (indexURL, stream->queryURL, NULL);
-      g_free (indexURL);
-    } else {
-      fragment->index_uri = indexURL;
-    }
-  } else if (fragment->index_range_start || fragment->index_range_end != -1) {
+    frag_url = gst_uri_make_writable (gst_uri_from_string_with_base (base_url,
+            indexURL));
+    gst_uri_set_query_string (frag_url, stream->queryURL);
+    fragment->index_uri = gst_uri_to_string (frag_url);
+    gst_uri_unref (frag_url);
+    g_free (indexURL);
+  } else if (indexURL == NULL && (fragment->index_range_start
+          || fragment->index_range_end != -1)) {
     /* index has no specific URL but has a range, we should only use this if
      * the media also has a range, otherwise we are serving some data twice
      * (in the media fragment and again in the index) */
@@ -3679,13 +4775,153 @@ gst_mpd_client_get_next_fragment (GstMpdClient * client,
     }
   }
 
-  gst_mpd_client_set_segment_index (stream,
-      forward ? segment_idx + 1 : segment_idx - 1);
-  GST_MPD_CLIENT_UNLOCK (client);
+  gst_uri_unref (base_url);
 
   GST_DEBUG ("Loading chunk with URL %s", fragment->uri);
 
   return TRUE;
+}
+
+gboolean
+gst_mpd_client_has_next_segment (GstMpdClient * client,
+    GstActiveStream * stream, gboolean forward)
+{
+  if (forward) {
+    guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
+
+    if (segments_count > 0 && stream->segments
+        && stream->segment_index + 1 == segments_count) {
+      GstMediaSegment *segment;
+
+      segment = g_ptr_array_index (stream->segments, stream->segment_index);
+      if (segment->repeat >= 0
+          && stream->segment_repeat_index >= segment->repeat)
+        return FALSE;
+    } else if (segments_count > 0
+        && stream->segment_index + 1 >= segments_count) {
+      return FALSE;
+    }
+  } else {
+    if (stream->segment_index < 0)
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
+GstFlowReturn
+gst_mpd_client_advance_segment (GstMpdClient * client, GstActiveStream * stream,
+    gboolean forward)
+{
+  GstMediaSegment *segment;
+  GstFlowReturn ret = GST_FLOW_OK;
+  guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
+
+  GST_DEBUG ("Advancing segment. Current: %d / %d r:%d", stream->segment_index,
+      segments_count, stream->segment_repeat_index);
+
+  /* handle special cases first */
+  if (forward) {
+    if (segments_count > 0 && stream->segment_index >= segments_count) {
+      ret = GST_FLOW_EOS;
+      goto done;
+    }
+
+    if (stream->segments == NULL) {
+      if (stream->segment_index < 0) {
+        stream->segment_index = 0;
+      } else {
+        stream->segment_index++;
+        if (segments_count > 0 && stream->segment_index >= segments_count) {
+          ret = GST_FLOW_EOS;
+        }
+      }
+      goto done;
+    }
+
+    /* special case for when playback direction is reverted right at *
+     * the end of the segment list */
+    if (stream->segment_index < 0) {
+      stream->segment_index = 0;
+      goto done;
+    }
+  } else {
+    if (stream->segments == NULL)
+      stream->segment_index--;
+    if (stream->segment_index < 0) {
+      stream->segment_index = -1;
+      ret = GST_FLOW_EOS;
+      goto done;
+    }
+    if (stream->segments == NULL)
+      goto done;
+
+    /* special case for when playback direction is reverted right at *
+     * the end of the segment list */
+    if (stream->segment_index >= segments_count) {
+      stream->segment_index = segments_count - 1;
+      segment = g_ptr_array_index (stream->segments, stream->segment_index);
+      if (segment->repeat >= 0) {
+        stream->segment_repeat_index = segment->repeat;
+      } else {
+        GstClockTime start = segment->start;
+        GstClockTime end =
+            gst_mpdparser_get_segment_end_time (client, stream->segments,
+            segment,
+            stream->segment_index);
+        stream->segment_repeat_index =
+            (guint) (end - start) / segment->duration;
+      }
+      goto done;
+    }
+  }
+
+  /* for the normal cases we can get the segment safely here */
+  segment = g_ptr_array_index (stream->segments, stream->segment_index);
+  if (forward) {
+    if (segment->repeat >= 0 && stream->segment_repeat_index >= segment->repeat) {
+      stream->segment_repeat_index = 0;
+      stream->segment_index++;
+      if (segments_count > 0 && stream->segment_index >= segments_count) {
+        ret = GST_FLOW_EOS;
+        goto done;
+      }
+    } else {
+      stream->segment_repeat_index++;
+    }
+  } else {
+    if (stream->segment_repeat_index == 0) {
+      stream->segment_index--;
+      if (stream->segment_index < 0) {
+        ret = GST_FLOW_EOS;
+        goto done;
+      }
+
+      segment = g_ptr_array_index (stream->segments, stream->segment_index);
+      /* negative repeats only seem to make sense at the end of a list,
+       * so this one will probably not be. Needs some sanity checking
+       * when loading the XML data. */
+      if (segment->repeat >= 0) {
+        stream->segment_repeat_index = segment->repeat;
+      } else {
+        GstClockTime start = segment->start;
+        GstClockTime end =
+            gst_mpdparser_get_segment_end_time (client, stream->segments,
+            segment,
+            stream->segment_index);
+        stream->segment_repeat_index =
+            (guint) (end - start) / segment->duration;
+      }
+    } else {
+      stream->segment_repeat_index--;
+    }
+  }
+
+done:
+  GST_DEBUG ("Advanced to segment: %d / %d r:%d (ret: %s)",
+      stream->segment_index, segments_count,
+      stream->segment_repeat_index, gst_flow_get_name (ret));
+  return ret;
 }
 
 gboolean
@@ -3706,17 +4942,24 @@ gst_mpd_client_get_next_header (GstMpdClient * client, gchar ** uri,
   *range_end = -1;
 
   GST_DEBUG ("Looking for current representation header");
-  GST_MPD_CLIENT_LOCK (client);
   *uri = NULL;
-  if (stream->cur_segment_base && stream->cur_segment_base->Initialization) {
-    *uri =
-        g_strdup (gst_mpdparser_get_initializationURL (stream,
-            stream->cur_segment_base->Initialization));
-    if (stream->cur_segment_base->Initialization->range) {
-      *range_start =
-          stream->cur_segment_base->Initialization->range->first_byte_pos;
-      *range_end =
-          stream->cur_segment_base->Initialization->range->last_byte_pos;
+  if (stream->cur_segment_base) {
+    if (stream->cur_segment_base->Initialization) {
+      *uri =
+          g_strdup (gst_mpdparser_get_initializationURL (stream,
+              stream->cur_segment_base->Initialization));
+      if (stream->cur_segment_base->Initialization->range) {
+        *range_start =
+            stream->cur_segment_base->Initialization->range->first_byte_pos;
+        *range_end =
+            stream->cur_segment_base->Initialization->range->last_byte_pos;
+      }
+    } else if (stream->cur_segment_base->indexRange) {
+      *uri =
+          g_strdup (gst_mpdparser_get_initializationURL (stream,
+              stream->cur_segment_base->Initialization));
+      *range_start = 0;
+      *range_end = stream->cur_segment_base->indexRange->first_byte_pos - 1;
     }
   } else if (stream->cur_seg_template) {
     const gchar *initialization = NULL;
@@ -3735,7 +4978,6 @@ gst_mpd_client_get_next_header (GstMpdClient * client, gchar ** uri,
           stream->cur_representation->bandwidth, 0);
     }
   }
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return *uri == NULL ? FALSE : TRUE;
 }
@@ -3758,7 +5000,6 @@ gst_mpd_client_get_next_header_index (GstMpdClient * client, gchar ** uri,
   *range_end = -1;
 
   GST_DEBUG ("Looking for current representation index");
-  GST_MPD_CLIENT_LOCK (client);
   *uri = NULL;
   if (stream->cur_segment_base && stream->cur_segment_base->indexRange) {
     *uri =
@@ -3782,7 +5023,6 @@ gst_mpd_client_get_next_header_index (GstMpdClient * client, gchar ** uri,
           stream->cur_representation->id, 0,
           stream->cur_representation->bandwidth, 0);
   }
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return *uri == NULL ? FALSE : TRUE;
 }
@@ -3792,26 +5032,30 @@ gst_mpd_client_get_next_fragment_duration (GstMpdClient * client,
     GstActiveStream * stream)
 {
   GstMediaSegment *media_segment = NULL;
-  guint seg_idx;
+  gint seg_idx;
 
   g_return_val_if_fail (stream != NULL, 0);
 
-  seg_idx = gst_mpd_client_get_segment_index (stream);
+  seg_idx = stream->segment_index;
 
   if (stream->segments) {
-    if (seg_idx < stream->segments->len)
+    if (seg_idx < stream->segments->len && seg_idx >= 0)
       media_segment = g_ptr_array_index (stream->segments, seg_idx);
 
     return media_segment == NULL ? 0 : media_segment->duration;
   } else {
     GstClockTime duration =
-        gst_mpd_client_get_segment_duration (client, stream);
-    g_return_val_if_fail (stream->cur_seg_template->
-        MultSegBaseType->SegmentTimeline == NULL, 0);
+        gst_mpd_client_get_segment_duration (client, stream, NULL);
+    guint segments_count = gst_mpd_client_get_segments_counts (client, stream);
 
-    if (GST_CLOCK_TIME_IS_VALID (duration))
-      return duration;
-    return 0;
+    g_return_val_if_fail (stream->cur_seg_template->MultSegBaseType->
+        SegmentTimeline == NULL, 0);
+
+    if (!GST_CLOCK_TIME_IS_VALID (duration) || (segments_count > 0
+            && seg_idx >= segments_count)) {
+      return 0;
+    }
+    return duration;
   }
 }
 
@@ -3822,14 +5066,12 @@ gst_mpd_client_get_media_presentation_duration (GstMpdClient * client)
 
   g_return_val_if_fail (client != NULL, GST_CLOCK_TIME_NONE);
 
-  GST_MPD_CLIENT_LOCK (client);
   if (client->mpd_node->mediaPresentationDuration != -1) {
     duration = client->mpd_node->mediaPresentationDuration * GST_MSECOND;
   } else {
     /* We can only get the duration for on-demand streams */
     duration = GST_CLOCK_TIME_NONE;
   }
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return duration;
 }
@@ -3840,22 +5082,27 @@ gst_mpd_client_set_period_id (GstMpdClient * client, const gchar * period_id)
   GstStreamPeriod *next_stream_period;
   gboolean ret = FALSE;
   GList *iter;
+  guint period_idx;
 
   g_return_val_if_fail (client != NULL, FALSE);
   g_return_val_if_fail (client->periods != NULL, FALSE);
   g_return_val_if_fail (period_id != NULL, FALSE);
 
-  GST_MPD_CLIENT_LOCK (client);
-  for (iter = client->periods; iter; iter = g_list_next (iter)) {
+  if (!gst_mpd_client_setup_media_presentation (client, GST_CLOCK_TIME_NONE, -1,
+          period_id))
+    return FALSE;
+
+  for (period_idx = 0, iter = client->periods; iter;
+      period_idx++, iter = g_list_next (iter)) {
     next_stream_period = iter->data;
 
     if (next_stream_period->period->id
         && strcmp (next_stream_period->period->id, period_id) == 0) {
       ret = TRUE;
+      client->period_idx = period_idx;
       break;
     }
   }
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return ret;
 }
@@ -3869,13 +5116,14 @@ gst_mpd_client_set_period_index (GstMpdClient * client, guint period_idx)
   g_return_val_if_fail (client != NULL, FALSE);
   g_return_val_if_fail (client->periods != NULL, FALSE);
 
-  GST_MPD_CLIENT_LOCK (client);
+  if (!gst_mpd_client_setup_media_presentation (client, -1, period_idx, NULL))
+    return FALSE;
+
   next_stream_period = g_list_nth_data (client->periods, period_idx);
   if (next_stream_period != NULL) {
     client->period_idx = period_idx;
     ret = TRUE;
   }
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return ret;
 }
@@ -3886,9 +5134,7 @@ gst_mpd_client_get_period_index (GstMpdClient * client)
   guint period_idx;
 
   g_return_val_if_fail (client != NULL, 0);
-  GST_MPD_CLIENT_LOCK (client);
   period_idx = client->period_idx;
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return period_idx;
 }
@@ -3900,13 +5146,28 @@ gst_mpd_client_get_period_id (GstMpdClient * client)
   gchar *period_id = NULL;
 
   g_return_val_if_fail (client != NULL, 0);
-  GST_MPD_CLIENT_LOCK (client);
   period = g_list_nth_data (client->periods, client->period_idx);
   if (period && period->period)
     period_id = period->period->id;
-  GST_MPD_CLIENT_UNLOCK (client);
 
   return period_id;
+}
+
+gboolean
+gst_mpd_client_has_previous_period (GstMpdClient * client)
+{
+  GList *next_stream_period;
+  g_return_val_if_fail (client != NULL, FALSE);
+  g_return_val_if_fail (client->periods != NULL, FALSE);
+
+  if (!gst_mpd_client_setup_media_presentation (client, GST_CLOCK_TIME_NONE,
+          client->period_idx - 1, NULL))
+    return FALSE;
+
+  next_stream_period =
+      g_list_nth_data (client->periods, client->period_idx - 1);
+
+  return next_stream_period != NULL;
 }
 
 gboolean
@@ -3916,58 +5177,51 @@ gst_mpd_client_has_next_period (GstMpdClient * client)
   g_return_val_if_fail (client != NULL, FALSE);
   g_return_val_if_fail (client->periods != NULL, FALSE);
 
-  GST_MPD_CLIENT_LOCK (client);
+  if (!gst_mpd_client_setup_media_presentation (client, GST_CLOCK_TIME_NONE,
+          client->period_idx + 1, NULL))
+    return FALSE;
+
   next_stream_period =
       g_list_nth_data (client->periods, client->period_idx + 1);
-  GST_MPD_CLIENT_UNLOCK (client);
-
   return next_stream_period != NULL;
 }
 
 void
-gst_mpd_client_set_segment_index_for_all_streams (GstMpdClient * client,
-    guint segment_idx)
+gst_mpd_client_seek_to_first_segment (GstMpdClient * client)
 {
   GList *list;
 
   g_return_if_fail (client != NULL);
   g_return_if_fail (client->active_streams != NULL);
 
-  /* FIXME: support multiple streams with different segment duration */
   for (list = g_list_first (client->active_streams); list;
       list = g_list_next (list)) {
     GstActiveStream *stream = (GstActiveStream *) list->data;
     if (stream) {
-      stream->segment_idx = segment_idx;
+      stream->segment_index = 0;
+      stream->segment_repeat_index = 0;
     }
   }
 }
 
-void
-gst_mpd_client_set_segment_index (GstActiveStream * stream, guint segment_idx)
-{
-  g_return_if_fail (stream != NULL);
-
-  stream->segment_idx = segment_idx;
-}
-
-guint
-gst_mpd_client_get_segment_index (GstActiveStream * stream)
-{
-  g_return_val_if_fail (stream != NULL, 0);
-
-  return stream->segment_idx;
-}
-
 static guint
-gst_mpd_client_get_segments_counts (GstActiveStream * stream)
+gst_mpd_client_get_segments_counts (GstMpdClient * client,
+    GstActiveStream * stream)
 {
+  GstStreamPeriod *stream_period;
+
   g_return_val_if_fail (stream != NULL, 0);
 
   if (stream->segments)
     return stream->segments->len;
-  g_return_val_if_fail (stream->cur_seg_template->
-      MultSegBaseType->SegmentTimeline == NULL, 0);
+  g_return_val_if_fail (stream->cur_seg_template->MultSegBaseType->
+      SegmentTimeline == NULL, 0);
+
+  stream_period = gst_mpdparser_get_stream_period (client);
+  if (stream_period->duration != -1)
+    return gst_util_uint64_scale_ceil (stream_period->duration, 1,
+        gst_mpd_client_get_segment_duration (client, stream, NULL));
+
   return 0;
 }
 
@@ -4118,23 +5372,25 @@ gst_mpdparser_get_list_and_nb_of_audio_language (GstMpdClient * client,
 {
   GstStreamPeriod *stream_period;
   GstAdaptationSetNode *adapt_set;
-  GList *list;
+  GList *adaptation_sets, *list;
   const gchar *this_mimeType = "audio";
   gchar *mimeType = NULL;
-  guint nb_adapatation_set = 0;
+  guint nb_adaptation_set = 0;
 
   stream_period = gst_mpdparser_get_stream_period (client);
   g_return_val_if_fail (stream_period != NULL, 0);
   g_return_val_if_fail (stream_period->period != NULL, 0);
 
-  for (list = g_list_first (stream_period->period->AdaptationSets); list;
-      list = g_list_next (list)) {
+  adaptation_sets =
+      gst_mpd_client_get_adaptation_sets_for_period (client, stream_period);
+  for (list = adaptation_sets; list; list = g_list_next (list)) {
     adapt_set = (GstAdaptationSetNode *) list->data;
-    if (adapt_set) {
+    if (adapt_set && adapt_set->lang) {
       gchar *this_lang = adapt_set->lang;
       GstRepresentationNode *rep;
       rep =
           gst_mpdparser_get_lowest_representation (adapt_set->Representations);
+      mimeType = NULL;
       if (rep->RepresentationBase)
         mimeType = rep->RepresentationBase->mimeType;
       if (!mimeType && adapt_set->RepresentationBase) {
@@ -4142,15 +5398,13 @@ gst_mpdparser_get_list_and_nb_of_audio_language (GstMpdClient * client,
       }
 
       if (strncmp_ext (mimeType, this_mimeType) == 0) {
-        if (this_lang) {
-          nb_adapatation_set++;
-          *lang = g_list_append (*lang, this_lang);
-        }
+        nb_adaptation_set++;
+        *lang = g_list_append (*lang, this_lang);
       }
     }
   }
 
-  return nb_adapatation_set;
+  return nb_adaptation_set;
 }
 
 
@@ -4159,7 +5413,7 @@ gst_mpd_client_get_next_segment_availability_end_time (GstMpdClient * client,
     GstActiveStream * stream)
 {
   GstDateTime *availability_start_time, *rv;
-  guint seg_idx;
+  gint seg_idx;
   GstClockTime seg_duration;
   gint64 offset;
   GstStreamPeriod *stream_period;
@@ -4169,8 +5423,8 @@ gst_mpd_client_get_next_segment_availability_end_time (GstMpdClient * client,
 
   stream_period = gst_mpdparser_get_stream_period (client);
 
-  seg_idx = gst_mpd_client_get_segment_index (stream);
-  seg_duration = gst_mpd_client_get_segment_duration (client, stream);
+  seg_idx = stream->segment_index;
+  seg_duration = gst_mpd_client_get_segment_duration (client, stream, NULL);
   if (seg_duration == 0)
     return NULL;
   availability_start_time = gst_mpd_client_get_availability_start_time (client);
@@ -4180,9 +5434,14 @@ gst_mpd_client_get_next_segment_availability_end_time (GstMpdClient * client,
   if (stream_period && stream_period->period) {
     GstDateTime *t =
         gst_mpd_client_add_time_difference (availability_start_time,
-        stream_period->period->start * 1000);
+        stream_period->start / 1000);
     gst_date_time_unref (availability_start_time);
     availability_start_time = t;
+
+    if (availability_start_time == NULL) {
+      GST_WARNING_OBJECT (client, "Failed to offset availability_start_time");
+      return NULL;
+    }
   }
 
   offset = (1 + seg_idx) * seg_duration;
@@ -4205,7 +5464,7 @@ gst_mpd_client_check_time_position (GstMpdClient * client,
 
   g_return_val_if_fail (gst_mpd_client_is_live (client), 0);
 
-  duration = gst_mpd_client_get_segment_duration (client, stream);
+  duration = gst_mpd_client_get_segment_duration (client, stream, NULL);
   stream_now = g_date_time_difference (now, start);
   g_date_time_unref (now);
   g_date_time_unref (start);
@@ -4244,7 +5503,7 @@ gst_mpd_client_check_time_position (GstMpdClient * client,
     *diff = ts_microseconds - stream_now;
     return 1;
   }
-  if (client->mpd_node->timeShiftBufferDepth
+  if (client->mpd_node->timeShiftBufferDepth != -1
       && ts_microseconds <
       stream_now - client->mpd_node->timeShiftBufferDepth) {
     *diff = ts_microseconds - stream_now;
@@ -4270,6 +5529,10 @@ gst_mpd_client_seek_to_time (GstMpdClient * client, GDateTime * time)
   ts_microseconds = g_date_time_difference (time, start);
   g_date_time_unref (start);
 
+  /* Clamp to availability start time, otherwise calculations wrap around */
+  if (ts_microseconds < 0)
+    ts_microseconds = 0;
+
   ts = ts_microseconds * GST_USECOND;
   for (stream = client->active_streams; stream; stream = g_list_next (stream)) {
     ret = ret & gst_mpd_client_stream_seek (client, stream->data, ts);
@@ -4282,4 +5545,10 @@ gst_media_fragment_info_clear (GstMediaFragmentInfo * fragment)
 {
   g_free (fragment->uri);
   g_free (fragment->index_uri);
+}
+
+gboolean
+gst_mpd_client_has_isoff_ondemand_profile (GstMpdClient * client)
+{
+  return client->profile_isoff_ondemand;
 }

@@ -22,6 +22,8 @@
 #include <config.h>
 #endif
 #include "wldisplay.h"
+#include "wlbuffer.h"
+
 #include <errno.h>
 
 #ifdef GST_WLSINK_ENHANCEMENT
@@ -71,6 +73,8 @@ gst_wl_display_init (GstWlDisplay * self)
 
   self->formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
   self->wl_fd_poll = gst_poll_new (TRUE);
+  self->buffers = g_hash_table_new (g_direct_hash, g_direct_equal);
+  g_mutex_init (&self->buffers_mutex);
 }
 
 static void
@@ -81,9 +85,18 @@ gst_wl_display_finalize (GObject * gobject)
   GstWlDisplay *self = GST_WL_DISPLAY (gobject);
 
   gst_poll_set_flushing (self->wl_fd_poll, TRUE);
+  g_thread_join (self->thread);
 
-  if (self->thread)
-    g_thread_join (self->thread);
+  /* to avoid buffers being unregistered from another thread
+   * at the same time, take their ownership */
+  g_mutex_lock (&self->buffers_mutex);
+  self->shutting_down = TRUE;
+  g_hash_table_foreach (self->buffers, (GHFunc) g_object_ref, NULL);
+  g_mutex_unlock (&self->buffers_mutex);
+
+  g_hash_table_foreach (self->buffers,
+      (GHFunc) gst_wl_buffer_force_release_and_unref, NULL);
+  g_hash_table_remove_all (self->buffers);
 
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->is_native_format == FALSE) {
@@ -101,6 +114,8 @@ gst_wl_display_finalize (GObject * gobject)
 
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
+  g_hash_table_unref (self->buffers);
+  g_mutex_clear (&self->buffers_mutex);
 
 #ifndef GST_WLSINK_ENHANCEMENT
   if (self->shm)
@@ -355,4 +370,27 @@ gst_wl_display_new_existing (struct wl_display * display,
   }
 
   return self;
+}
+
+void
+gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf)
+{
+  g_assert (!self->shutting_down);
+
+  GST_TRACE_OBJECT (self, "registering GstWlBuffer %p", buf);
+
+  g_mutex_lock (&self->buffers_mutex);
+  g_hash_table_add (self->buffers, buf);
+  g_mutex_unlock (&self->buffers_mutex);
+}
+
+void
+gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf)
+{
+  GST_TRACE_OBJECT (self, "unregistering GstWlBuffer %p", buf);
+
+  g_mutex_lock (&self->buffers_mutex);
+  if (G_LIKELY (!self->shutting_down))
+    g_hash_table_remove (self->buffers, buf);
+  g_mutex_unlock (&self->buffers_mutex);
 }

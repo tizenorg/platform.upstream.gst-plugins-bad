@@ -51,13 +51,14 @@ struct _GstAmcAudioDec
 
   /* < private > */
   GstAmcCodec *codec;
-  GstAmcBuffer *input_buffers, *output_buffers;
-  gsize n_input_buffers, n_output_buffers;
 
   GstCaps *input_caps;
   GList *codec_datas;
   gboolean input_caps_changed;
   gint spf;
+
+  /* For collecting complete frames for the output */
+  GstAdapter *output_adapter;
 
   /* Output format of the codec */
   GstAudioInfo info;
@@ -78,14 +79,10 @@ struct _GstAmcAudioDec
   GCond drain_cond;
   /* TRUE if EOS buffers shouldn't be forwarded */
   gboolean draining;
-
-  /* TRUE if upstream is EOS */
-  gboolean eos;
+  /* TRUE if the component is drained currently */
+  gboolean drained;
 
   GstFlowReturn downstream_flow_ret;
-
-  /* Output buffers counter */
-  gint n_buffers;
 };
 
 struct _GstAmcAudioDecClass

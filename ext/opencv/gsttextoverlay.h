@@ -48,6 +48,7 @@
 
 #include <gst/gst.h>
 #include "gstopencvutils.h"
+#include <opencv2/core/core_c.h>
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
@@ -72,7 +73,6 @@ struct _GstOpencvTextOverlay
   GstPad *sinkpad, *srcpad;
 
   IplImage *cvImage;
-  CvMemStorage *cvStorage;
   CvFont font;  
 
   gint xpos;

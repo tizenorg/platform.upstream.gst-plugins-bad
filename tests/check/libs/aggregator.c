@@ -49,12 +49,15 @@ typedef struct _GstTestAggregatorClass GstTestAggregatorClass;
 static GType gst_test_aggregator_get_type (void);
 
 #define BUFFER_DURATION 100000000       /* 10 frames per second */
+#define TEST_GAP_PTS 0
+#define TEST_GAP_DURATION (5 * GST_SECOND)
 
 struct _GstTestAggregator
 {
   GstAggregator parent;
 
   guint64 timestamp;
+  gboolean gap_expected;
 };
 
 struct _GstTestAggregatorClass
@@ -63,7 +66,7 @@ struct _GstTestAggregatorClass
 };
 
 static GstFlowReturn
-gst_test_aggregator_aggregate (GstAggregator * aggregator)
+gst_test_aggregator_aggregate (GstAggregator * aggregator, gboolean timeout)
 {
   GstIterator *iter;
   gboolean all_eos = TRUE;
@@ -76,7 +79,6 @@ gst_test_aggregator_aggregate (GstAggregator * aggregator)
 
   iter = gst_element_iterate_sink_pads (GST_ELEMENT (testagg));
   while (!done_iterating) {
-    GstBuffer *buffer;
     GValue value = { 0, };
     GstAggregatorPad *pad;
 
@@ -84,10 +86,21 @@ gst_test_aggregator_aggregate (GstAggregator * aggregator)
       case GST_ITERATOR_OK:
         pad = g_value_get_object (&value);
 
-        if (pad->eos == FALSE)
+        if (gst_aggregator_pad_is_eos (pad) == FALSE)
           all_eos = FALSE;
-        buffer = gst_aggregator_pad_steal_buffer (pad);
-        gst_buffer_replace (&buffer, NULL);
+
+        if (testagg->gap_expected == TRUE) {
+          buf = gst_aggregator_pad_get_buffer (pad);
+          fail_unless (buf);
+          fail_unless (GST_BUFFER_PTS (buf) == TEST_GAP_PTS);
+          fail_unless (GST_BUFFER_DURATION (buf) == TEST_GAP_DURATION);
+          fail_unless (GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_GAP));
+          fail_unless (GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DROPPABLE));
+          gst_buffer_unref (buf);
+          testagg->gap_expected = FALSE;
+        }
+
+        gst_aggregator_pad_drop_buffer (pad);
 
         g_value_reset (&value);
         break;
@@ -156,8 +169,9 @@ static void
 gst_test_aggregator_init (GstTestAggregator * self)
 {
   GstAggregator *agg = GST_AGGREGATOR (self);
-  gst_segment_init (&agg->segment, GST_FORMAT_BYTES);
+  gst_segment_init (&agg->segment, GST_FORMAT_TIME);
   self->timestamp = 0;
+  self->gap_expected = FALSE;
 }
 
 static gboolean
@@ -223,13 +237,11 @@ static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS_ANY);
 
-static gpointer
-push_buffer (gpointer user_data)
+static void
+start_flow (ChainData * chain_data)
 {
-  GstFlowReturn flow;
-  GstCaps *caps;
-  ChainData *chain_data = (ChainData *) user_data;
   GstSegment segment;
+  GstCaps *caps;
 
   gst_pad_push_event (chain_data->srcpad, gst_event_new_stream_start ("test"));
 
@@ -239,6 +251,15 @@ push_buffer (gpointer user_data)
 
   gst_segment_init (&segment, GST_FORMAT_TIME);
   gst_pad_push_event (chain_data->srcpad, gst_event_new_segment (&segment));
+}
+
+static gpointer
+push_buffer (gpointer user_data)
+{
+  GstFlowReturn flow;
+  ChainData *chain_data = (ChainData *) user_data;
+
+  start_flow (chain_data);
 
   GST_DEBUG ("Pushing buffer on pad: %s:%s",
       GST_DEBUG_PAD_NAME (chain_data->sinkpad));
@@ -256,11 +277,26 @@ static gpointer
 push_event (gpointer user_data)
 {
   ChainData *chain_data = (ChainData *) user_data;
+  GstTestAggregator *aggregator = (GstTestAggregator *) chain_data->aggregator;
+  GstEventType event_type;
+
+  start_flow (chain_data);
 
   GST_INFO_OBJECT (chain_data->srcpad, "Pushing event: %"
       GST_PTR_FORMAT, chain_data->event);
+
+  event_type = GST_EVENT_TYPE (chain_data->event);
+  switch (event_type) {
+    case GST_EVENT_GAP:
+      aggregator->gap_expected = TRUE;
+      break;
+    default:
+      break;
+  }
+
   fail_unless (gst_pad_push_event (chain_data->srcpad,
           chain_data->event) == TRUE);
+
 
   return NULL;
 }
@@ -287,7 +323,7 @@ _quit (GMainLoop * ml)
 static GstPadProbeReturn
 _aggregated_cb (GstPad * pad, GstPadProbeInfo * info, GMainLoop * ml)
 {
-  GST_DEBUG ("SHould quit ML");
+  GST_DEBUG ("Should quit ML");
   g_idle_add ((GSourceFunc) _quit, ml);
 
   return GST_PAD_PROBE_REMOVE;
@@ -453,6 +489,33 @@ GST_START_TEST (test_aggregate_eos)
 
 GST_END_TEST;
 
+GST_START_TEST (test_aggregate_gap)
+{
+  GThread *thread;
+
+  ChainData data = { 0, };
+  TestData test = { 0, };
+
+  _test_data_init (&test, FALSE);
+  _chain_data_init (&data, test.aggregator);
+
+  data.event = gst_event_new_gap (TEST_GAP_PTS, TEST_GAP_DURATION);
+
+  thread = g_thread_try_new ("gst-check", push_event, &data, NULL);
+
+  g_main_loop_run (test.ml);
+  g_source_remove (test.timeout_id);
+
+  /* these will return immediately as when the data is popped the threads are
+   * unlocked and will terminate */
+  g_thread_join (thread);
+
+  _chain_data_clear (&data);
+  _test_data_clear (&test);
+}
+
+GST_END_TEST;
+
 #define NUM_BUFFERS 3
 static void
 handoff (GstElement * fakesink, GstBuffer * buf, GstPad * pad, guint * count)
@@ -549,6 +612,95 @@ GST_START_TEST (test_two_src_pipeline)
 
 GST_END_TEST;
 
+static GstPadProbeReturn
+_drop_buffer_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
+{
+  gint wait;
+
+  if (GST_IS_BUFFER (info->data)) {
+    wait = GPOINTER_TO_INT (user_data);
+    if (wait > 0)
+      g_usleep (wait / 1000);
+    return GST_PAD_PROBE_DROP;
+  }
+
+  return GST_PAD_PROBE_PASS;
+}
+
+#define TIMEOUT_NUM_BUFFERS 20
+static void
+_test_timeout (gint buffer_wait)
+{
+  GstBus *bus;
+  GstMessage *msg;
+  GstElement *pipeline, *src, *src1, *agg, *sink;
+  GstPad *src1pad;
+
+  gint count = 0;
+
+  pipeline = gst_pipeline_new ("pipeline");
+  src = gst_element_factory_make ("fakesrc", NULL);
+  g_object_set (src, "num-buffers", TIMEOUT_NUM_BUFFERS, "sizetype", 2,
+      "sizemax", 4, "is-live", TRUE, "datarate", 4000, NULL);
+
+  src1 = gst_element_factory_make ("fakesrc", NULL);
+  g_object_set (src1, "num-buffers", TIMEOUT_NUM_BUFFERS, "sizetype", 2,
+      "sizemax", 4, "is-live", TRUE, "datarate", 4000, NULL);
+
+  agg = gst_check_setup_element ("testaggregator");
+  g_object_set (agg, "latency", GST_USECOND, NULL);
+  sink = gst_check_setup_element ("fakesink");
+  g_object_set (sink, "signal-handoffs", TRUE, NULL);
+  g_signal_connect (sink, "handoff", (GCallback) handoff, &count);
+
+  fail_unless (gst_bin_add (GST_BIN (pipeline), src));
+  fail_unless (gst_bin_add (GST_BIN (pipeline), src1));
+  fail_unless (gst_bin_add (GST_BIN (pipeline), agg));
+  fail_unless (gst_bin_add (GST_BIN (pipeline), sink));
+
+  src1pad = gst_element_get_static_pad (src1, "src");
+  fail_if (src1pad == NULL);
+  gst_pad_add_probe (src1pad, GST_PAD_PROBE_TYPE_BLOCK_DOWNSTREAM,
+      (GstPadProbeCallback) _drop_buffer_probe_cb,
+      GINT_TO_POINTER (buffer_wait), NULL);
+
+  fail_unless (gst_element_link (src, agg));
+  fail_unless (gst_element_link (src1, agg));
+  fail_unless (gst_element_link (agg, sink));
+
+  bus = gst_element_get_bus (pipeline);
+  fail_if (bus == NULL);
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+
+  msg = gst_bus_poll (bus, GST_MESSAGE_EOS | GST_MESSAGE_ERROR, -1);
+  fail_if (GST_MESSAGE_TYPE (msg) != GST_MESSAGE_EOS);
+  gst_message_unref (msg);
+
+  /* cannot rely on the exact number of buffers as the timeout may produce
+   * more buffers with the unsynchronized _aggregate() implementation in
+   * testaggregator */
+  fail_if (count < TIMEOUT_NUM_BUFFERS);
+
+  gst_element_set_state (pipeline, GST_STATE_NULL);
+  gst_object_unref (src1pad);
+  gst_object_unref (bus);
+  gst_object_unref (pipeline);
+}
+
+GST_START_TEST (test_timeout_pipeline)
+{
+  _test_timeout (0);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_timeout_pipeline_with_wait)
+{
+  _test_timeout (1000000 /* 1 ms */ );
+}
+
+GST_END_TEST;
+
 GST_START_TEST (test_flushing_seek)
 {
   GstEvent *event;
@@ -641,7 +793,7 @@ GST_START_TEST (test_flushing_seek)
 GST_END_TEST;
 
 static void
-infinite_seek (guint num_srcs, guint num_seeks)
+infinite_seek (guint num_srcs, guint num_seeks, gboolean is_live)
 {
   GstBus *bus;
   GstMessage *message;
@@ -657,13 +809,19 @@ infinite_seek (guint num_srcs, guint num_seeks)
   agg = gst_check_setup_element ("testaggregator");
   sink = gst_check_setup_element ("fakesink");
 
+  if (is_live)
+    g_object_set (agg, "latency", GST_MSECOND, NULL);
+
   fail_unless (gst_bin_add (GST_BIN (pipeline), agg));
   fail_unless (gst_bin_add (GST_BIN (pipeline), sink));
   fail_unless (gst_element_link (agg, sink));
 
   for (i = 0; i < num_srcs; i++) {
     src = gst_element_factory_make ("fakesrc", NULL);
-    g_object_set (src, "sizetype", 2, "sizemax", 4, NULL);
+    g_object_set (src, "sizetype", 2, "sizemax", 4,
+        "format", GST_FORMAT_TIME, "datarate", 1000, NULL);
+    if (is_live)
+      g_object_set (src, "is-live", TRUE, NULL);
     fail_unless (gst_bin_add (GST_BIN (pipeline), src));
     fail_unless (gst_element_link (src, agg));
   }
@@ -694,7 +852,7 @@ infinite_seek (guint num_srcs, guint num_seeks)
 
             GST_INFO ("Seeking (num: %i)", count);
             seek_res =
-                gst_element_seek_simple (sink, GST_FORMAT_BYTES,
+                gst_element_seek_simple (sink, GST_FORMAT_TIME,
                 GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, 0);
             GST_INFO ("seek result is : %d", seek_res);
             fail_unless (seek_res != 0);
@@ -722,14 +880,21 @@ infinite_seek (guint num_srcs, guint num_seeks)
 
 GST_START_TEST (test_infinite_seek)
 {
-  infinite_seek (2, 500);
+  infinite_seek (2, 500, FALSE);
 }
 
 GST_END_TEST;
 
 GST_START_TEST (test_infinite_seek_50_src)
 {
-  infinite_seek (50, 100);
+  infinite_seek (50, 100, FALSE);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_infinite_seek_50_src_live)
+{
+  infinite_seek (50, 100, TRUE);
 }
 
 GST_END_TEST;
@@ -796,7 +961,7 @@ GST_START_TEST (test_add_remove)
 
     src = gst_element_factory_make ("fakesrc", NULL);
     g_object_set (src, "num-buffers", 100000, "sizetype", 2, "sizemax", 4,
-        NULL);
+        "format", GST_FORMAT_TIME, "datarate", 1000, NULL);
     gst_element_set_locked_state (src, TRUE);
     fail_unless (gst_bin_add (GST_BIN (pipeline), src));
     fail_unless (gst_element_link (src, agg));
@@ -875,7 +1040,7 @@ GST_START_TEST (test_add_remove)
     } while (carry_on);
 
     GST_INFO ("Seeking");
-    fail_unless (gst_element_seek_simple (pipeline, GST_FORMAT_BYTES,
+    fail_unless (gst_element_seek_simple (pipeline, GST_FORMAT_TIME,
             GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, 0));
 
     count++;
@@ -1012,11 +1177,15 @@ gst_aggregator_suite (void)
   suite_add_tcase (suite, general);
   tcase_add_test (general, test_aggregate);
   tcase_add_test (general, test_aggregate_eos);
+  tcase_add_test (general, test_aggregate_gap);
   tcase_add_test (general, test_flushing_seek);
   tcase_add_test (general, test_infinite_seek);
   tcase_add_test (general, test_infinite_seek_50_src);
+  tcase_add_test (general, test_infinite_seek_50_src_live);
   tcase_add_test (general, test_linear_pipeline);
   tcase_add_test (general, test_two_src_pipeline);
+  tcase_add_test (general, test_timeout_pipeline);
+  tcase_add_test (general, test_timeout_pipeline_with_wait);
   tcase_add_test (general, test_add_remove);
   tcase_add_test (general, test_change_state_intensive);
 
