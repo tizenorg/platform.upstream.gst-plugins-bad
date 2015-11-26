@@ -827,7 +827,7 @@ gst_ps_demux_handle_dvd_event (GstPsDemux * demux, GstEvent * event)
 
       g_snprintf (cur_stream_name, 32, "audio-%d-language", i);
       lang_code = gst_structure_get_string (structure, cur_stream_name);
-      if (lang_code && temp) {
+      if (lang_code) {
         GstTagList *list = temp->pending_tags;
 
         if (!list)

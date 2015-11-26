@@ -24,24 +24,16 @@
 #include <gst/gst.h>
 #include <wayland-client.h>
 #include "scaler-client-protocol.h"
-#ifdef GST_WLSINK_ENHANCEMENT
-#include <tbm_bufmgr.h>
-#include <wayland-tbm-client.h>
-#include <tizen-extension-client-protocol.h>
-#define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
-#endif
+
 G_BEGIN_DECLS
+
 #define GST_TYPE_WL_DISPLAY                  (gst_wl_display_get_type ())
 #define GST_WL_DISPLAY(obj)                  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplay))
 #define GST_IS_WL_DISPLAY(obj)               (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_CLASS(klass)          (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
 #define GST_IS_WL_DISPLAY_CLASS(klass)       (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_WL_DISPLAY))
 #define GST_WL_DISPLAY_GET_CLASS(obj)        (G_TYPE_INSTANCE_GET_CLASS ((obj), GST_TYPE_WL_DISPLAY, GstWlDisplayClass))
-#if 1
-#define FUNCTION_ENTER()	GST_INFO("<ENTER>")
-#else
-#define FUNCTION_ENTER()
-#endif
+
 typedef struct _GstWlDisplay GstWlDisplay;
 typedef struct _GstWlDisplayClass GstWlDisplayClass;
 
@@ -80,7 +72,7 @@ struct _GstWlDisplayClass
 GType gst_wl_display_get_type (void);
 
 GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
-GstWlDisplay *gst_wl_display_new_existing (struct wl_display *display,
+GstWlDisplay *gst_wl_display_new_existing (struct wl_display * display,
     gboolean take_ownership, GError ** error);
 
 /* see wlbuffer.c for explanation */
@@ -88,4 +80,5 @@ void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer buf);
 void gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer buf);
 
 G_END_DECLS
+
 #endif /* __GST_WL_DISPLAY_H__ */

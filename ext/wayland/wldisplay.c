@@ -21,35 +21,11 @@
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
+
 #include "wldisplay.h"
 #include "wlbuffer.h"
 
 #include <errno.h>
-
-#ifdef GST_WLSINK_ENHANCEMENT
-#include <fcntl.h>
-#include <unistd.h>
-#include <xf86drm.h>
-#include <string.h>
-#include <stdlib.h>
-
-static void
-handle_tizen_video_format (void *data, struct tizen_video *tizen_video,
-    uint32_t format)
-{
-  FUNCTION_ENTER ();
-  GstWlDisplay *self = data;
-
-  g_return_if_fail (self != NULL);
-
-  GST_INFO ("format is %d", format);
-  g_array_append_val (self->formats, format);
-}
-
-static const struct tizen_video_listener tz_video_listener = {
-  handle_tizen_video_format
-};
-#endif
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
@@ -61,7 +37,6 @@ static void gst_wl_display_finalize (GObject * gobject);
 static void
 gst_wl_display_class_init (GstWlDisplayClass * klass)
 {
-  FUNCTION_ENTER ();
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize = gst_wl_display_finalize;
 }
@@ -69,8 +44,6 @@ gst_wl_display_class_init (GstWlDisplayClass * klass)
 static void
 gst_wl_display_init (GstWlDisplay * self)
 {
-  FUNCTION_ENTER ();
-
   self->formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
   self->wl_fd_poll = gst_poll_new (TRUE);
   self->buffers = g_hash_table_new (g_direct_hash, g_direct_equal);
@@ -80,8 +53,6 @@ gst_wl_display_init (GstWlDisplay * self)
 static void
 gst_wl_display_finalize (GObject * gobject)
 {
-  FUNCTION_ENTER ();
-
   GstWlDisplay *self = GST_WL_DISPLAY (gobject);
 
   gst_poll_set_flushing (self->wl_fd_poll, TRUE);
@@ -98,29 +69,13 @@ gst_wl_display_finalize (GObject * gobject)
       (GHFunc) gst_wl_buffer_force_release_and_unref, NULL);
   g_hash_table_remove_all (self->buffers);
 
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (self->is_native_format == FALSE) {
-    /*in case of normal video format */
-    if (self->tbm_bo)
-      tbm_bo_unref (self->tbm_bo);
-    self->tbm_bo = NULL;
-  }
-  if (self->tbm_client) {
-    wayland_tbm_client_deinit (self->tbm_client);
-    self->tbm_client = NULL;
-  }
-  self->tbm_bufmgr = NULL;
-#endif
-
   g_array_unref (self->formats);
   gst_poll_free (self->wl_fd_poll);
   g_hash_table_unref (self->buffers);
   g_mutex_clear (&self->buffers_mutex);
 
-#ifndef GST_WLSINK_ENHANCEMENT
   if (self->shm)
     wl_shm_destroy (self->shm);
-#endif
 
   if (self->shell)
     wl_shell_destroy (self->shell);
@@ -141,12 +96,6 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_flush (self->display);
     wl_display_disconnect (self->display);
   }
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (self->tizen_policy)
-    tizen_policy_destroy (self->tizen_policy);
-  if (self->tizen_video)
-    tizen_video_destroy (self->tizen_video);
-#endif
 
   G_OBJECT_CLASS (gst_wl_display_parent_class)->finalize (gobject);
 }
@@ -154,8 +103,6 @@ gst_wl_display_finalize (GObject * gobject)
 static void
 sync_callback (void *data, struct wl_callback *callback, uint32_t serial)
 {
-  FUNCTION_ENTER ();
-
   gboolean *done = data;
   *done = TRUE;
 }
@@ -167,8 +114,6 @@ static const struct wl_callback_listener sync_listener = {
 static gint
 gst_wl_display_roundtrip (GstWlDisplay * self)
 {
-  FUNCTION_ENTER ();
-
   struct wl_callback *callback;
   gint ret = 0;
   gboolean done = FALSE;
@@ -189,8 +134,6 @@ gst_wl_display_roundtrip (GstWlDisplay * self)
 static void
 shm_format (void *data, struct wl_shm *wl_shm, uint32_t format)
 {
-  FUNCTION_ENTER ();
-
   GstWlDisplay *self = data;
 
   g_array_append_val (self->formats, format);
@@ -204,8 +147,6 @@ static void
 registry_handle_global (void *data, struct wl_registry *registry,
     uint32_t id, const char *interface, uint32_t version)
 {
-
-  FUNCTION_ENTER ();
   GstWlDisplay *self = data;
 
   if (g_strcmp0 (interface, "wl_compositor") == 0) {
@@ -216,27 +157,12 @@ registry_handle_global (void *data, struct wl_registry *registry,
         wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
   } else if (g_strcmp0 (interface, "wl_shell") == 0) {
     self->shell = wl_registry_bind (registry, id, &wl_shell_interface, 1);
-#ifndef GST_WLSINK_ENHANCEMENT
   } else if (g_strcmp0 (interface, "wl_shm") == 0) {
     self->shm = wl_registry_bind (registry, id, &wl_shm_interface, 1);
     wl_shm_add_listener (self->shm, &shm_listener, self);
-#endif
   } else if (g_strcmp0 (interface, "wl_scaler") == 0) {
     self->scaler = wl_registry_bind (registry, id, &wl_scaler_interface, 2);
-#ifdef GST_WLSINK_ENHANCEMENT
-  } else if (g_strcmp0 (interface, "tizen_policy") == 0) {
-    self->tizen_policy =
-        wl_registry_bind (registry, id, &tizen_policy_interface, 1);
-  } else if (g_strcmp0 (interface, "tizen_video") == 0) {
-    self->tizen_video =
-        wl_registry_bind (registry, id, &tizen_video_interface, version);
-    g_return_if_fail (self->tizen_video != NULL);
-
-    GST_INFO ("id(%d)", id);
-
-    tizen_video_add_listener (self->tizen_video, &tz_video_listener, self);
   }
-#endif
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -246,8 +172,6 @@ static const struct wl_registry_listener registry_listener = {
 static gpointer
 gst_wl_display_thread_run (gpointer data)
 {
-  FUNCTION_ENTER ();
-
   GstWlDisplay *self = data;
   GstPollFD pollfd = GST_POLL_FD_INIT;
 
@@ -284,8 +208,6 @@ error:
 GstWlDisplay *
 gst_wl_display_new (const gchar * name, GError ** error)
 {
-  FUNCTION_ENTER ();
-
   struct wl_display *display;
 
   display = wl_display_connect (name);
@@ -304,8 +226,6 @@ GstWlDisplay *
 gst_wl_display_new_existing (struct wl_display * display,
     gboolean take_ownership, GError ** error)
 {
-  FUNCTION_ENTER ();
-
   GstWlDisplay *self;
   GError *err = NULL;
   gint i;
@@ -344,18 +264,7 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (compositor, "wl_compositor");
   VERIFY_INTERFACE_EXISTS (subcompositor, "wl_subcompositor");
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
-#ifdef GST_WLSINK_ENHANCEMENT
-  VERIFY_INTERFACE_EXISTS (tizen_video, "tizen_video");
-  self->tbm_client = wayland_tbm_client_init (self->display);
-  if (!self->tbm_client) {
-    *error = g_error_new (g_quark_from_static_string ("GstWlDisplay"), 0,
-        "Error initializing wayland-tbm");
-    g_object_unref (self);
-    return NULL;
-  }
-#else
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
-#endif
   VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");
 
 #undef VERIFY_INTERFACE_EXISTS

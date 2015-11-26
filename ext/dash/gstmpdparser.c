@@ -4626,7 +4626,7 @@ gst_mpd_client_get_utc_timing_sources (GstMpdClient * client,
 
 gboolean
 gst_mpd_client_get_next_fragment (GstMpdClient * client,
-    guint indexStream, GstMediaFragmentInfo * fragment, gboolean forward)
+    guint indexStream, GstMediaFragmentInfo * fragment)
 {
   GstActiveStream *stream = NULL;
   GstMediaSegment *currentChunk;

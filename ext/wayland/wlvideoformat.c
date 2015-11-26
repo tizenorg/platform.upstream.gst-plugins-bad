@@ -30,8 +30,6 @@
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
 
-#ifndef GST_WLSINK_ENHANCEMENT
-
 typedef struct
 {
   enum wl_shm_format wl_format;
@@ -111,4 +109,3 @@ gst_wl_shm_format_to_string (enum wl_shm_format wl_format)
   return gst_video_format_to_string
       (gst_wl_shm_format_to_video_format (wl_format));
 }
-#endif
