@@ -181,7 +181,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %if %{with wayland}
 %{_libdir}/libgstwayland-%{gst_branch}.so.0*
-%{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
 %endif
 
 %{_libdir}/libgstphotography-%{gst_branch}.so.0*

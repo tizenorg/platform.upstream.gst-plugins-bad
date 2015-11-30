@@ -64,11 +64,11 @@ else
 DIRECTFB_DIR=
 endif
 
-if USE_WAYLAND
-WAYLAND_DIR=wayland
-else
+#if USE_WAYLAND
+#WAYLAND_DIR=wayland
+#else
 WAYLAND_DIR=
-endif
+#endif
 
 if USE_DAALA
 DAALA_DIR=daala
