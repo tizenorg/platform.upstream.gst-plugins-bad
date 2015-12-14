@@ -12,12 +12,12 @@ Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
 Source100:      common.tar.gz
 BuildRequires:  gettext-tools
-BuildRequires:  SDL-devel
+#BuildRequires:  SDL-devel
 BuildRequires:  autoconf
 BuildRequires:  gcc-c++
-BuildRequires:  glib2-devel >= 2.31.14
-BuildRequires:  gstreamer-devel >= 1.0.0
-BuildRequires:  gst-plugins-base-devel >= 1.0.0
+BuildRequires:  pkgconfig(glib-2.0) >= 2.31.14
+BuildRequires:  pkgconfig(gstreamer-1.0)
+BuildRequires:  pkgconfig(gstreamer-plugins-base-1.0)
 BuildRequires:  pkgconfig(orc-0.4) >= 0.4.11
 BuildRequires:  python
 BuildRequires:  xsltproc
@@ -192,7 +192,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
 %{_libdir}/libgstbadbase-%{gst_branch}.so.0*
 %{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
-%{_libdir}/gstreamer-%{gst_branch}/include/gst/gl/gstglconfig.h
 %{_libdir}/gstreamer-%{gst_branch}/libgstcompositor.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdtls.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfragmented.so
@@ -207,7 +206,6 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libgstgl-1.0.so.0.601.0
 #%{_libdir}/libgstwayland-1.0.so.0
 #%{_libdir}/libgstwayland-1.0.so.0.601.0
-%{_libdir}/pkgconfig/gstreamer-gl-1.0.pc
 /usr/share/gstreamer-%{gst_branch}/presets/GstFreeverb.prs
 
 
@@ -215,11 +213,13 @@ rm -rf $RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %defattr(-, root, root)
 %{_includedir}/gstreamer-%{gst_branch}
+%{_libdir}/gstreamer-%{gst_branch}/include/gst/gl/gstglconfig.h
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-insertbin-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-mpegts-%{gst_branch}.pc
+%{_libdir}/pkgconfig/gstreamer-gl-1.0.pc
 %if %{with wayland}
 %{_libdir}/pkgconfig/gstreamer-wayland-%{gst_branch}.pc
 %{_includedir}/gstreamer-%{gst_branch}/gst/wayland/wayland.h
