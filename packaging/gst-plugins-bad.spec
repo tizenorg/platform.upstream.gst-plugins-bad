@@ -44,6 +44,7 @@ BuildRequires:  pkgconfig(wayland-client) >= 1.0.0
 BuildRequires:  pkgconfig(wayland-cursor) >= 1.0.0
 BuildRequires:  pkgconfig(wayland-tbm-client)
 BuildRequires:  pkgconfig(tizen-extension-client)
+BuildRequires:  pkgconfig(libxml-2.0)
 %endif
 %if %{with x}
 BuildRequires:  pkgconfig(x11)
@@ -178,6 +179,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstsmoothstreaming.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstdashdemux.so
 
 %if %{with wayland}
 %{_libdir}/libgstwayland-%{gst_branch}.so.0*
