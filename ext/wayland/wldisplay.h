@@ -80,10 +80,7 @@ struct _GstWlDisplay
   struct wayland_tbm_client *tbm_client;
   tbm_bufmgr tbm_bufmgr;
   tbm_bo tbm_bo[TBM_BO_NUM];
-  int tbm_bo_c_idx;
-  int tbm_bo_u_idx;
-  gboolean tbm_need_limit_idx;
-  int tbm_bo_max_idx;
+  int tbm_bo_idx;
   tbm_surface_h tsurface;
   gboolean USE_TBM;
 

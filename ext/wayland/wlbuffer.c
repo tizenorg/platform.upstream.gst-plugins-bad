@@ -196,7 +196,6 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
 
   gst_mini_object_set_qdata ((GstMiniObject *) gstbuffer,
       gst_wl_buffer_qdata_quark (), self, (GDestroyNotify) gstbuffer_disposed);
-
   GST_INFO ("GstWlBuffer (%p)", self);
   return self;
 }
@@ -256,5 +255,6 @@ gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
    * the compositor is using the buffer and it should not return
    * back to the pool and be re-used until the compositor releases it. */
   gst_buffer_ref (self->gstbuffer);
+
   self->used_by_compositor = TRUE;
 }

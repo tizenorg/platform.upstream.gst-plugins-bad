@@ -57,11 +57,8 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->display->USE_TBM) {
     tbm_bo_handle virtual_addr;
-    if (self->display->tbm_need_limit_idx
-        && self->display->tbm_bo_c_idx == self->display->tbm_bo_max_idx)
-      self->display->tbm_bo_c_idx = 0;
 
-    idx = self->display->tbm_bo_c_idx++;
+    idx = self->display->tbm_bo_idx++;
 
     self->display->tbm_bufmgr =
         wayland_tbm_client_get_bufmgr (self->display->tbm_client);
@@ -82,7 +79,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
       GST_ERROR_OBJECT (self, "get tbm bo handle failed: %s", strerror (errno));
       tbm_bo_unref (self->display->tbm_bo[idx]);
       self->display->tbm_bo[idx] = NULL;
-      self->display->tbm_bo_c_idx--;
+      self->display->tbm_bo_idx--;
       return FALSE;
     }
 
@@ -90,6 +87,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
     gst_memory_init ((GstMemory *) mem, GST_MEMORY_FLAG_NO_SHARE, allocator,
         NULL, size, 0, 0, size);
     mem->data = virtual_addr.ptr;
+    mem->tbm_bo_ptr = self->display->tbm_bo[idx];
     GST_INFO ("mem(%p) mem->data(%p) virtual_addr.ptr(%p) size(%d)", mem,
         mem->data, virtual_addr.ptr, size);
 
@@ -97,7 +95,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
 
   } else {                      /* USE SHM */
     /* TODO: make use of the allocation params, if necessary */
-    GST_ERROR ("1");
+
     /* allocate shm pool */
     snprintf (filename, 1024, "%s/%s-%d-%s", g_get_user_runtime_dir (),
         "wayland-shm", init++, "XXXXXX");
@@ -309,12 +307,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
           wayland_tbm_client_create_buffer (display->tbm_client,
           display->tsurface);
     } else {
-      int idx;
-      if (display->tbm_need_limit_idx
-          && display->tbm_bo_u_idx == display->tbm_bo_max_idx)
-        display->tbm_bo_u_idx = 0;
 
-      idx = display->tbm_bo_u_idx++;
       width = GST_VIDEO_INFO_WIDTH (info);
       height = GST_VIDEO_INFO_HEIGHT (info);
       stride = GST_VIDEO_INFO_PLANE_STRIDE (info, 0);
@@ -330,7 +323,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
           height, stride, gst_wl_tbm_format_to_string (format));
 
 #ifdef DUMP_BUFFER
-      virtual_addr = tbm_bo_get_handle (display->tbm_bo[idx], TBM_DEVICE_CPU);
+      virtual_addr = tbm_bo_get_handle (shm_mem->tbm_bo_ptr, TBM_DEVICE_CPU);
       if (!virtual_addr.ptr) {
         GST_ERROR ("get tbm bo handle failed: %s", strerror (errno));
         return FALSE;
@@ -359,10 +352,10 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       ts_info.planes[1].offset = GST_VIDEO_INFO_PLANE_OFFSET (info, 1);
       ts_info.planes[2].offset = GST_VIDEO_INFO_PLANE_OFFSET (info, 2);
 
-      GST_INFO ("display->tbm_bo (%p)", display->tbm_bo[idx]);
+      GST_INFO ("tbm_bo (%p)", shm_mem->tbm_bo_ptr);
 
       display->tsurface =
-          tbm_surface_internal_create_with_bos (&ts_info, &display->tbm_bo[idx],
+          tbm_surface_internal_create_with_bos (&ts_info, &shm_mem->tbm_bo_ptr,
           1);
       wbuffer =
           wayland_tbm_client_create_buffer (display->tbm_client,

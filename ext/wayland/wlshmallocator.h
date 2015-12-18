@@ -45,6 +45,9 @@ struct _GstWlShmMemory
 
   gpointer data;
   gint fd;
+#ifdef GST_WLSINK_ENHANCEMENT
+  gpointer tbm_bo_ptr;
+#endif
 };
 
 struct _GstWlShmAllocator

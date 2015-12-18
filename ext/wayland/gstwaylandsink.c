@@ -827,14 +827,12 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     goto no_window_size;
 
 #ifdef GST_WLSINK_ENHANCEMENT
-  sink->display->tbm_need_limit_idx = FALSE;
 
   wlbuffer = gst_buffer_get_wl_buffer (buffer);
   if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
-    GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, " "writing directly", buffer);   // s/w codec case
+    GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, " "writing directly", buffer);   //buffer is from our  pool and have wl_buffer
     GST_INFO ("wl_buffer (%p)", wlbuffer->wlbuffer);
     to_render = buffer;
-
 #ifdef DUMP_BUFFER
     GstMemory *mem;
     GstMapInfo mem_info = GST_MAP_INFO_INIT;
@@ -859,25 +857,25 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     GstMemory *mem;
     struct wl_buffer *wbuf = NULL;
 
-    GST_LOG_OBJECT (sink, "buffer %p does not have a wl_buffer from our " "display, creating it", buffer);      //videotestsrc case , s/w codec too
+    GST_LOG_OBJECT (sink, "buffer %p does not have a wl_buffer from our " "display, creating it", buffer);      //buffer is from our pool but have not wl_buffer
     mem = gst_buffer_peek_memory (buffer, 0);
     if (gst_is_wl_shm_memory (mem)) {
       FUNCTION;
       wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
           &sink->video_info);
-    }
-    if (wbuf) {
-      gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);   //careat GstWlBuffer and add  gstbuffer, wlbuffer, display and etc
-      to_render = buffer;
-
-    } else {
+      if (wbuf) {
+        gst_buffer_add_wl_buffer (buffer, wbuf, sink->display); //careat GstWlBuffer and add  gstbuffer, wlbuffer, display and etc
+        to_render = buffer;
+      }
+    } else {                    //buffer is not from our pool and have not wl_buffer
       GstMapInfo src;
       /* we don't know how to create a wl_buffer directly from the provided
        * memory, so we have to copy the data to a memory that we know how
        * to handle... */
 
       GST_LOG_OBJECT (sink, "buffer %p is not from our pool", buffer);
-      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying", buffer);   //omx codec case
+      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying",
+          buffer);
 
       if (sink->USE_TBM && sink->display->is_native_format) {
         /* in case of SN12 or ST12 */
@@ -925,9 +923,9 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
           gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
         }
-      } else if (sink->USE_TBM && !sink->display->is_native_format) {
+      }
 
-        sink->display->tbm_need_limit_idx = TRUE;
+      else if (sink->USE_TBM && !sink->display->is_native_format) {
 
         /* sink->pool always exists (created in set_caps), but it may not
          * be active if upstream is not using it */
@@ -980,6 +978,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
             goto no_wl_buffer;
 
           gst_buffer_add_wl_buffer (to_render, wbuf, sink->display);
+
         }
 
         gst_buffer_map (buffer, &src, GST_MAP_READ);
@@ -1048,7 +1047,8 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
        * to handle... */
 
       GST_LOG_OBJECT (sink, "buffer %p is not from our pool", buffer);
-      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying", buffer);   //omx codec case
+      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying",
+          buffer);
       /* sink->pool always exists (created in set_caps), but it may not
        * be active if upstream is not using it */
       if (!gst_buffer_pool_is_active (sink->pool) &&

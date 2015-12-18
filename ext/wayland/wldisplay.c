@@ -80,10 +80,7 @@ gst_wl_display_init (GstWlDisplay * self)
   self->buffers = g_hash_table_new (g_direct_hash, g_direct_equal);
   g_mutex_init (&self->buffers_mutex);
 #ifdef GST_WLSINK_ENHANCEMENT
-  self->tbm_bo_c_idx = 0;
-  self->tbm_bo_u_idx = 0;
-  self->tbm_need_limit_idx = FALSE;
-  self->tbm_bo_max_idx = TBM_BO_MAX_IDX;
+  self->tbm_bo_idx = 0;
 #endif
 }
 
