@@ -248,15 +248,15 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 #endif
 
 #ifdef GST_WLSINK_ENHANCEMENT
-  if (display->USE_TBM) {
-    /*Area surface from App need to be under parent surface */
-    if (display->tizen_policy)
-      tizen_policy_place_subsurface_below_parent (display->tizen_policy,
-          window->area_subsurface);
-    wl_surface_commit (parent);
+  /*Area surface from App need to be under parent surface */
+  if (display->tizen_policy) {
+    tizen_policy_place_subsurface_below_parent (display->tizen_policy,
+        window->area_subsurface);
+    tizen_policy_place_subsurface_below_parent (display->tizen_policy,
+        window->video_subsurface);
   }
+  wl_surface_commit (parent);
 #endif
-
   return window;
 }
 
