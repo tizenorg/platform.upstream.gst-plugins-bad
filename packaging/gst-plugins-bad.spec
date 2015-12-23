@@ -82,24 +82,59 @@ export V=1
 NOCONFIGURE=1 ./autogen.sh
 export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS"
 %configure\
-    --disable-static\
-    --disable-examples\
-    --enable-experimental\
-    --disable-audiomixer\
-    --enable-compositor\
-    --disable-ivfparse\
-    --disable-jp2kdecimator\
-    --disable-opengl\
-    --enable-egl=yes\
-    --enable-wayland=yes\
-    --enable-gles2=yes\
-    --disable-glx\
-    --disable-sndfile\
-    --disable-stereo\
-    --disable-videosignal\
-    --disable-vmnc\
-    --disable-gtk-doc\
-    --disable-warnings-as-errors
+	--disable-static\
+	--disable-examples\
+	--enable-experimental\
+	--disable-adpcmenc\
+	--disable-aiff\
+	--disable-asfmux\
+	--disable-audiomixer\
+	--enable-compositor\
+	--disable-audiovisualizers\
+	--disable-bayer\
+	--disable-cdxaparse\
+	--disable-dataurisrc\
+	--disable-dccp\
+	--disable-dvbsuboverlay\
+	--disable-dvdspu\
+	--disable-faceoverlay\
+	--disable-festival\
+	--disable-freeverb\
+	--disable-frei0r\
+	--disable-gaudieffects\
+	--disable-geometrictransform\
+	--disable-hdvparse\
+	--disable-inter\
+	--disable-interlace\
+	--disable-ivfparse\
+	--disable-jp2kdecimator\
+	--disable-librfb\
+	--disable-mve\
+	--disable-mxf\
+	--disable-nuvdemux\
+	--disable-onvif\
+	--disable-pcapparse\
+	--disable-pnm\
+	--disable-removesilence\
+	--disable-sdi\
+	--disable-segmentclip\
+	--disable-siren\
+	--disable-smooth\
+	--disable-speed\
+	--disable-subenc\
+	--disable-stereo\
+	--disable-tta\
+	--disable-videomeasure\
+	--disable-videosignal\
+	--disable-vmnc\
+	--disable-opengl\
+	--enable-egl=yes\
+	--enable-wayland=yes\
+	--enable-gles2=yes\
+	--disable-glx\
+	--disable-sndfile\
+	--disable-gtk-doc\
+	--disable-warnings-as-errors
 %__make %{?_smp_mflags} V=1
 
 %install
@@ -124,58 +159,58 @@ rm -rf $RPM_BUILD_ROOT
 %defattr(-, root, root)
 %license COPYING COPYING.LIB
 %{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmenc.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstasfmux.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstaudiovisualizers.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmenc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstasfmux.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstaudiovisualizers.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstautoconvert.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstbayer.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstbayer.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstcamerabin2.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstcoloreffects.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstcurl.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdataurisrc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdataurisrc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdebugutilsbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdvb.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdvbsuboverlay.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfestival.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstgaudieffects.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdvbsuboverlay.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstfestival.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstgaudieffects.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstgdp.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstgeometrictransform.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstgeometrictransform.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstid3tag.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstinter.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstinterlace.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstinter.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstinterlace.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstjpegformat.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstliveadder.so
 
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsdemux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegtsdemux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegtsmux.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstpcapparse.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstpnm.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstpcapparse.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstpnm.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstrawparse.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstremovesilence.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstremovesilence.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstsdpelem.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstsegmentclip.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstsegmentclip.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstshm.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstsmooth.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstspeed.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstsmooth.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstspeed.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideoparsersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgsty4mdec.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdvdspu.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdvdspu.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfieldanalysis.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfrei0r.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstfrei0r.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstfbdevsink.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfreeverb.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstfreeverb.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstivtc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmidi.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstmxf.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstmxf.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
@@ -200,7 +235,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/gstreamer-%{gst_branch}/libgstfragmented.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstopengl.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstrtpbad.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstrtponvif.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstrtponvif.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvcdsrc.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
 %{_libdir}/libgstadaptivedemux-1.0.so.0
@@ -209,7 +244,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_libdir}/libgstgl-1.0.so.0.601.0
 #%{_libdir}/libgstwayland-1.0.so.0
 #%{_libdir}/libgstwayland-1.0.so.0.601.0
-/usr/share/gstreamer-%{gst_branch}/presets/GstFreeverb.prs
+#/usr/share/gstreamer-%{gst_branch}/presets/GstFreeverb.prs
 
 
 %files devel
