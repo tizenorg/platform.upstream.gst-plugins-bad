@@ -91,6 +91,10 @@ typedef struct _GstAdaptiveDemux GstAdaptiveDemux;
 typedef struct _GstAdaptiveDemuxClass GstAdaptiveDemuxClass;
 typedef struct _GstAdaptiveDemuxPrivate GstAdaptiveDemuxPrivate;
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+typedef GstPad * (*GstAdaptiveDemuxStreamCreatePadFunc) (GstAdaptiveDemuxStream * stream);
+#endif
+
 struct _GstAdaptiveDemuxStreamFragment
 {
   GstClockTime timestamp;
@@ -117,6 +121,9 @@ struct _GstAdaptiveDemuxStream
 
   GstAdaptiveDemux *demux;
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  gint stream_id_counter;
+#endif
   GstSegment segment;
 
   GstAdapter *adapter;
@@ -454,6 +461,11 @@ void gst_adaptive_demux_stream_queue_event (GstAdaptiveDemuxStream * stream,
 GstFlowReturn
 gst_adaptive_demux_stream_advance_fragment_unlocked (GstAdaptiveDemux * demux,
     GstAdaptiveDemuxStream * stream, GstClockTime duration);
+
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+gboolean gst_adaptive_demux_stream_check_switch_pad (GstAdaptiveDemuxStream * stream,
+    GstCaps * caps, GstAdaptiveDemuxStreamCreatePadFunc create_pad_func);
+#endif
 
 G_END_DECLS
 

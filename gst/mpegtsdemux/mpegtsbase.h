@@ -57,6 +57,9 @@ typedef struct _MpegTSBaseProgram MpegTSBaseProgram;
 
 struct _MpegTSBaseStream
 {
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  gint                refcount;
+#endif
   guint16             pid;
   guint8              stream_type;
 
@@ -211,6 +214,10 @@ struct _MpegTSBaseClass {
 
 G_GNUC_INTERNAL GType mpegts_base_get_type(void);
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+G_GNUC_INTERNAL MpegTSBaseStream *mpegts_base_stream_ref (MpegTSBaseStream * stream);
+G_GNUC_INTERNAL void mpegts_base_stream_unref (MpegTSBaseStream * stream);
+#endif
 G_GNUC_INTERNAL MpegTSBaseProgram *mpegts_base_get_program (MpegTSBase * base, gint program_number);
 G_GNUC_INTERNAL MpegTSBaseProgram *mpegts_base_add_program (MpegTSBase * base, gint program_number, guint16 pmt_pid);
 

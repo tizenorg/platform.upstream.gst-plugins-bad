@@ -195,6 +195,10 @@ struct _TSDemuxStream
 
   GstTsDemuxKeyFrameScanFunction scan_function;
   TSDemuxH264ParsingInfos h264infos;
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  /* For pad matching to avoid switching pads */
+  TSDemuxStream *matched_stream;
+#endif
 };
 
 #define VIDEO_CAPS \
@@ -297,7 +301,12 @@ static GstFlowReturn
 gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream);
 static void gst_ts_demux_stream_flush (TSDemuxStream * stream,
     GstTSDemux * demux, gboolean hard);
-
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void gst_ts_demux_remove_stream (GstTSDemux * tsdemux,
+    TSDemuxStream * stream, gboolean push_eos);
+static void gst_ts_demux_remove_old_streams (GstTSDemux * demux,
+    gboolean push_eos);
+#endif
 static gboolean push_event (MpegTSBase * base, GstEvent * event);
 static void gst_ts_demux_check_and_sync_streams (GstTSDemux * demux,
     GstClockTime time);
@@ -401,6 +410,9 @@ gst_ts_demux_reset (MpegTSBase * base)
   demux->group_id = G_MAXUINT;
 
   demux->last_seek_offset = -1;
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  gst_ts_demux_remove_old_streams (demux, FALSE);
+#endif
 }
 
 static void
@@ -1031,11 +1043,49 @@ gst_ts_demux_create_tags (TSDemuxStream * stream)
   }
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void
+gst_ts_demux_stream_send_stream_start (MpegTSBase * base,
+    MpegTSBaseStream * bstream, GstPad * pad)
+{
+  GstTSDemux *demux = GST_TS_DEMUX_CAST (base);
+  TSDemuxStream *stream = (TSDemuxStream *) bstream;
+  GstEvent *event;
+  gchar *stream_id;
+
+  stream_id =
+      gst_pad_create_stream_id_printf (pad, GST_ELEMENT_CAST (base), "%08x",
+      bstream->pid);
+
+  event = gst_pad_get_sticky_event (base->sinkpad, GST_EVENT_STREAM_START, 0);
+  if (event) {
+    if (gst_event_parse_group_id (event, &demux->group_id))
+      demux->have_group_id = TRUE;
+    else
+      demux->have_group_id = FALSE;
+    gst_event_unref (event);
+  } else if (!demux->have_group_id) {
+    demux->have_group_id = TRUE;
+    demux->group_id = gst_util_group_id_next ();
+  }
+  event = gst_event_new_stream_start (stream_id);
+  if (demux->have_group_id)
+    gst_event_set_group_id (event, demux->group_id);
+  if (stream->sparse)
+    gst_event_set_stream_flags (event, GST_STREAM_FLAG_SPARSE);
+
+  gst_pad_push_event (pad, event);
+  g_free (stream_id);
+}
+#endif
+
 static GstPad *
 create_pad_for_stream (MpegTSBase * base, MpegTSBaseStream * bstream,
     MpegTSBaseProgram * program)
 {
+#ifndef GST_EXT_AVOID_PAD_SWITCHING
   GstTSDemux *demux = GST_TS_DEMUX (base);
+#endif
   TSDemuxStream *stream = (TSDemuxStream *) bstream;
   gchar *name = NULL;
   GstCaps *caps = NULL;
@@ -1359,6 +1409,16 @@ done:
   }
 
   if (template && name && caps) {
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+    GST_LOG ("stream:%p creating pad with name %s and caps %" GST_PTR_FORMAT,
+        stream, name, caps);
+    pad = gst_pad_new_from_template (template, name);
+    gst_pad_set_active (pad, TRUE);
+    gst_pad_use_fixed_caps (pad);
+
+    stream->sparse = sparse;
+    gst_ts_demux_stream_send_stream_start (base, bstream, pad);
+#else
     GstEvent *event;
     gchar *stream_id;
 
@@ -1391,6 +1451,7 @@ done:
 
     gst_pad_push_event (pad, event);
     g_free (stream_id);
+#endif
     gst_pad_set_caps (pad, caps);
     if (!stream->taglist)
       stream->taglist = gst_tag_list_new_empty ();
@@ -1409,6 +1470,25 @@ done:
 
   return pad;
 }
+
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void
+gst_ts_demux_remove_old_streams (GstTSDemux * demux, gboolean push_eos)
+{
+  if (demux->old_streams) {
+    GList *iter;
+    for (iter = demux->old_streams; iter; iter = g_list_next (iter)) {
+      TSDemuxStream *stream = iter->data;
+
+      gst_ts_demux_remove_stream (demux, stream, push_eos);
+      mpegts_base_stream_unref ((MpegTSBaseStream *) stream);
+    }
+    g_list_free (demux->old_streams);
+    demux->old_streams = NULL;
+  }
+
+}
+#endif
 
 static void
 gst_ts_demux_stream_added (MpegTSBase * base, MpegTSBaseStream * bstream,
@@ -1465,10 +1545,49 @@ tsdemux_h264_parsing_info_clear (TSDemuxH264ParsingInfos * h264infos)
   }
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void
+gst_ts_demux_stream_rename_stopping_pad (GstTSDemux * demux,
+    TSDemuxStream * stream)
+{
+  if (stream->pad) {
+    gchar *name;
+
+    GST_DEBUG_OBJECT (stream->pad, "Renaming stopping pad: %s",
+        GST_PAD_NAME (stream->pad));
+    name = g_strdup_printf ("%s_stopping", GST_PAD_NAME (stream->pad));
+    gst_object_set_name (GST_OBJECT_CAST (stream->pad), name);
+
+    g_free (name);
+  }
+}
+
+static void
+gst_ts_demux_remove_stream (GstTSDemux * tsdemux, TSDemuxStream * stream,
+    gboolean push_eos)
+{
+  if (stream->pad) {
+    if (push_eos && stream->active) {
+      GST_DEBUG_OBJECT (stream->pad, "Pushing out EOS");
+      gst_pad_push_event (stream->pad, gst_event_new_eos ());
+      gst_pad_set_active (stream->pad, FALSE);
+    }
+
+    GST_DEBUG_OBJECT (stream->pad, "Removing pad");
+    gst_element_remove_pad (GST_ELEMENT_CAST (tsdemux), stream->pad);
+    stream->active = FALSE;
+    stream->pad = NULL;
+  }
+}
+#endif
+
 static void
 gst_ts_demux_stream_removed (MpegTSBase * base, MpegTSBaseStream * bstream)
 {
   TSDemuxStream *stream = (TSDemuxStream *) bstream;
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  GstTSDemux *tsdemux = (GstTSDemux *) base;
+#endif
 
   if (stream->pad) {
     gst_flow_combiner_remove_pad (GST_TS_DEMUX_CAST (base)->flowcombiner,
@@ -1479,17 +1598,21 @@ gst_ts_demux_stream_removed (MpegTSBase * base, MpegTSBaseStream * bstream)
         /* Flush out all data */
         GST_DEBUG_OBJECT (stream->pad, "Flushing out pending data");
         gst_ts_demux_push_pending_data ((GstTSDemux *) base, stream);
-
+#ifndef GST_EXT_AVOID_PAD_SWITCHING
         GST_DEBUG_OBJECT (stream->pad, "Pushing out EOS");
         gst_pad_push_event (stream->pad, gst_event_new_eos ());
         gst_pad_set_active (stream->pad, FALSE);
+#endif
       }
-
+#ifndef GST_EXT_AVOID_PAD_SWITCHING
       GST_DEBUG_OBJECT (stream->pad, "Removing pad");
       gst_element_remove_pad (GST_ELEMENT_CAST (base), stream->pad);
       stream->active = FALSE;
+#endif
     }
+#ifndef GST_EXT_AVOID_PAD_SWITCHING
     stream->pad = NULL;
+#endif
   }
 
   gst_ts_demux_stream_flush (stream, GST_TS_DEMUX_CAST (base), TRUE);
@@ -1500,6 +1623,12 @@ gst_ts_demux_stream_removed (MpegTSBase * base, MpegTSBaseStream * bstream)
   }
 
   tsdemux_h264_parsing_info_clear (&stream->h264infos);
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  /* Keep our reference as we can only finish the stream once we added
+   * pads for the new program or the pipeline might go EOS */
+  mpegts_base_stream_ref (bstream);
+  tsdemux->old_streams = g_list_append (tsdemux->old_streams, bstream);
+#endif
 }
 
 static void
@@ -1567,6 +1696,117 @@ gst_ts_demux_flush_streams (GstTSDemux * demux, gboolean hard)
     gst_ts_demux_stream_flush (walk->data, demux, hard);
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static gboolean
+gst_ts_demux_find_matching_stream (GstTSDemux * demux, TSDemuxStream * stream,
+    GList * streams_list)
+{
+  GstCaps *this_caps;
+
+  if (stream->pad == NULL)
+    return TRUE;
+
+  this_caps = gst_pad_get_current_caps (stream->pad);
+  for (; streams_list; streams_list = g_list_next (streams_list)) {
+    TSDemuxStream *other_stream = streams_list->data;
+
+    if (other_stream->pad == NULL)
+      continue;
+
+    if (other_stream->matched_stream)
+      continue;
+
+    if (gst_pad_peer_query_accept_caps (other_stream->pad, this_caps)) {
+      /* TODO we are not checking the PIDs so the pad names will be
+       * inconsistent with the new streams' PIDs */
+      other_stream->matched_stream = stream;
+      stream->matched_stream = other_stream;
+      gst_caps_unref (this_caps);
+      return TRUE;
+    }
+  }
+
+  gst_caps_unref (this_caps);
+  GST_DEBUG_OBJECT (demux, "No match found for stream: %p %" GST_PTR_FORMAT,
+      stream, stream->pad);
+  return FALSE;
+}
+
+static gboolean
+push_sticky_event (GstPad * pad, GstEvent ** event, gpointer udata)
+{
+  GstPad *other_pad = udata;
+
+  gst_pad_push_event (other_pad, gst_event_ref (*event));
+
+  return TRUE;
+}
+
+static gboolean
+gst_ts_demux_check_streams_match (GstTSDemux * demux)
+{
+  GList *iter;
+  gint old_length = 0;
+  gint new_length = 0;
+
+  if (!demux->old_streams) {
+    GST_DEBUG_OBJECT (demux, "No old streams present, streams don't match");
+    return FALSE;
+  }
+
+  /* Initialize matching variables */
+  for (iter = demux->program->stream_list; iter; iter = g_list_next (iter)) {
+    TSDemuxStream *stream = iter->data;
+    if (stream->pad) {
+      new_length++;
+      stream->matched_stream = NULL;
+    }
+  }
+  for (iter = demux->old_streams; iter; iter = g_list_next (iter)) {
+    TSDemuxStream *stream = iter->data;
+    if (stream->pad) {
+      old_length++;
+      stream->matched_stream = NULL;
+    }
+  }
+
+  if (new_length != old_length) {
+    GST_DEBUG_OBJECT (demux,
+        "Number of streams is different, no match possible");
+    return FALSE;
+  }
+
+  for (iter = demux->program->stream_list; iter; iter = g_list_next (iter)) {
+    if (!gst_ts_demux_find_matching_stream (demux, iter->data,
+            demux->old_streams))
+      return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (demux, "Streams matched, no need for pad switching");
+
+  /* do the pad replacement, unref pads from new streams and use the pads
+   * from the old ones */
+  for (iter = demux->program->stream_list; iter; iter = g_list_next (iter)) {
+    TSDemuxStream *stream = iter->data;
+
+    if (stream->pad) {
+      GstPad *pad = stream->pad;
+
+      stream->pad = stream->matched_stream->pad;
+      stream->matched_stream->pad = NULL;
+
+      gst_ts_demux_stream_send_stream_start ((MpegTSBase *) demux,
+          (MpegTSBaseStream *) stream, stream->pad);
+
+      gst_pad_sticky_events_foreach (pad, push_sticky_event, stream->pad);
+
+      gst_object_unref (pad);
+    }
+  }
+
+  return TRUE;
+}
+#endif
 static void
 gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
 {
@@ -1590,13 +1830,34 @@ gst_ts_demux_program_started (MpegTSBase * base, MpegTSBaseProgram * program)
       gst_event_unref (demux->segment_event);
       demux->segment_event = NULL;
     }
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+    /* Check if the new streams match the old ones to
+     * prevent switching pads if not needed */
+    if (gst_ts_demux_check_streams_match (demux))
+      return;
 
+    /* 1) Rename old pad names to avoid clashes (matching PIDs)
+     * 2) add new streams
+     * 3) Fire no-more-pads */
+    for (tmp = demux->old_streams; tmp; tmp = tmp->next) {
+      TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
+      gst_ts_demux_stream_rename_stopping_pad (demux, stream);
+    }
+    for (tmp = program->stream_list; tmp; tmp = tmp->next) {
+      TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
+      activate_pad_for_stream (demux, stream);
+    }
+    gst_element_no_more_pads ((GstElement *) demux);
+
+    gst_ts_demux_remove_old_streams (demux, TRUE);
+#else
     /* Add all streams, then fire no-more-pads */
     for (tmp = program->stream_list; tmp; tmp = tmp->next) {
       TSDemuxStream *stream = (TSDemuxStream *) tmp->data;
       activate_pad_for_stream (demux, stream);
     }
     gst_element_no_more_pads ((GstElement *) demux);
+#endif
   }
 }
 

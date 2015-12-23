@@ -658,11 +658,55 @@ gst_adaptive_demux_set_stream_struct_size (GstAdaptiveDemux * demux,
   demux->stream_struct_size = struct_size;
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void
+gst_adaptive_demux_stream_push_stream_start (GstAdaptiveDemux * demux,
+    GstAdaptiveDemuxStream * stream)
+{
+  GstPad *pad = stream->pad;
+  gchar *stream_id;
+  GstEvent *event;
+  gchar *name = gst_pad_get_name (pad);
+
+  stream_id =
+      gst_pad_create_stream_id_printf (pad, GST_ELEMENT_CAST (demux), "%s-%04d",
+      name, stream->stream_id_counter++);
+
+  event =
+      gst_pad_get_sticky_event (GST_ADAPTIVE_DEMUX_SINK_PAD (demux),
+      GST_EVENT_STREAM_START, 0);
+  if (event) {
+    if (gst_event_parse_group_id (event, &demux->group_id))
+      demux->have_group_id = TRUE;
+    else
+      demux->have_group_id = FALSE;
+    gst_event_unref (event);
+  } else if (!demux->have_group_id) {
+    demux->have_group_id = TRUE;
+    demux->group_id = gst_util_group_id_next ();
+  }
+  event = gst_event_new_stream_start (stream_id);
+  if (demux->have_group_id)
+    gst_event_set_group_id (event, demux->group_id);
+
+  gst_pad_push_event (pad, event);
+  g_free (stream_id);
+  g_free (name);
+}
+#endif
+
 static gboolean
 gst_adaptive_demux_expose_stream (GstAdaptiveDemux * demux,
     GstAdaptiveDemuxStream * stream)
 {
   GstPad *pad = stream->pad;
+
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  gst_pad_set_active (pad, TRUE);
+  stream->need_header = TRUE;
+
+  gst_adaptive_demux_stream_push_stream_start (demux, stream);
+#else
   gchar *name = gst_pad_get_name (pad);
   GstEvent *event;
   gchar *stream_id;
@@ -692,6 +736,7 @@ gst_adaptive_demux_expose_stream (GstAdaptiveDemux * demux,
   gst_pad_push_event (pad, event);
   g_free (stream_id);
   g_free (name);
+#endif
 
   GST_DEBUG_OBJECT (demux, "Adding srcpad %s:%s with caps %" GST_PTR_FORMAT,
       GST_DEBUG_PAD_NAME (pad), stream->pending_caps);
@@ -1373,6 +1418,73 @@ gst_adaptive_demux_stream_set_caps (GstAdaptiveDemuxStream * stream,
   gst_caps_replace (&stream->pending_caps, caps);
   gst_caps_unref (caps);
 }
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+
+/**
+ * gst_adaptive_demux_stream_check_switch_pad:
+ * @stream:
+ * @caps: the #GstCaps of the new stream
+ * @create_pad_func: callback to create a pad if needed
+ *
+ * Compares @caps with the current caps on pad and with the allowed
+ * downstream caps. If the caps is compatible it just sets a new caps
+ * on the pad, otherwise it will request a new pad to be created and
+ * switch pads.
+ *
+ * This only works currently for streams that only have a single output
+ * due to the way pad switching works in groups. (HLS demux can use it)
+ *
+ * Return: %TRUE if a new pad was created
+ */
+gboolean
+gst_adaptive_demux_stream_check_switch_pad (GstAdaptiveDemuxStream * stream,
+    GstCaps * caps, GstAdaptiveDemuxStreamCreatePadFunc create_pad_func)
+{
+  GstCaps *current_caps;
+  gboolean ret;
+
+  current_caps = gst_pad_get_current_caps (stream->pad);
+  if (current_caps == NULL || gst_caps_is_equal (current_caps, caps) ||
+      gst_pad_query_accept_caps (stream->pad, caps)) {
+
+    /* no need to switch pads */
+    ret = FALSE;
+    GST_DEBUG_OBJECT (stream->pad, "New caps compatible with old one."
+        " Scheduling new stream-start, caps and segment events");
+    gst_adaptive_demux_stream_push_stream_start (stream->demux, stream);
+    gst_adaptive_demux_stream_set_caps (stream, caps);
+    if (stream->pending_segment)
+      gst_event_unref (stream->pending_segment);
+    stream->pending_segment = gst_event_new_segment (&stream->segment);
+  } else {
+    GstPad *old_pad;
+
+    /* need to switch pad for a new one */
+    ret = TRUE;
+
+    GST_DEBUG_OBJECT (stream->pad, "New caps is incompatible with old "
+        "one. Need to switch pads");
+    old_pad = stream->pad;
+    stream->pad = create_pad_func (stream);
+    gst_adaptive_demux_stream_set_caps (stream, caps);
+    gst_adaptive_demux_expose_stream (stream->demux, stream);
+
+    /* FIXME currently there is no way of properly replacing a single
+     * pad in the stream. This will only work for streams that have
+     * a single source pad */
+    gst_element_no_more_pads (GST_ELEMENT_CAST (stream->demux));
+
+    gst_pad_push_event (old_pad, gst_event_new_eos ());
+    gst_pad_set_active (old_pad, FALSE);
+    gst_element_remove_pad (GST_ELEMENT_CAST (stream->demux), old_pad);
+    gst_object_unref (old_pad);
+  }
+
+  if (current_caps)
+    gst_caps_unref (current_caps);
+  return ret;
+}
+#endif
 
 void
 gst_adaptive_demux_stream_set_tags (GstAdaptiveDemuxStream * stream,

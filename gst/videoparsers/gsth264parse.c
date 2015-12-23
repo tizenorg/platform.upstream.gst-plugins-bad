@@ -201,6 +201,9 @@ gst_h264_parse_reset_stream_info (GstH264Parse * h264parse)
 {
   gint i;
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  h264parse->state = 0;
+#endif
   h264parse->width = 0;
   h264parse->height = 0;
   h264parse->fps_num = 0;
@@ -2721,6 +2724,12 @@ gst_h264_parse_event (GstBaseParse * parse, GstEvent * event)
       res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
       break;
     }
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+    case GST_EVENT_STREAM_START:
+      res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
+      gst_h264_parse_reset ((GstH264Parse *) parse);
+      break;
+#endif
     default:
       res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
       break;

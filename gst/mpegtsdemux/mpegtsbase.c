@@ -160,12 +160,54 @@ mpegts_base_get_property (GObject * object, guint prop_id,
   }
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static void
+mpegts_base_clear (MpegTSBase * base)
+{
+  mpegts_packetizer_clear (base->packetizer);
+  memset (base->is_pes, 0, 1024);
+  memset (base->known_psi, 0, 1024);
+
+  /* FIXME : Actually these are not *always* know SI streams
+   * depending on the variant of mpeg-ts being used. */
+
+  /* Known PIDs : PAT, TSDT, IPMP CIT */
+  MPEGTS_BIT_SET (base->known_psi, 0);
+  MPEGTS_BIT_SET (base->known_psi, 2);
+  MPEGTS_BIT_SET (base->known_psi, 3);
+  /* TDT, TOT, ST */
+  MPEGTS_BIT_SET (base->known_psi, 0x14);
+  /* network synchronization */
+  MPEGTS_BIT_SET (base->known_psi, 0x15);
+
+  /* ATSC */
+  MPEGTS_BIT_SET (base->known_psi, 0x1ffb);
+
+  if (base->pat) {
+    g_ptr_array_unref (base->pat);
+    base->pat = NULL;
+  }
+
+  gst_segment_init (&base->segment, GST_FORMAT_UNDEFINED);
+  base->last_seek_seqnum = (guint32) - 1;
+
+  base->seen_pat = FALSE;
+  base->seek_offset = -1;
+
+  g_hash_table_foreach_remove (base->programs, (GHRFunc) remove_each_program,
+      base);
+}
+#endif
 
 static void
 mpegts_base_reset (MpegTSBase * base)
 {
   MpegTSBaseClass *klass = GST_MPEGTS_BASE_GET_CLASS (base);
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  mpegts_base_clear (base);
+  base->mode = BASE_MODE_STREAMING;
+#else
   mpegts_packetizer_clear (base->packetizer);
   memset (base->is_pes, 0, 1024);
   memset (base->known_psi, 0, 1024);
@@ -199,7 +241,7 @@ mpegts_base_reset (MpegTSBase * base)
 
   g_hash_table_foreach_remove (base->programs, (GHRFunc) remove_each_program,
       base);
-
+#endif
   if (klass->reset)
     klass->reset (base);
 }
@@ -263,6 +305,33 @@ mpegts_base_finalize (GObject * object)
     G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+MpegTSBaseStream *
+mpegts_base_stream_ref (MpegTSBaseStream * stream)
+{
+  g_return_val_if_fail (stream != NULL, NULL);
+
+  GST_TRACE ("%p ref %d->%d", stream, stream->refcount, stream->refcount + 1);
+
+  g_atomic_int_inc (&stream->refcount);
+
+  return stream;
+}
+
+void
+mpegts_base_stream_unref (MpegTSBaseStream * stream)
+{
+  g_return_if_fail (stream != NULL);
+
+  GST_TRACE ("%p unref %d->%d", stream, stream->refcount, stream->refcount - 1);
+
+  g_return_if_fail (stream->refcount > 0);
+
+  if (g_atomic_int_dec_and_test (&stream->refcount)) {
+    g_free (stream);
+  }
+}
+#endif
 
 /* returns NULL if no matching descriptor found *
  * otherwise returns a descriptor that needs to *
@@ -452,6 +521,9 @@ mpegts_base_program_add_stream (MpegTSBase * base,
   }
 
   bstream = g_malloc0 (base->stream_size);
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  bstream->refcount = 1;
+#endif
   bstream->pid = pid;
   bstream->stream_type = stream_type;
   bstream->stream = stream;
@@ -494,7 +566,11 @@ mpegts_base_program_remove_stream (MpegTSBase * base,
     klass->stream_removed (base, stream);
 
   program->stream_list = g_list_remove_all (program->stream_list, stream);
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  mpegts_base_stream_unref (stream);
+#else
   g_free (stream);
+#endif
   program->streams[pid] = NULL;
 }
 
@@ -1060,6 +1136,15 @@ mpegts_base_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       res = GST_MPEGTS_BASE_GET_CLASS (base)->push_event (base, event);
       break;
     case GST_EVENT_STREAM_START:
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+      GST_DEBUG_OBJECT (base,
+          "Handling stream-start, flushing all pending data");
+      mpegts_base_drain (base);
+      mpegts_base_flush (base, TRUE);
+      mpegts_packetizer_flush (base->packetizer, TRUE);
+      mpegts_base_clear (base);
+      mpegts_packetizer_clear (base->packetizer);
+#endif
       gst_event_unref (event);
       break;
     case GST_EVENT_CAPS:

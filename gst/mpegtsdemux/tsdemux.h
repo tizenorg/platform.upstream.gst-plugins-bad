@@ -66,6 +66,10 @@ struct _GstTSDemux
   /*< private >*/
   MpegTSBaseProgram *program;	/* Current program */
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  GList *old_streams;
+#endif
+
   /* segments to be sent */
   GstSegment segment;
   GstEvent *segment_event;

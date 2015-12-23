@@ -70,6 +70,10 @@ struct _GstHLSDemux
   GstM3U8Client *client;        /* M3U8 client */
   gboolean do_typefind;         /* Whether we need to typefind the next buffer */
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  GstClockTime current_pts;
+#endif
+
   /* Cache for the last key */
   gchar *key_url;
   GstFragment *key_fragment;

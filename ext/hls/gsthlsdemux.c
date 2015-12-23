@@ -273,6 +273,15 @@ gst_hls_demux_create_pad (GstHLSDemux * hlsdemux)
   return pad;
 }
 
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+static GstPad *
+gst_hls_demux_stream_create_pad (GstAdaptiveDemuxStream * stream)
+{
+  GstHLSDemux *hlsdemux = GST_HLS_DEMUX_CAST (stream->demux);
+  return gst_hls_demux_create_pad (hlsdemux);
+}
+#endif
+
 static guint64
 gst_hls_demux_get_bitrate (GstHLSDemux * hlsdemux)
 {
@@ -574,8 +583,15 @@ gst_hls_demux_handle_buffer (GstAdaptiveDemux * demux,
 
     GST_DEBUG_OBJECT (hlsdemux, "Typefind result: %" GST_PTR_FORMAT " prob:%d",
         caps, prob);
-
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+    gst_adaptive_demux_stream_check_switch_pad (stream, caps,
+        gst_hls_demux_stream_create_pad);
+    GST_DEBUG_OBJECT (stream->pad, "Overwriting PTS to %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (hlsdemux->current_pts));
+    stream->fragment.timestamp = hlsdemux->current_pts;
+#else
     gst_adaptive_demux_stream_set_caps (stream, caps);
+#endif
     hlsdemux->do_typefind = FALSE;
   }
 
@@ -716,6 +732,9 @@ gst_hls_demux_update_fragment_info (GstAdaptiveDemuxStream * stream)
   }
 
   /* set up our source for download */
+#ifdef GST_EXT_AVOID_PAD_SWITCHING
+  hlsdemux->current_pts = timestamp;
+#endif
   if (hlsdemux->reset_pts || discont) {
     stream->fragment.timestamp = timestamp;
   } else {
@@ -759,8 +778,10 @@ gst_hls_demux_select_bitrate (GstAdaptiveDemuxStream * stream, guint64 bitrate)
     return FALSE;
 
   gst_hls_demux_change_playlist (hlsdemux, bitrate, &changed);
+#ifndef GST_EXT_AVOID_PAD_SWITCHING
   if (changed)
     gst_hls_demux_setup_streams (GST_ADAPTIVE_DEMUX_CAST (hlsdemux));
+#endif
   return changed;
 }
 
