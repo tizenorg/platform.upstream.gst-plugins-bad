@@ -1025,6 +1025,9 @@ gst_shm_sink_unlock_stop (GstBaseSink * bsink)
 static gboolean
 gst_shm_sink_propose_allocation (GstBaseSink * sink, GstQuery * query)
 {
+  /*We don't use shmsink  allocator temporarily because of libav bug*/
+  return FALSE;
+
   GstShmSink *self = GST_SHM_SINK (sink);
 
   if (self->allocator)
