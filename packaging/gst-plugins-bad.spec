@@ -6,7 +6,7 @@ Name:           gst-plugins-bad
 Version:        1.6.1
 Release:        2
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
-License:        GPL-2.0+ and LGPL-2.1+
+License:        LGPL-2.0+
 Group:          Multimedia/Framework
 Url:            http://gstreamer.freedesktop.org/
 Source:         http://gstreamer.freedesktop.org/src/gst-plugins-bad/%{name}-%{version}.tar.xz
@@ -157,7 +157,7 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %manifest %{name}.manifest
 %defattr(-, root, root)
-%license COPYING COPYING.LIB
+%license COPYING.LIB
 %{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmenc.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstasfmux.so
