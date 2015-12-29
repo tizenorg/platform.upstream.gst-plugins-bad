@@ -2425,7 +2425,7 @@ gst_ts_demux_push_pending_data (GstTSDemux * demux, TSDemuxStream * stream)
       stream->needs_keyframe = FALSE;
     } else {
       base->seek_offset = demux->last_seek_offset - 200 * base->packetsize;
-      if (demux->last_seek_offset < 200 * base->packetsize)
+      if (demux->last_seek_offset < 200 * (guint64)base->packetsize)
         base->seek_offset = 0;
       demux->last_seek_offset = base->seek_offset;
       mpegts_packetizer_flush (base->packetizer, FALSE);
