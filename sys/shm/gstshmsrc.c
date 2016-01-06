@@ -426,11 +426,13 @@ gst_shm_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
     MMVideoBuffer *mm_video_buf = NULL;
     GstMemory *mem_imgb = NULL;
     unsigned key[MM_VIDEO_BUFFER_PLANE_MAX];
-    int offset = rv - sizeof(MMVideoBuffer) - sizeof(key);
+    int offset = *(buf + rv - sizeof(int));
     if(offset < 0) {
       GST_ERROR_OBJECT(self, "offset error %d", offset);
       return GST_FLOW_ERROR;
     }
+
+    GST_LOG_OBJECT(self, "mm_buf offset %d", offset);
 
     mm_video_buf = g_malloc0(sizeof(MMVideoBuffer));
     mem_imgb = gst_memory_new_wrapped(0, mm_video_buf, sizeof(MMVideoBuffer), 0,
@@ -438,7 +440,7 @@ gst_shm_src_create (GstPushSrc * psrc, GstBuffer ** outbuf)
     gst_buffer_append_memory(*outbuf, mem_imgb);
 
     memcpy(mm_video_buf, buf + offset, sizeof(MMVideoBuffer));
-    memcpy(key, buf + rv - sizeof(key), sizeof(key));
+    memcpy(key, buf + rv - (sizeof(key) + sizeof(int)), sizeof(key));
     if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
       int i;
       GST_DEBUG_OBJECT(self, "width %d, height %d", mm_video_buf->width[0],

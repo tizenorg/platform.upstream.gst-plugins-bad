@@ -694,8 +694,10 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
   GstBuffer *sendbuf = NULL;
   gsize buf_size = gst_buffer_get_size(buf);
 #ifdef GST_TBM_SUPPORT
-  unsigned key[MM_VIDEO_BUFFER_PLANE_MAX];
+  unsigned int key[MM_VIDEO_BUFFER_PLANE_MAX];
   gsize key_size = sizeof(key);
+  int mm_buf_offset = 0;
+  int key_offset = 0;
 #endif
 
   GST_OBJECT_LOCK (self);
@@ -728,19 +730,26 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
 
     memory = gst_buffer_peek_memory (buf, 1);
     gst_memory_map (memory, &map, GST_MAP_READ);
-    mm_video_buf = (MMVideoBuffer *) map.data;
 
+    mm_video_buf = (MMVideoBuffer *) map.data;
     if (mm_video_buf == NULL) {
       GST_ERROR_OBJECT (self, "mm_video_buf is NULL. Skip rendering");
       gst_memory_unmap (memory, &map);
       goto flushing;
     }
+
+    mm_buf_offset = buf_size - map.size;
+    key_offset = buf_size;
+
+    GST_LOG_OBJECT(self, "mm_buf_offset %d, key_offset %d",
+                         mm_buf_offset, key_offset);
+
     /* export bo key */
     if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
       int i;
-      GST_DEBUG_OBJECT (self, "GstBuffer size %d, tbm bo key size %d",
-          buf_size, key_size);
-      buf_size += key_size;
+      GST_DEBUG_OBJECT (self, "GstBuffer size %d, tbm bo key size %d, info size %d",
+          buf_size, key_size, sizeof(int));
+      buf_size += (key_size + sizeof(int));
       for(i = 0; i < MM_VIDEO_BUFFER_PLANE_MAX; i++) {
         if(mm_video_buf->handle.bo[i]) {
           key[i] = tbm_bo_export(mm_video_buf->handle.bo[i]);
@@ -803,8 +812,11 @@ gst_shm_sink_render (GstBaseSink * bsink, GstBuffer * buf)
     gst_memory_map (memory, &map, GST_MAP_WRITE);
     gst_buffer_extract (buf, 0, map.data, map.size);
 #ifdef GST_TBM_SUPPORT
-    if(self->use_tbm && gst_buffer_n_memory (buf) > 1)
-      memcpy(map.data + map.size - key_size, key, key_size);
+    if(self->use_tbm && gst_buffer_n_memory (buf) > 1) {
+      memcpy(map.data + key_offset, key, key_size);
+      /* set offset info */
+      *(map.data + key_offset + key_size) = mm_buf_offset;
+    }
 #endif
     gst_memory_unmap (memory, &map);
 
