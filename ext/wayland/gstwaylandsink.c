@@ -804,7 +804,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
   g_mutex_lock (&sink->render_lock);
 
-  GST_ERROR_OBJECT (sink, "render buffer %p", buffer);
+  GST_LOG_OBJECT (sink, "render buffer %p", buffer);
 
   if (G_UNLIKELY (!sink->window)) {
     /* ask for window handle. Unlock render_lock while doing that because

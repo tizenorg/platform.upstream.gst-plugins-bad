@@ -344,12 +344,18 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
   /*Wayland-compositor will try to render damage area which need  to be updated */
   wl_surface_damage (window->video_surface, 0, 0, window->surface_width,
       window->surface_height);
+#ifdef GST_WLSINK_ENHANCEMEN
+  GST_LOG("update area width %d, height %d", window->surface_width, window->surface_height);
+#endif
   /* wl_surface_commit change surface state, if wl_buffer is not attached newly,  then surface is not changed */
   wl_surface_commit (window->video_surface);
 
   if (G_UNLIKELY (info)) {
     /* commit also the parent (area_surface) in order to change
      * the position of the video_subsurface */
+#ifdef GST_WLSINK_ENHANCEMEN
+    GST_DEBUG("render_rectangle %d*%d", window->render_rectangle.w, window->render_rectangle.h);
+#endif
     wl_surface_damage (window->area_surface, 0, 0, window->render_rectangle.w,
         window->render_rectangle.h);
     wl_surface_commit (window->area_surface);
