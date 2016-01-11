@@ -58,6 +58,75 @@
 #include <string.h>
 
 //#define DUMP_BUFFER
+#ifdef GST_WLSINK_ENHANCEMENT
+#define GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_display_geometry_method_get_type())
+#define GST_TYPE_WAYLANDSINK_ROTATE_ANGLE (gst_waylandsink_rotate_angle_get_type())
+#define GST_TYPE_WAYLANDSINK_FLIP (gst_waylandsink_flip_get_type())
+
+static GType
+gst_waylandsink_rotate_angle_get_type (void)
+{
+  static GType waylandsink_rotate_angle_type = 0;
+  static const GEnumValue rotate_angle_type[] = {
+    {0, "No rotate", "DEGREE_0"},
+    {1, "Rotate 90 degree", "DEGREE_90"},
+    {2, "Rotate 180 degree", "DEGREE_180"},
+    {3, "Rotate 270 degree", "DEGREE_270"},
+    {4, NULL, NULL},
+  };
+
+  if (!waylandsink_rotate_angle_type) {
+    waylandsink_rotate_angle_type =
+        g_enum_register_static ("GstWaylandSinkRotateAngleType",
+        rotate_angle_type);
+  }
+
+  return waylandsink_rotate_angle_type;
+}
+
+
+static GType
+gst_waylandsink_display_geometry_method_get_type (void)
+{
+  static GType waylandsink_display_geometry_method_type = 0;
+  static const GEnumValue display_geometry_method_type[] = {
+    {0, "Letter box", "LETTER_BOX"},
+    {1, "Origin size", "ORIGIN_SIZE"},
+    {2, "Full-screen", "FULL_SCREEN"},
+    {3, "Cropped full-screen", "CROPPED_FULL_SCREEN"},
+    {4, "Origin size(if screen size is larger than video size(width/height)) or Letter box(if video size(width/height) is larger than screen size)", "ORIGIN_SIZE_OR_LETTER_BOX"},
+    {5, NULL, NULL},
+  };
+
+  if (!waylandsink_display_geometry_method_type) {
+    waylandsink_display_geometry_method_type =
+        g_enum_register_static ("GstWaylandSinkDisplayGeometryMethodType",
+        display_geometry_method_type);
+  }
+  return waylandsink_display_geometry_method_type;
+}
+
+static GType
+gst_waylandsink_flip_get_type (void)
+{
+  static GType waylandsink_flip_type = 0;
+  static const GEnumValue flip_type[] = {
+    {FLIP_NONE, "Flip NONE", "FLIP_NONE"},
+    {FLIP_HORIZONTAL, "Flip HORIZONTAL", "FLIP_HORIZONTAL"},
+    {FLIP_VERTICAL, "Flip VERTICAL", "FLIP_VERTICAL"},
+    {FLIP_BOTH, "Flip BOTH", "FLIP_BOTH"},
+    {FLIP_NUM, NULL, NULL},
+  };
+
+  if (!waylandsink_flip_type) {
+    waylandsink_flip_type =
+        g_enum_register_static ("GstWaylandSinkFlipType", flip_type);
+  }
+
+  return waylandsink_flip_type;
+}
+
+#endif
 
 /* signals */
 enum
@@ -72,7 +141,11 @@ enum
   PROP_0,
   PROP_DISPLAY,
 #ifdef GST_WLSINK_ENHANCEMENT
-  PROP_USE_TBM
+  PROP_USE_TBM,
+  PROP_ROTATE_ANGLE,
+  PROP_DISPLAY_GEOMETRY_METHOD,
+  PROP_ORIENTATION,
+  PROP_FLIP
 #endif
 };
 int dump__cnt = 0;
@@ -127,7 +200,11 @@ static void gst_wayland_sink_waylandvideo_init (GstWaylandVideoInterface *
     iface);
 static void gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video);
 static void gst_wayland_sink_end_geometry_change (GstWaylandVideo * video);
-
+#ifdef GST_WLSINK_ENHANCEMENT
+static void gst_wayland_sink_update_window_geometry (GstWaylandSink * sink);
+static void render_last_buffer (GstWaylandSink * sink);
+//static void gst_wayland_sink_render_last_buffer (GstWaylandSink * sink);
+#endif
 #define gst_wayland_sink_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstWaylandSink, gst_wayland_sink, GST_TYPE_VIDEO_SINK,
     G_IMPLEMENT_INTERFACE (GST_TYPE_VIDEO_OVERLAY,
@@ -176,12 +253,40 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
       g_param_spec_string ("display", "Wayland Display name", "Wayland "
           "display name to connect to, if not supplied via the GstContext",
           NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
-
+#ifdef GST_WLSINK_ENHANCEMENT
   g_object_class_install_property (gobject_class, PROP_USE_TBM,
       g_param_spec_boolean ("use-tbm",
           "Use Tizen Buffer Memory insted of Shared memory",
           "When enabled, Memory is alloced by TBM insted of SHM ", TRUE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_ROTATE_ANGLE,
+      g_param_spec_enum ("rotate", "Rotate angle",
+          "Rotate angle of display output",
+          GST_TYPE_WAYLANDSINK_ROTATE_ANGLE, DEGREE_0,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_DISPLAY_GEOMETRY_METHOD,
+      g_param_spec_enum ("display-geometry-method", "Display geometry method",
+          "Geometrical method for display",
+          GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD,
+          DEF_DISPLAY_GEOMETRY_METHOD,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_ORIENTATION,
+      g_param_spec_enum ("orientation",
+          "Orientation information used for ROI/ZOOM",
+          "Orientation information for display",
+          GST_TYPE_WAYLANDSINK_ROTATE_ANGLE, DEGREE_0,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_FLIP,
+      g_param_spec_enum ("flip", "Display flip",
+          "Flip for display",
+          GST_TYPE_WAYLANDSINK_FLIP, DEF_DISPLAY_FLIP,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+#endif
 }
 
 #ifdef DUMP_BUFFER
@@ -204,7 +309,13 @@ static void
 gst_wayland_sink_init (GstWaylandSink * sink)
 {
   FUNCTION;
+
   sink->USE_TBM = TRUE;
+  sink->display_geometry_method = DEF_DISPLAY_GEOMETRY_METHOD;
+  sink->flip = DEF_DISPLAY_FLIP;
+  sink->rotate_angle = DEGREE_0;
+  sink->orientation = DEGREE_0;
+
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
 }
@@ -225,6 +336,18 @@ gst_wayland_sink_get_property (GObject * object,
 #ifdef GST_WLSINK_ENHANCEMENT
     case PROP_USE_TBM:
       g_value_set_boolean (value, sink->USE_TBM);
+      break;
+    case PROP_ROTATE_ANGLE:
+      g_value_set_enum (value, sink->rotate_angle);
+      break;
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      g_value_set_enum (value, sink->display_geometry_method);
+      break;
+    case PROP_ORIENTATION:
+      g_value_set_enum (value, sink->orientation);
+      break;
+    case PROP_FLIP:
+      g_value_set_enum (value, sink->flip);
       break;
 #endif
     default:
@@ -250,6 +373,64 @@ gst_wayland_sink_set_property (GObject * object,
     case PROP_USE_TBM:
       sink->USE_TBM = g_value_get_boolean (value);
       GST_LOG ("1:USE TBM 0: USE SHM set(%d)", sink->USE_TBM);
+      break;
+    case PROP_ROTATE_ANGLE:
+      sink->rotate_angle = g_value_get_enum (value);
+      GST_WARNING_OBJECT (sink, "Rotate angle is set (%d)", sink->rotate_angle);
+      if (sink->window) {
+        gst_wl_window_set_rotate_angle (sink->window, sink->rotate_angle);
+      }
+      sink->video_info_changed = TRUE;
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to render last buffer */
+        g_mutex_lock (&sink->render_lock);
+        render_last_buffer(sink);
+        g_mutex_unlock (&sink->render_lock);
+      }
+      break;
+    case PROP_DISPLAY_GEOMETRY_METHOD:
+      sink->display_geometry_method = g_value_get_enum (value);
+      GST_WARNING_OBJECT (sink, "Display geometry method is set (%d)",
+          sink->display_geometry_method);
+      if (sink->window) {
+        gst_wl_window_set_disp_geo_method (sink->window,
+            sink->display_geometry_method);
+      }
+      sink->video_info_changed = TRUE;
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to render last buffer */
+        g_mutex_lock (&sink->render_lock);
+        render_last_buffer(sink);
+        g_mutex_unlock (&sink->render_lock);
+      }
+      break;
+    case PROP_ORIENTATION:
+      sink->orientation = g_value_get_enum (value);
+      GST_WARNING_OBJECT (sink, "Orientation is set (%d)", sink->orientation);
+      if (sink->window) {
+        gst_wl_window_set_orientation (sink->window, sink->orientation);
+      }
+      sink->video_info_changed = TRUE;
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to render last buffer */
+        g_mutex_lock (&sink->render_lock);
+        render_last_buffer(sink);
+        g_mutex_unlock (&sink->render_lock);
+      }
+      break;
+    case PROP_FLIP:
+      sink->flip = g_value_get_enum (value);
+      GST_WARNING_OBJECT (sink, "flip is set (%d)", sink->flip);
+      if (sink->flip) {
+        gst_wl_window_set_flip (sink->window, sink->flip);
+      }
+      sink->video_info_changed = TRUE;
+      if (GST_STATE (sink) == GST_STATE_PAUSED) {
+        /*need to render last buffer */
+        g_mutex_lock (&sink->render_lock);
+        render_last_buffer(sink);
+        g_mutex_unlock (&sink->render_lock);
+      }
       break;
 #endif
     default:
@@ -768,6 +949,37 @@ static const struct wl_callback_listener frame_callback_listener = {
   frame_redraw_callback
 };
 
+#ifdef GST_WLSINK_ENHANCEMENT
+static void
+gst_wayland_sink_update_window_geometry (GstWaylandSink * sink)
+{
+  FUNCTION;
+  g_return_if_fail (sink != NULL);
+  g_return_if_fail (sink->window != NULL);
+
+  gst_wl_window_set_rotate_angle (sink->window, sink->rotate_angle);
+  gst_wl_window_set_disp_geo_method (sink->window,
+      sink->display_geometry_method);
+  gst_wl_window_set_orientation (sink->window, sink->orientation);
+  gst_wl_window_set_flip (sink->window, sink->flip);
+}
+#if 0
+static void
+gst_wayland_sink_render_last_buffer (GstWaylandSink * sink)
+{
+  FUNCTION;
+  g_return_if_fail (sink != NULL);
+
+  g_mutex_lock (&sink->render_lock);
+  gst_wl_window_render (sink->window, wlbuffer, info);
+  gst_wl_window_set_video_info (sink->window, &sink->video_info);
+  sink->video_info_changed = FALSE;
+  if (sink->last_buffer)
+    render_last_buffer (sink);
+  g_mutex_unlock (&sink->render_lock);
+}
+#endif
+#endif
 /* must be called with the render lock */
 static void
 render_last_buffer (GstWaylandSink * sink)
@@ -790,7 +1002,17 @@ render_last_buffer (GstWaylandSink * sink)
     info = &sink->video_info;
     sink->video_info_changed = FALSE;
   }
+#ifdef GST_WLSINK_ENHANCEMENT
+  if(sink->last_buffer)
+    gst_wl_window_render (sink->window, wlbuffer, info);
+  else {
+    if (G_UNLIKELY (info)) {
+      gst_wl_window_set_video_info (sink->window, &info);
+    }
+  }
+#else
   gst_wl_window_render (sink->window, wlbuffer, info);
+#endif
 }
 
 static GstFlowReturn
@@ -819,6 +1041,10 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
           gst_wl_window_new_toplevel (sink->display, &sink->video_info);
     }
   }
+#ifdef GST_WLSINK_ENHANCEMENT
+  gst_wayland_sink_update_window_geometry (sink);
+  sink->video_info_changed = TRUE;
+#endif
   /* drop buffers until we get a frame callback */
   if (g_atomic_int_get (&sink->redraw_pending) == TRUE)
     goto done;
@@ -1171,7 +1397,9 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
           "ignoring window handle");
     }
   }
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  gst_wayland_sink_update_window_geometry (sink);
+#endif
   g_mutex_unlock (&sink->render_lock);
 }
 
