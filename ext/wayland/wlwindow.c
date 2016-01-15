@@ -338,7 +338,6 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
     case DISP_GEO_METHOD_LETTER_BOX:
       GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
       gst_video_sink_center_rect (src, dst, &res, TRUE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
       res.x += window->render_rectangle.x;
       res.y += window->render_rectangle.y;
       break;
@@ -348,7 +347,6 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
         GST_INFO
             ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
         gst_video_sink_center_rect (src, dst, &res, TRUE);
-        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
         res.x += window->render_rectangle.x;
         res.y += window->render_rectangle.y;
       } else {
