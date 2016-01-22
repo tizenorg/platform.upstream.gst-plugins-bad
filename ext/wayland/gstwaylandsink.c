@@ -383,7 +383,7 @@ gst_wayland_sink_set_property (GObject * object,
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render last buffer */
         g_mutex_lock (&sink->render_lock);
-        render_last_buffer(sink);
+        render_last_buffer (sink);
         g_mutex_unlock (&sink->render_lock);
       }
       break;
@@ -399,7 +399,7 @@ gst_wayland_sink_set_property (GObject * object,
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render last buffer */
         g_mutex_lock (&sink->render_lock);
-        render_last_buffer(sink);
+        render_last_buffer (sink);
         g_mutex_unlock (&sink->render_lock);
       }
       break;
@@ -413,7 +413,7 @@ gst_wayland_sink_set_property (GObject * object,
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render last buffer */
         g_mutex_lock (&sink->render_lock);
-        render_last_buffer(sink);
+        render_last_buffer (sink);
         g_mutex_unlock (&sink->render_lock);
       }
       break;
@@ -427,7 +427,7 @@ gst_wayland_sink_set_property (GObject * object,
       if (GST_STATE (sink) == GST_STATE_PAUSED) {
         /*need to render last buffer */
         g_mutex_lock (&sink->render_lock);
-        render_last_buffer(sink);
+        render_last_buffer (sink);
         g_mutex_unlock (&sink->render_lock);
       }
       break;
@@ -986,7 +986,7 @@ render_last_buffer (GstWaylandSink * sink)
     sink->video_info_changed = FALSE;
   }
 #ifdef GST_WLSINK_ENHANCEMENT
-  if(sink->last_buffer)
+  if (sink->last_buffer)
     gst_wl_window_render (sink->window, wlbuffer, info);
   else {
     if (G_UNLIKELY (info)) {
@@ -1346,16 +1346,44 @@ static void
 gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
 {
   FUNCTION;
+#if GST_WLSINK_ENHANCEMENT      /* use  unique_id */
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
-  struct wl_surface *surface = (struct wl_surface *) handle;
-
   g_return_if_fail (sink != NULL);
-#ifdef GST_WLSINK_ENHANCEMENT
+
   if (sink->window != NULL) {
     GST_WARNING_OBJECT (sink, "changing window handle is not supported");
     return;
   }
-#endif
+  g_mutex_lock (&sink->render_lock);
+  g_clear_object (&sink->window);
+
+  GST_INFO ("parent_id %d %p", (int) handle, handle);
+
+  if (handle) {
+    if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
+      /* we cannot use our own display with an external window handle */
+      if (G_UNLIKELY (sink->display->own_display)) {
+        sink->display->parent_id = (int) handle;
+        GST_INFO ("parent_id %d", sink->display->parent_id);
+        //GST_DEBUG_OBJECT (sink, "Setting parent id %d", handle);
+        sink->window = gst_wl_window_new_in_surface (sink->display, NULL);
+      }
+    } else {
+      GST_ERROR_OBJECT (sink, "Failed to find display handle, "
+          "ignoring window handle");
+    }
+  }
+  gst_wayland_sink_update_window_geometry (sink);
+
+  g_mutex_unlock (&sink->render_lock);
+
+
+#else
+  GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
+  struct wl_surface *surface = (struct wl_surface *) handle;
+
+  g_return_if_fail (sink != NULL);
+
   g_mutex_lock (&sink->render_lock);
 
   GST_DEBUG_OBJECT (sink, "Setting window handle %" GST_PTR_FORMAT,
@@ -1367,18 +1395,10 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
     if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
       /* we cannot use our own display with an external window handle */
       if (G_UNLIKELY (sink->display->own_display)) {
-#ifdef GST_WLSINK_ENHANCEMENT
-        GST_ELEMENT_WARNING (sink, RESOURCE, OPEN_READ_WRITE,
-            ("Application did not provide a wayland display handle"),
-            ("Now waylandsink use internal display handle "
-                "which is created ourselves. Consider providing a "
-                "display handle from your application with GstContext"));
-#else
         GST_ELEMENT_ERROR (sink, RESOURCE, OPEN_READ_WRITE,
             ("waylandsink cannot use an externally-supplied surface without "
                 "an externally-supplied display handle. Consider providing a "
                 "display handle from your application with GstContext"));
-#endif
       } else {
         sink->window = gst_wl_window_new_in_surface (sink->display, surface);
       }
@@ -1387,10 +1407,9 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
           "ignoring window handle");
     }
   }
-#ifdef GST_WLSINK_ENHANCEMENT
-  gst_wayland_sink_update_window_geometry (sink);
-#endif
   g_mutex_unlock (&sink->render_lock);
+
+#endif /* use  unique_id */
 }
 
 static void

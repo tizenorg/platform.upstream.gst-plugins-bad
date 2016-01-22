@@ -90,6 +90,7 @@ struct _GstWlDisplay
   int stride_width[NV_BUF_PLANE_NUM];
   int stride_height[NV_BUF_PLANE_NUM];
   int native_video_size;
+  unsigned int parent_id;
 #endif
 
 #if 1

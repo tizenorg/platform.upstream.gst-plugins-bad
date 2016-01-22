@@ -132,12 +132,20 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
   if (display->need_shell_surface) {
     window->shell_surface = wl_shell_get_shell_surface (display->shell,
         window->area_surface);
-  }
-  if (display->use_parent_wl_surface && parent != NULL) {
+  } else if (display->use_parent_wl_surface) {
+#if GST_WLSINK_ENHANCEMENT
+	GST_INFO("call tizen_policy_get_subsurface");
     window->area_subsurface =
-        wl_subcompositor_get_subsurface (display->subcompositor,
-        window->area_surface, parent);
+        tizen_policy_get_subsurface (display->tizen_policy,
+        window->area_surface, display->parent_id);
     wl_subsurface_set_desync (window->area_subsurface);
+    wl_surface_commit (window->area_surface);
+#else
+    window->area_subsurface =
+	    wl_subcompositor_get_subsurface (display->subcompositor,
+	    window->area_surface, parent);
+    wl_subsurface_set_desync (window->area_subsurface);
+#endif
   }
 #endif
 
@@ -146,6 +154,7 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
       wl_subcompositor_get_subsurface (display->subcompositor,
       window->video_surface, window->area_surface);
   wl_subsurface_set_desync (window->video_subsurface);
+  wl_surface_commit (window->video_surface);
 
   window->area_viewport = wl_scaler_get_viewport (display->scaler,
       window->area_surface);
@@ -240,9 +249,13 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
   GstWlWindow *window;
 
   display->use_parent_wl_surface = TRUE;
+#ifdef GST_WLSINK_ENHANCEMENT
+  window = gst_wl_window_new_internal (display, NULL);
+#else
   window = gst_wl_window_new_internal (display, parent);
+#endif
 
-#if 0
+#if 0                           /*for enlightment */
   /* embed in parent */
   window->area_subsurface =
       wl_subcompositor_get_subsurface (display->subcompositor,
@@ -253,11 +266,13 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 #ifdef GST_WLSINK_ENHANCEMENT
   /*Area surface from App need to be under parent surface */
   if (display->tizen_policy) {
+	GST_INFO(" call tizen_policy_place_subsurface_below_parent ");
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->area_subsurface);
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->video_subsurface);
   }
+#else
   wl_surface_commit (parent);
 #endif
   return window;
@@ -445,9 +460,9 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
 
-  wl_viewport_set_source (window->video_viewport, wl_fixed_from_int (src_input.x),
-      wl_fixed_from_int (src_input.y), wl_fixed_from_int (src_input.w),
-      wl_fixed_from_int (src_input.h));
+  wl_viewport_set_source (window->video_viewport,
+      wl_fixed_from_int (src_input.x), wl_fixed_from_int (src_input.y),
+      wl_fixed_from_int (src_input.w), wl_fixed_from_int (src_input.h));
   GST_INFO ("wl_viewport_set_source(%d,%d, %d x %d)", src_input.x, src_input.y,
       src_input.w, src_input.h);
 
@@ -502,7 +517,8 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
   wl_surface_damage (window->video_surface, 0, 0, window->surface_width,
       window->surface_height);
 #ifdef GST_WLSINK_ENHANCEMENT
-  GST_LOG("update area width %d, height %d", window->surface_width, window->surface_height);
+  GST_LOG ("update area width %d, height %d", window->surface_width,
+      window->surface_height);
 #endif
   /* wl_surface_commit change surface state, if wl_buffer is not attached newly,  then surface is not changed */
   wl_surface_commit (window->video_surface);
@@ -511,7 +527,8 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
     /* commit also the parent (area_surface) in order to change
      * the position of the video_subsurface */
 #ifdef GST_WLSINK_ENHANCEMENT
-    GST_DEBUG("render_rectangle %d*%d", window->render_rectangle.w, window->render_rectangle.h);
+    GST_DEBUG ("render_rectangle %d*%d", window->render_rectangle.w,
+        window->render_rectangle.h);
 #endif
     wl_surface_damage (window->area_surface, 0, 0, window->render_rectangle.w,
         window->render_rectangle.h);
@@ -558,6 +575,7 @@ gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
   if (window->video_width != 0)
     wl_subsurface_set_desync (window->video_subsurface);
 }
+
 #ifdef GST_WLSINK_ENHANCEMENT
 void
 gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info)
@@ -572,6 +590,7 @@ gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info)
   if (window->render_rectangle.w != 0)
     gst_wl_window_resize_video_surface (window, FALSE);
 }
+
 void
 gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
 {
@@ -608,4 +627,3 @@ gst_wl_window_set_flip (GstWlWindow * window, guint flip)
   GST_INFO ("flip value is (%d)", window->flip);
 }
 #endif
-
