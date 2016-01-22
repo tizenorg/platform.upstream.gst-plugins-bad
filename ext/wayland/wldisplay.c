@@ -122,11 +122,11 @@ gst_wl_display_finalize (GObject * gobject)
         self->tbm_bo[i] = NULL;
       }
     }
-    if (self->tbm_client) {
-      wayland_tbm_client_deinit (self->tbm_client);
-      self->tbm_client = NULL;
-    }
     self->tbm_bufmgr = NULL;
+  }
+  if (self->tbm_client) {
+    wayland_tbm_client_deinit (self->tbm_client);
+    self->tbm_client = NULL;
   }
 #endif
   if (self->shm)
@@ -344,6 +344,7 @@ gst_wl_display_new_existing (struct wl_display * display,
   VERIFY_INTERFACE_EXISTS (shell, "wl_shell");
 #ifdef GST_WLSINK_ENHANCEMENT
   VERIFY_INTERFACE_EXISTS (tizen_video, "tizen_video");
+
   self->tbm_client = wayland_tbm_client_init (self->display);
   if (!self->tbm_client) {
     *error = g_error_new (g_quark_from_static_string ("GstWlDisplay"), 0,
