@@ -134,21 +134,33 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
         window->area_surface);
   } else if (display->use_parent_wl_surface) {
 #if GST_WLSINK_ENHANCEMENT
+    GST_ERROR ("call tizen_policy_get_subsurface");
     window->area_subsurface =
         tizen_policy_get_subsurface (display->tizen_policy,
         window->area_surface, display->parent_id);
     wl_subsurface_set_desync (window->area_subsurface);
     wl_surface_commit (window->area_surface);
+#else
+    window->area_subsurface =
+        wl_subcompositor_get_subsurface (display->subcompositor,
+        window->area_surface, parent);
+    wl_subsurface_set_desync (window->area_subsurface);
 #endif
   }
 #endif
 
   /* embed video_surface in area_surface */
+#if 0
+  window->video_subsurface =
+      tizen_policy_get_subsurface (display->tizen_policy,
+      window->video_surface, display->parent_id);
+  wl_subsurface_set_desync (window->video_subsurface);
+  wl_surface_commit (window->video_surface);
+#else
   window->video_subsurface =
       wl_subcompositor_get_subsurface (display->subcompositor,
       window->video_surface, window->area_surface);
   wl_subsurface_set_desync (window->video_subsurface);
-#if GST_WLSINK_ENHANCEMENT
   wl_surface_commit (window->video_surface);
 #endif
   window->area_viewport = wl_scaler_get_viewport (display->scaler,
@@ -261,6 +273,7 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 #ifdef GST_WLSINK_ENHANCEMENT
   /*Area surface from App need to be under parent surface */
   if (display->tizen_policy) {
+    GST_ERROR (" call tizen_policy_place_subsurface_below_parent ");
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->area_subsurface);
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,

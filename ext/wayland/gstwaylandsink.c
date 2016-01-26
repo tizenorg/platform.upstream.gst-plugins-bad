@@ -56,12 +56,54 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dlfcn.h>
+
+//#include "libsec-video-set-display.h"
+
 
 //#define DUMP_BUFFER
 #ifdef GST_WLSINK_ENHANCEMENT
 #define GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_display_geometry_method_get_type())
 #define GST_TYPE_WAYLANDSINK_ROTATE_ANGLE (gst_waylandsink_rotate_angle_get_type())
 #define GST_TYPE_WAYLANDSINK_FLIP (gst_waylandsink_flip_get_type())
+
+
+typedef struct
+{
+//  void *v4l2_ptr;
+  int src_input_width;
+  int src_input_height;
+  int src_input_x;
+  int src_input_y;
+  int result_width;
+  int result_height;
+  int result_x;
+  int result_y;
+  int stereoscopic_info;
+  int sw_hres;
+  int sw_vres;
+  int max_hres;
+  int max_vres;
+} wl_meta;
+
+typedef struct _Set_plane
+{
+  void *v4l2_ptr;
+  int src_input_width;
+  int src_input_height;
+  int src_input_x;
+  int src_input_y;
+  int result_width;
+  int result_height;
+  int result_x;
+  int result_y;
+  int stereoscopic_info;
+  int sw_hres;
+  int sw_vres;
+  int max_hres;
+  int max_vres;
+} Set_plane;
+
 
 static GType
 gst_waylandsink_rotate_angle_get_type (void)
@@ -998,15 +1040,307 @@ render_last_buffer (GstWaylandSink * sink)
 #endif
 }
 
+#ifdef GST_WLSINK_ENHANCEMENT
+void
+ _add_meta_data (GstWlWindow * window, wl_meta * meta, GstVideoInfo *info)
+{
+  FUNCTION;
+  GstVideoRectangle src = { 0, };
+  GstVideoRectangle res;
+
+  /* center the video_subsurface inside area_subsurface */
+  src.w = GST_VIDEO_INFO_WIDTH (info);
+  src.h = GST_VIDEO_INFO_HEIGHT (info);
+
+  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
+  GstVideoRectangle src_input = { 0, 0, 0, 0 };
+  GstVideoRectangle dst = { 0, 0, 0, 0 };
+
+  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
+
+  src.x = src.y = 0;
+  src_input.w = src_origin.w = GST_VIDEO_INFO_WIDTH (info);
+  src_input.h = src_origin.h = GST_VIDEO_INFO_HEIGHT (info);
+  GST_INFO ("video (%d x %d)", GST_VIDEO_INFO_WIDTH (info), GST_VIDEO_INFO_HEIGHT (info));
+  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
+      src_input.h);
+  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
+      src_origin.w, src_origin.h);
+
+  if (window->rotate_angle == DEGREE_0 || window->rotate_angle == DEGREE_180) {
+    src.w = GST_VIDEO_INFO_WIDTH (info);        //video_width
+    src.h = GST_VIDEO_INFO_HEIGHT (info);       //video_height
+  } else {
+    src.w = GST_VIDEO_INFO_HEIGHT (info);
+    src.h = GST_VIDEO_INFO_WIDTH (info);
+  }
+  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
+
+  /*default res.w and res.h */
+  dst.w = window->render_rectangle.w;
+  dst.h = window->render_rectangle.h;
+  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
+  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
+      window->render_rectangle.x, window->render_rectangle.y,
+      window->render_rectangle.w, window->render_rectangle.h);
+  switch (window->disp_geo_method) {
+    case DISP_GEO_METHOD_LETTER_BOX:
+      GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
+      gst_video_sink_center_rect (src, dst, &res, TRUE);
+      res.x += window->render_rectangle.x;
+      res.y += window->render_rectangle.y;
+      break;
+    case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
+      if (src.w > dst.w || src.h > dst.h) {
+        /*LETTER BOX */
+        GST_INFO
+            ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
+        gst_video_sink_center_rect (src, dst, &res, TRUE);
+        res.x += window->render_rectangle.x;
+        res.y += window->render_rectangle.y;
+      } else {
+        /*ORIGIN SIZE */
+        GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
+        gst_video_sink_center_rect (src, dst, &res, FALSE);
+        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      }
+      break;
+    case DISP_GEO_METHOD_ORIGIN_SIZE:  //is working
+      GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
+      gst_video_sink_center_rect (src, dst, &res, FALSE);
+      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      break;
+    case DISP_GEO_METHOD_FULL_SCREEN:  //is working
+      GST_INFO ("DISP_GEO_METHOD_FULL_SCREEN");
+      res.x = res.y = 0;
+      res.w = window->render_rectangle.w;
+      res.h = window->render_rectangle.h;
+      break;
+    case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
+      GST_INFO ("DISP_GEO_METHOD_CROPPED_FULL_SCREEN");
+      gst_video_sink_center_rect (src, dst, &res, FALSE);
+      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
+      res.x = res.y = 0;
+      res.w = dst.w;
+      res.h = dst.h;
+      break;
+    default:
+      break;
+  }
+
+  GST_INFO
+      ("window[%d x %d] src[%d,%d,%d x %d],dst[%d,%d,%d x %d],input[%d,%d,%d x %d],result[%d,%d,%d x %d]",
+      window->render_rectangle.w, window->render_rectangle.h,
+      src.x, src.y, src.w, src.h,
+      dst.x, dst.y, dst.w, dst.h,
+      src_input.x, src_input.y, src_input.w, src_input.h,
+      res.x, res.y, res.w, res.h);
+
+  meta->src_input_width = src_input.w;
+  meta->src_input_height = src_input.h;
+  meta->src_input_x = src_input.x;
+  meta->src_input_y = src_input.y;
+  meta->result_x = res.x;
+  meta->result_y = res.y;
+  meta->result_width = res.w;
+  meta->result_height = res.h;
+  /*in case of S/W codec, we need to set sw_hres and sw_vres value.
+     in case of H/W codec, these value are not used */
+  meta->sw_hres = src.w;
+  meta->sw_vres = src.h;
+  meta->max_hres = src.w;
+  meta->max_vres = src.h;
+
+}
+
+
+struct wl_buffer *
+gst_wayland_sink_create_wlbuffer_with_meta (GstWaylandSink * sink)
+{
+  FUNCTION;
+
+  wl_meta *meta;
+  tbm_bo_handle virtual_addr;
+  tbm_surface_info_s ts_info;
+  struct wl_buffer *wbuffer;
+  GstWlDisplay *display;
+  GstVideoInfo info;
+  int num_bo = 1;
+
+  int idx = 0;
+  info = sink->video_info;
+  display = sink->display;
+  display->tbm_bufmgr = wayland_tbm_client_get_bufmgr (display->tbm_client);
+  g_return_if_fail (display->tbm_bufmgr != NULL);
+  display->tbm_bo[idx] =
+      tbm_bo_alloc (display->tbm_bufmgr, sizeof (wl_meta), TBM_BO_DEFAULT);
+  if (!display->tbm_bo[idx]) {
+    GST_ERROR ("alloc tbm bo(size:%d) failed: %s", sizeof (wl_meta),
+        strerror (errno));
+    return NULL;
+  }
+
+  virtual_addr.ptr = NULL;
+  virtual_addr = tbm_bo_get_handle (display->tbm_bo[idx], TBM_DEVICE_CPU);
+  if (!virtual_addr.ptr) {
+    GST_ERROR ("get tbm bo handle failed: %s", strerror (errno));
+    tbm_bo_unref (display->tbm_bo[idx]);
+    display->tbm_bo[idx] = NULL;
+    return NULL;
+  }
+  memset (virtual_addr.ptr, 0, sizeof (wl_meta));
+  meta = (wl_meta *) malloc (sizeof (wl_meta));
+  g_return_if_fail (meta != NULL);
+
+  /*fill meta */
+  _add_meta_data (sink->window, meta, &info);
+  memcpy (virtual_addr.ptr, meta, sizeof (meta));
+
+  //create wl_buffer
+  ts_info.width = GST_VIDEO_INFO_WIDTH (&info);
+  ts_info.height = GST_VIDEO_INFO_HEIGHT (&info);
+  ts_info.format = GST_VIDEO_INFO_FORMAT (&info);
+  ts_info.bpp = tbm_surface_internal_get_bpp (ts_info.format);
+  ts_info.num_planes = tbm_surface_internal_get_num_planes (ts_info.format);
+  ts_info.planes[0].stride = GST_VIDEO_INFO_PLANE_STRIDE (&info, 0);
+  ts_info.planes[1].stride = GST_VIDEO_INFO_PLANE_STRIDE (&info, 1);
+  ts_info.planes[2].stride = GST_VIDEO_INFO_PLANE_STRIDE (&info, 2);
+  ts_info.planes[0].offset = GST_VIDEO_INFO_PLANE_OFFSET (&info, 0);
+  ts_info.planes[1].offset = GST_VIDEO_INFO_PLANE_OFFSET (&info, 1);
+  ts_info.planes[2].offset = GST_VIDEO_INFO_PLANE_OFFSET (&info, 2);
+  display->tsurface =
+      tbm_surface_internal_create_with_bos (&ts_info, &display->tbm_bo[idx],
+      num_bo);
+  wbuffer =
+      wayland_tbm_client_create_buffer (display->tbm_client, display->tsurface);
+
+  return wbuffer;
+}
+
+
+static GstFlowReturn
+gst_wayland_sink_send_meta (GstWaylandSink * sink, GstBuffer * buffer)
+{
+  FUNCTION;
+
+  GstWlBuffer *wlbuffer;
+  wlbuffer = gst_buffer_get_wl_buffer (buffer);
+  if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
+    GST_ERROR ("buffer %p has a wl_buffer from our display", buffer);
+    GST_ERROR ("We must get codec buffer");
+  } else {
+    GstMemory *mem;
+    struct wl_buffer *wbuf = NULL;
+    mem = gst_buffer_peek_memory (buffer, 0);
+    if (gst_is_wl_shm_memory (mem)) {
+      GST_ERROR ("buffer %p has not a wl_buffer from our display", buffer);
+      GST_ERROR ("We must get codec buffer");
+    } else {
+      /* this buffer is made by codec */
+
+      struct wl_buffer *wbuf = NULL;
+      /* create wlbuffer */
+      wbuf = gst_wayland_sink_create_wlbuffer_with_meta (sink);
+      if (G_UNLIKELY (!wbuf)) {
+        GST_ERROR ("could not create wl_buffer out of wl_shm memory");
+        return GST_FLOW_ERROR;
+      }
+
+      gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
+    }
+  }
+  if (G_UNLIKELY (buffer == sink->last_buffer)) {
+    GST_LOG_OBJECT (sink, "Buffer already being rendered");
+    return GST_FLOW_OK;
+  }
+  gst_buffer_replace (&sink->last_buffer, buffer);
+  render_last_buffer (sink);
+
+  return GST_FLOW_OK;
+}
+
+static GstFlowReturn
+gst_wayland_sink_send_buf (GstWaylandSink * sink, GstBuffer * buffer)
+{
+  FUNCTION;
+
+  Set_plane set_plane;
+  gint buffer_type = 0;
+  gint scaler = 0;
+  guint data_size;
+  guint video_width;
+  guint video_height;
+  GstStructure *structure;
+  void *data;
+  guint align = 15;
+
+#if 1
+  data_size = sink->video_info.size;
+  data = g_malloc (data_size + align);
+
+  gst_buffer_extract (buffer, 0, data, MIN (gst_buffer_get_size (buffer),
+          data_size));
+
+
+  /*if we need meta for set_plane, we can fill meta, don't worry */
+  set_plane.v4l2_ptr = data;
+  //set_plane.v4l2_ptr = (struct v4l2_drm *) direct_videosink->data; // build error : need to check v412_drm 
+
+  /* send data to libsec */
+  //libsec_setplane (&set_plane, buffer_type, scaler);
+
+#else /* we get below code from directvideosink !!!! */
+  video_width = GST_VIDEO_INFO_WIDTH (&sink->video_info);
+  video_height = GST_VIDEO_INFO_HEIGHT (&sink->video_info);
+
+  /* Get max_hres, max_vres from caps */
+  structure = gst_caps_get_structure (caps, 0);
+  gst_structure_get_int (structure, "maxwidth", &set_plane.max_hres);
+  gst_structure_get_int (structure, "maxheight", &set_plane.max_vres);
+
+  if (set_plane.max_hres < video_width)
+    set_plane.max_hres = video_width;
+  if (set_plane.max_vres < video_height)
+    set_plane.max_vres = video_height;
+  GST_DEBUG ("caps: maxwidth = %d, maxheight = %d", set_plane.max_hres,
+      set_plane.max_vres);
+
+  data_size = sink->video_info.size;
+  data = g_malloc (data_size + align);
+
+  gst_buffer_extract (buffer, 0, data, MIN (gst_buffer_get_size (buffer),
+          data_size));
+
+  set_plane.v4l2_ptr = data;
+  //set_plane.v4l2_ptr = (struct v4l2_drm *) direct_videosink->data; // build error : need to check v412_drm 
+  set_plane.result_height = 0;
+  set_plane.result_width = 0;
+  set_plane.result_x = 0;
+  set_plane.result_y = 0;
+  set_plane.src_input_height = video_height;
+  set_plane.src_input_width = video_width;
+  set_plane.src_input_x = 0;
+  set_plane.src_input_y = 0;
+  set_plane.max_hres = 0;
+  //set_plane.max_vres = 0;
+  set_plane.sw_hres = 0;
+  set_plane.sw_vres = 0;
+
+  //libsec_setplane (&set_plane, buffer_type, scaler);
+#endif
+
+  return GST_FLOW_OK;
+}
+#endif
 static GstFlowReturn
 gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 {
   FUNCTION;
+
   GstWaylandSink *sink = GST_WAYLAND_SINK (bsink);
   GstBuffer *to_render;
   GstWlBuffer *wlbuffer;
   GstFlowReturn ret = GST_FLOW_OK;
-
   g_mutex_lock (&sink->render_lock);
 
   GST_LOG_OBJECT (sink, "render buffer %p", buffer);
@@ -1024,314 +1358,25 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
           gst_wl_window_new_toplevel (sink->display, &sink->video_info);
     }
   }
-#ifdef GST_WLSINK_ENHANCEMENT
-  gst_wayland_sink_update_window_geometry (sink);
-  sink->video_info_changed = TRUE;
-#endif
-  /* drop buffers until we get a frame callback */
-  if (g_atomic_int_get (&sink->redraw_pending) == TRUE)
-    goto done;
   /* make sure that the application has called set_render_rectangle() */
   if (G_UNLIKELY (sink->window->render_rectangle.w == 0))
-    goto no_window_size;
+    return GST_FLOW_ERROR;
 
-#ifdef GST_WLSINK_ENHANCEMENT
-
-  wlbuffer = gst_buffer_get_wl_buffer (buffer);
-  if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
-    GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, " "writing directly", buffer);   //buffer is from our  pool and have wl_buffer
-    GST_INFO ("wl_buffer (%p)", wlbuffer->wlbuffer);
-    to_render = buffer;
-#ifdef DUMP_BUFFER
-    GstMemory *mem;
-    GstMapInfo mem_info = GST_MAP_INFO_INIT;
-    int size = GST_VIDEO_INFO_SIZE (&sink->video_info);
-    mem = gst_buffer_peek_memory (to_render, 0);
-    gst_memory_map (mem, &mem_info, GST_MAP_READ);
-    void *data;
-    data = mem_info.data;
-    int ret;
-    char file_name[128];
-
-    sprintf (file_name, "/home/owner/DUMP/_WLSINK_OUT_DUMP_%2.2d.dump",
-        dump__cnt++);
-    ret = __write_rawdata (file_name, data, size);
-    if (ret) {
-      GST_ERROR ("_write_rawdata() failed");
-    }
-    GST_ERROR ("DUMP IMAGE %d, size (%d)", dump__cnt, size);
-    gst_memory_unmap (mem, &mem_info);
-#endif
-  } else {
-    GstMemory *mem;
-    struct wl_buffer *wbuf = NULL;
-
-    GST_LOG_OBJECT (sink, "buffer %p does not have a wl_buffer from our " "display, creating it", buffer);      //buffer is from our pool but have not wl_buffer
-    mem = gst_buffer_peek_memory (buffer, 0);
-    if (gst_is_wl_shm_memory (mem)) {
-      FUNCTION;
-      wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-          &sink->video_info);
-      if (wbuf) {
-        gst_buffer_add_wl_buffer (buffer, wbuf, sink->display); //careat GstWlBuffer and add  gstbuffer, wlbuffer, display and etc
-        to_render = buffer;
-      }
-    } else {                    //buffer is not from our pool and have not wl_buffer
-      GstMapInfo src;
-      /* we don't know how to create a wl_buffer directly from the provided
-       * memory, so we have to copy the data to a memory that we know how
-       * to handle... */
-
-      GST_LOG_OBJECT (sink, "buffer %p is not from our pool", buffer);
-      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying",
-          buffer);
-
-      if (sink->USE_TBM && sink->display->is_native_format) {
-        /* in case of SN12 or ST12 */
-        GstMemory *mem;
-        struct wl_buffer *wbuf = NULL;
-        GstMapInfo mem_info = GST_MAP_INFO_INIT;
-        MMVideoBuffer *mm_video_buf = NULL;
-
-        mem = gst_buffer_peek_memory (buffer, 1);
-        gst_memory_map (mem, &mem_info, GST_MAP_READ);
-        mm_video_buf = (MMVideoBuffer *) mem_info.data;
-        gst_memory_unmap (mem, &mem_info);
-
-        if (mm_video_buf == NULL) {
-          GST_WARNING_OBJECT (sink, "mm_video_buf is NULL. Skip rendering");
-          return ret;
-        }
-        /* assign mm_video_buf info */
-        if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
-          GST_DEBUG_OBJECT (sink, "TBM bo %p %p %p", mm_video_buf->handle.bo[0],
-              mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
-          sink->display->native_video_size = 0;
-          for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
-            if (mm_video_buf->handle.bo[i] != NULL) {
-              sink->display->bo[i] = mm_video_buf->handle.bo[i];
-            } else {
-              sink->display->bo[i] = 0;
-            }
-            sink->display->plane_size[i] = mm_video_buf->size[i];
-            sink->display->stride_width[i] = mm_video_buf->stride_width[i];
-            sink->display->stride_height[i] = mm_video_buf->stride_height[i];
-            sink->display->native_video_size += sink->display->plane_size[i];
-          }
-        } else {
-          GST_ERROR_OBJECT (sink, "Buffer type is not TBM");
-          return ret;
-        }
-        wlbuffer = gst_buffer_get_wl_buffer (buffer);
-        if (G_UNLIKELY (!wlbuffer)) {
-          wbuf =
-              gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-              &sink->video_info);
-          if (G_UNLIKELY (!wbuf))
-            goto no_wl_buffer;
-
-          gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
-        }
-      }
-
-      else if (sink->USE_TBM && !sink->display->is_native_format) {
-
-        /* sink->pool always exists (created in set_caps), but it may not
-         * be active if upstream is not using it */
-        if (!gst_buffer_pool_is_active (sink->pool)
-            && !gst_buffer_pool_set_active (sink->pool, TRUE))
-          goto activate_failed;
-
-        ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
-        if (ret != GST_FLOW_OK)
-          goto no_buffer;
-
-        //GstMemory *mem;
-        //mem = gst_buffer_peek_memory (to_render, 0);
-        //if (gst_is_wl_shm_memory (mem)) {
-        GST_INFO ("to_render buffer is our buffer");
-        //}
-        /* the first time we acquire a buffer,
-         * we need to attach a wl_buffer on it */
-        wlbuffer = gst_buffer_get_wl_buffer (buffer);
-        if (G_UNLIKELY (!wlbuffer)) {
-          mem = gst_buffer_peek_memory (to_render, 0);
-          wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-              &sink->video_info);
-          if (G_UNLIKELY (!wbuf))
-            goto no_wl_buffer;
-
-          wlbuffer = gst_buffer_add_wl_buffer (to_render, wbuf, sink->display);
-        }
-
-        gst_buffer_map (buffer, &src, GST_MAP_READ);
-        gst_buffer_fill (to_render, 0, src.data, src.size);
-        gst_buffer_unmap (buffer, &src);
-      } else {                  /* USE SHM */
-        /* sink->pool always exists (created in set_caps), but it may not
-         * be active if upstream is not using it */
-        if (!gst_buffer_pool_is_active (sink->pool) &&
-            !gst_buffer_pool_set_active (sink->pool, TRUE))
-          goto activate_failed;
-        ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
-        if (ret != GST_FLOW_OK)
-          goto no_buffer;
-        /* the first time we acquire a buffer,
-         * we need to attach a wl_buffer on it */
-        wlbuffer = gst_buffer_get_wl_buffer (buffer);
-        if (G_UNLIKELY (!wlbuffer)) {
-          mem = gst_buffer_peek_memory (to_render, 0);
-          wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-              &sink->video_info);
-          if (G_UNLIKELY (!wbuf))
-            goto no_wl_buffer;
-
-          gst_buffer_add_wl_buffer (to_render, wbuf, sink->display);
-
-        }
-
-        gst_buffer_map (buffer, &src, GST_MAP_READ);
-        gst_buffer_fill (to_render, 0, src.data, src.size);
-        gst_buffer_unmap (buffer, &src);
-      }
-    }
+  if (sink->video_info_changed == TRUE) {
+    /*update geometry values from sink to window */
+    gst_wayland_sink_update_window_geometry (sink);
   }
 
-  if (sink->USE_TBM && sink->display->is_native_format) {
-    if (G_UNLIKELY (buffer == sink->last_buffer)) {
-      GST_LOG_OBJECT (sink, "Buffer already being rendered");
-      goto done;
-    }
-    gst_buffer_replace (&sink->last_buffer, buffer);
-    render_last_buffer (sink);
-
-    goto done;
-  } else {                      /* USE SHM or normal format */
-    /* drop double rendering */
-    if (G_UNLIKELY (buffer == sink->last_buffer)) {
-      GST_LOG_OBJECT (sink, "Buffer already being rendered");
-      goto done;
-    }
-    gst_buffer_replace (&sink->last_buffer, to_render);
-    render_last_buffer (sink);
-
-    if (buffer != to_render)
-      gst_buffer_unref (to_render);
-
-    goto done;
+  if (sink->video_info_changed == TRUE) {
+    ret = gst_wayland_sink_send_meta (sink, buffer);
+    if (ret != GST_FLOW_OK)
+      return ret;
   }
+  ret = gst_wayland_sink_send_buf (sink, buffer);
 
-#else /* open source */
+  g_mutex_unlock (&sink->render_lock);
 
-  wlbuffer = gst_buffer_get_wl_buffer (buffer);
-
-  if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
-    GST_LOG_OBJECT (sink,
-        "buffer %p has a wl_buffer from our display, " "writing directly",
-        buffer);
-    GST_INFO ("wl_buffer (%p)", wlbuffer->wlbuffer);
-    to_render = buffer;
-
-  } else {
-    GstMemory *mem;
-    struct wl_buffer *wbuf = NULL;
-
-    GST_LOG_OBJECT (sink,
-        "buffer %p does not have a wl_buffer from our " "display, creating it",
-        buffer);
-    mem = gst_buffer_peek_memory (buffer, 0);
-    if (gst_is_wl_shm_memory (mem)) {
-      FUNCTION;
-      wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-          &sink->video_info);
-    }
-    if (wbuf) {
-      gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
-      to_render = buffer;
-
-    } else {
-      GstMapInfo src;
-      /* we don't know how to create a wl_buffer directly from the provided
-       * memory, so we have to copy the data to a memory that we know how
-       * to handle... */
-
-      GST_LOG_OBJECT (sink, "buffer %p is not from our pool", buffer);
-      GST_LOG_OBJECT (sink, "buffer %p cannot have a wl_buffer, " "copying",
-          buffer);
-      /* sink->pool always exists (created in set_caps), but it may not
-       * be active if upstream is not using it */
-      if (!gst_buffer_pool_is_active (sink->pool) &&
-          !gst_buffer_pool_set_active (sink->pool, TRUE))
-        goto activate_failed;
-
-      ret = gst_buffer_pool_acquire_buffer (sink->pool, &to_render, NULL);
-      if (ret != GST_FLOW_OK)
-        goto no_buffer;
-
-      /* the first time we acquire a buffer,
-       * we need to attach a wl_buffer on it */
-      wlbuffer = gst_buffer_get_wl_buffer (buffer);
-      if (G_UNLIKELY (!wlbuffer)) {
-        mem = gst_buffer_peek_memory (to_render, 0);
-        wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
-            &sink->video_info);
-        if (G_UNLIKELY (!wbuf))
-          goto no_wl_buffer;
-
-        gst_buffer_add_wl_buffer (to_render, wbuf, sink->display);
-      }
-
-      gst_buffer_map (buffer, &src, GST_MAP_READ);
-      gst_buffer_fill (to_render, 0, src.data, src.size);
-      gst_buffer_unmap (buffer, &src);
-    }
-  }
-  /* drop double rendering */
-  if (G_UNLIKELY (buffer == sink->last_buffer)) {
-    GST_LOG_OBJECT (sink, "Buffer already being rendered");
-    goto done;
-  }
-
-  gst_buffer_replace (&sink->last_buffer, to_render);
-  render_last_buffer (sink);
-
-  if (buffer != to_render)
-    gst_buffer_unref (to_render);
-
-  goto done;
-
-#endif /* GST_WLSINK_ENHANCEMENT */
-
-no_window_size:
-  {
-    GST_ELEMENT_ERROR (sink, RESOURCE, WRITE,
-        ("Window has no size set"),
-        ("Make sure you set the size after calling set_window_handle"));
-    ret = GST_FLOW_ERROR;
-    goto done;
-  }
-no_buffer:
-  {
-    GST_WARNING_OBJECT (sink, "could not create buffer");
-    goto done;
-  }
-no_wl_buffer:
-  {
-    GST_ERROR_OBJECT (sink, "could not create wl_buffer out of wl_shm memory");
-    ret = GST_FLOW_ERROR;
-    goto done;
-  }
-activate_failed:
-  {
-    GST_ERROR_OBJECT (sink, "failed to activate bufferpool.");
-    ret = GST_FLOW_ERROR;
-    goto done;
-  }
-done:
-  {
-    g_mutex_unlock (&sink->render_lock);
-    return ret;
-  }
+  return ret;
 }
 
 static void
