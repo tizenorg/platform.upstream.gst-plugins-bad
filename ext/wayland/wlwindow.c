@@ -31,6 +31,8 @@
 #include "wlshmallocator.h"
 #include "wlbuffer.h"
 
+#define SWAP(a, b) { (a) ^= (b) ^= (a) ^= (b); }
+
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
 
@@ -459,6 +461,10 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   }
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
+
+  /*need to swap */
+  if(transform%2 == 1) /*1, 3, 5, 7*/
+	  SWAP(src_input.w,src_input.h);
 
   wl_viewport_set_source (window->video_viewport,
       wl_fixed_from_int (src_input.x), wl_fixed_from_int (src_input.y),
