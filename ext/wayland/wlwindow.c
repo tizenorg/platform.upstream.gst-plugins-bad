@@ -31,6 +31,8 @@
 #include "wlshmallocator.h"
 #include "wlbuffer.h"
 
+#define SWAP(a, b) { (a) ^= (b) ^= (a) ^= (b); }
+
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
 
@@ -134,7 +136,7 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
         window->area_surface);
   } else if (display->use_parent_wl_surface) {
 #ifdef GST_WLSINK_ENHANCEMENT
-	GST_INFO("call tizen_policy_get_subsurface");
+    GST_INFO ("call tizen_policy_get_subsurface");
     window->area_subsurface =
         tizen_policy_get_subsurface (display->tizen_policy,
         window->area_surface, display->parent_id);
@@ -142,8 +144,8 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
     wl_surface_commit (window->area_surface);
 #else
     window->area_subsurface =
-	    wl_subcompositor_get_subsurface (display->subcompositor,
-	    window->area_surface, parent);
+        wl_subcompositor_get_subsurface (display->subcompositor,
+        window->area_surface, parent);
     wl_subsurface_set_desync (window->area_subsurface);
 #endif
   }
@@ -266,7 +268,7 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 #ifdef GST_WLSINK_ENHANCEMENT
   /*Area surface from App need to be under parent surface */
   if (display->tizen_policy) {
-	GST_INFO(" call tizen_policy_place_subsurface_below_parent ");
+    GST_INFO (" call tizen_policy_place_subsurface_below_parent ");
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->area_subsurface);
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
@@ -459,6 +461,10 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   }
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
+
+  /*need to swap */
+  if (transform % 2 == 1)       /*1, 3, 5, 7 */
+    SWAP (src_input.w, src_input.h);
 
   wl_viewport_set_source (window->video_viewport,
       wl_fixed_from_int (src_input.x), wl_fixed_from_int (src_input.y),
