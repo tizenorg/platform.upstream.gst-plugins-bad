@@ -28,7 +28,6 @@ BuildRequires:  pkgconfig(gio-2.0) >= 2.25.0
 BuildRequires:  pkgconfig(libcrypto)
 BuildRequires:  pkgconfig(libcurl) >= 7.21.0
 BuildRequires:  pkgconfig(libexif) >= 0.6.16
-BuildRequires:  pkgconfig(libpng) >= 1.2
 BuildRequires:  pkgconfig(openssl) >= 0.9.5
 BuildRequires:  pkgconfig(sndfile) >= 1.0.16
 BuildRequires:  pkgconfig(libdrm)
