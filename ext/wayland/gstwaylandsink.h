@@ -73,7 +73,7 @@ enum
 };
 
 #define DEF_DISPLAY_FLIP            FLIP_NONE
-#define DEF_DISPLAY_GEOMETRY_METHOD         DISP_GEO_METHOD_FULL_SCREEN
+#define DEF_DISPLAY_GEOMETRY_METHOD         DISP_GEO_METHOD_LETTER_BOX
 #endif
 
 typedef struct _GstWaylandSink GstWaylandSink;
