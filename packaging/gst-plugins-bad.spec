@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.6.1
-Release:        3
+Release:        4
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        LGPL-2.0+
 Group:          Multimedia/Framework
@@ -79,7 +79,13 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
-export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS -DGST_EXT_AVOID_PAD_SWITCHING"
+export CFLAGS="%{optflags} \
+	-DGST_WLSINK_ENHANCEMENT\
+	-DGST_TBM_SUPPORT\
+	-DMESA_EGL_NO_X11_HEADERS\
+	-DGST_EXT_AVOID_PAD_SWITCHING\
+	-DGST_TIZEN_MODIFICATION"
+
 %configure\
 	--disable-static\
 	--disable-examples\

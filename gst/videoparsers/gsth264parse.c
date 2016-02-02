@@ -1053,6 +1053,7 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
   gsize size;
   gint current_off = 0;
   gboolean drain, nonext;
+  gboolean align_nal = FALSE;
   GstH264NalParser *nalparser = h264parse->nalparser;
   GstH264NalUnit nalu;
   GstH264ParserResult pres;
@@ -1091,6 +1092,10 @@ gst_h264_parse_handle_frame (GstBaseParse * parse,
   }
 
   drain = GST_BASE_PARSE_DRAINING (parse);
+#ifdef GST_TIZEN_MODIFICATION
+  if (h264parse->align == GST_H264_PARSE_ALIGN_NAL)
+	  align_nal = TRUE;
+#endif
   nonext = FALSE;
 
   current_off = h264parse->current_off;
