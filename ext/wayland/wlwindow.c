@@ -108,7 +108,11 @@ gst_wl_window_finalize (GObject * gobject)
 }
 
 static GstWlWindow *
+#ifdef GST_WLSINK_ENHANCEMENT
 gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
+#else
+gst_wl_window_new_internal (GstWlDisplay * display)
+#endif
 {
   FUNCTION;
   GstWlWindow *window;
@@ -137,11 +141,19 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
   } else if (display->use_parent_wl_surface) {
 #ifdef GST_WLSINK_ENHANCEMENT
     GST_INFO ("call tizen_policy_get_subsurface");
-    window->area_subsurface =
-        tizen_policy_get_subsurface (display->tizen_policy,
-        window->area_surface, display->parent_id);
-    wl_subsurface_set_desync (window->area_subsurface);
-    wl_surface_commit (window->area_surface);
+    if (display->wl_surface_id && parent == NULL) {
+      window->area_subsurface =
+          tizen_policy_get_subsurface (display->tizen_policy,
+          window->area_surface, display->wl_surface_id);
+      wl_subsurface_set_desync (window->area_subsurface);
+      wl_surface_commit (window->area_surface);
+    } else {
+      GST_INFO (" wl_surface %p", parent);
+      window->area_subsurface =
+          wl_subcompositor_get_subsurface (display->subcompositor,
+          window->area_surface, parent);
+      wl_subsurface_set_desync (window->area_subsurface);
+    }
 #else
     window->area_subsurface =
         wl_subcompositor_get_subsurface (display->subcompositor,
@@ -215,14 +227,16 @@ gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info)
   gint width;
 
 /* not create shell_surface here for enlightenment */
+#ifdef GST_WLSINK_ENHANCEMENT
   display->need_shell_surface = TRUE;
 
   window = gst_wl_window_new_internal (display, NULL);
 
-#if 0                           //GST_WLSINK_ENHANCEMENT
+#if 0 //GST_WLSINK_ENHANCEMENT
   /* go toplevel */
   window->shell_surface = wl_shell_get_shell_surface (display->shell,
       window->area_surface);
+#endif
 #endif
   if (window->shell_surface) {
     wl_shell_surface_add_listener (window->shell_surface,
@@ -252,7 +266,11 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 
   display->use_parent_wl_surface = TRUE;
 #ifdef GST_WLSINK_ENHANCEMENT
-  window = gst_wl_window_new_internal (display, NULL);
+  if (parent) { /*use wl_surface */
+    window = gst_wl_window_new_internal (display, parent);
+  } else { /* use wl_surface id */
+    window = gst_wl_window_new_internal (display, NULL);
+  }
 #else
   window = gst_wl_window_new_internal (display, parent);
 #endif
