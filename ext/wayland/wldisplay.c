@@ -81,6 +81,7 @@ gst_wl_display_init (GstWlDisplay * self)
   g_mutex_init (&self->buffers_mutex);
 #ifdef GST_WLSINK_ENHANCEMENT
   self->tbm_bo_idx = 0;
+  self->wl_surface_id = -1;
 #endif
 }
 
