@@ -331,7 +331,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       data = virtual_addr.ptr;
       int ret;
       char file_name[128];
-      GST_ERROR ("DUMP %d ", dump_cnt);
+      GST_INFO ("DUMP %d ", dump_cnt);
 //        if (dump_cnt < 60) {
       sprintf (file_name, "/home/owner/WLSINK_OUT_DUMP_%2.2d.dump", dump_cnt++);
       ret = _write_rawdata (file_name, virtual_addr.ptr, size);

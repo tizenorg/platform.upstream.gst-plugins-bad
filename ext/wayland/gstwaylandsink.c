@@ -752,14 +752,14 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   /* verify we support the requested format */
 #ifdef GST_WLSINK_ENHANCEMENT
   if (sink->display->USE_TBM) {
-    GST_ERROR ("USE TBM FORMAT");
+    GST_INFO ("USE TBM FORMAT");
     formats = sink->display->tbm_formats;
     for (i = 0; i < formats->len; i++) {
       if (g_array_index (formats, uint32_t, i) == tbm_format)
         break;
     }
   } else {                      /* USE SHM */
-    GST_ERROR ("USE SHM FORMAT");
+    GST_INFO ("USE SHM FORMAT");
     formats = sink->display->formats;
     for (i = 0; i < formats->len; i++) {
       if (g_array_index (formats, uint32_t, i) == format)
@@ -1062,7 +1062,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     if (ret) {
       GST_ERROR ("_write_rawdata() failed");
     }
-    GST_ERROR ("DUMP IMAGE %d, size (%d)", dump__cnt, size);
+    GST_INFO ("DUMP IMAGE %d, size (%d)", dump__cnt, size);
     gst_memory_unmap (mem, &mem_info);
 #endif
   } else {
