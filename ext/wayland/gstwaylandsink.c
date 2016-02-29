@@ -1414,12 +1414,13 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
     if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
       /* we cannot use our own display with an external window handle */
       if (G_UNLIKELY (sink->display->own_display)) {
+		  GST_ELEMENT_WARNING (sink, RESOURCE, OPEN_READ_WRITE,
+			  ("Application did not provide a wayland display handle"),
+			  ("Now waylandsink use internal display handle "
+				  "which is created ourselves. Consider providing a "
+				  "display handle from your application with GstContext"));
+		  sink->window = gst_wl_window_new_in_surface (sink->display, surface);
       } else {
-        GST_ELEMENT_WARNING (sink, RESOURCE, OPEN_READ_WRITE,
-            ("Application did not provide a wayland display handle"),
-            ("Now waylandsink use internal display handle "
-                "which is created ourselves. Consider providing a "
-                "display handle from your application with GstContext"));
         sink->window = gst_wl_window_new_in_surface (sink->display, surface);
       }
     } else {
