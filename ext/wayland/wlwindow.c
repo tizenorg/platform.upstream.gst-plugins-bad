@@ -531,7 +531,7 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
     wl_subsurface_set_sync (window->video_subsurface);
     gst_wl_window_resize_video_surface (window, FALSE);
   }
-
+  GST_INFO ("GstWlBuffer(%p)", buffer);
   if (G_LIKELY (buffer))
     gst_wl_buffer_attach (buffer, window->video_surface);
   else
