@@ -322,6 +322,24 @@ gst_wayland_sink_init (GstWaylandSink * sink)
   g_mutex_init (&sink->render_lock);
 }
 
+#ifdef GST_WLSINK_ENHANCEMENT
+static void
+update_last_buffer_geometry (GstWaylandSink * sink)
+{
+  FUNCTION;
+
+  GstWlBuffer *wlbuffer;
+  wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
+  wlbuffer->used_by_compositor = FALSE;
+
+  /*need to render last buffer */
+  /* reuse current GstWlBuffer */
+  render_last_buffer (sink);
+  /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
+     to call gst_wl_buffer_finalize(), we need to decrease buffer ref count */
+  gst_buffer_unref (wlbuffer->gstbuffer);
+}
+#endif
 static void
 gst_wayland_sink_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
@@ -364,6 +382,7 @@ gst_wayland_sink_set_property (GObject * object,
 {
   FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
+  g_mutex_lock (&sink->render_lock);
 
   switch (prop_id) {
     case PROP_DISPLAY:
@@ -376,62 +395,50 @@ gst_wayland_sink_set_property (GObject * object,
       sink->USE_TBM = g_value_get_boolean (value);
       GST_LOG ("1:USE TBM 0: USE SHM set(%d)", sink->USE_TBM);
       break;
+
     case PROP_ROTATE_ANGLE:
+      if (sink->rotate_angle == g_value_get_enum (value))
+        break;
       sink->rotate_angle = g_value_get_enum (value);
       GST_WARNING_OBJECT (sink, "Rotate angle is set (%d)", sink->rotate_angle);
+      sink->video_info_changed = TRUE;
       if (sink->window) {
         gst_wl_window_set_rotate_angle (sink->window, sink->rotate_angle);
       }
-      sink->video_info_changed = TRUE;
-      if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render last buffer */
-        g_mutex_lock (&sink->render_lock);
-        render_last_buffer (sink);
-        g_mutex_unlock (&sink->render_lock);
-      }
       break;
+
     case PROP_DISPLAY_GEOMETRY_METHOD:
+      if (sink->display_geometry_method == g_value_get_enum (value))
+        break;
       sink->display_geometry_method = g_value_get_enum (value);
       GST_WARNING_OBJECT (sink, "Display geometry method is set (%d)",
           sink->display_geometry_method);
+      sink->video_info_changed = TRUE;
       if (sink->window) {
         gst_wl_window_set_disp_geo_method (sink->window,
             sink->display_geometry_method);
       }
-      sink->video_info_changed = TRUE;
-      if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render last buffer */
-        g_mutex_lock (&sink->render_lock);
-        render_last_buffer (sink);
-        g_mutex_unlock (&sink->render_lock);
-      }
       break;
+
     case PROP_ORIENTATION:
+      if (sink->orientation == g_value_get_enum (value))
+        break;
       sink->orientation = g_value_get_enum (value);
       GST_WARNING_OBJECT (sink, "Orientation is set (%d)", sink->orientation);
+      sink->video_info_changed = TRUE;
       if (sink->window) {
         gst_wl_window_set_orientation (sink->window, sink->orientation);
       }
-      sink->video_info_changed = TRUE;
-      if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render last buffer */
-        g_mutex_lock (&sink->render_lock);
-        render_last_buffer (sink);
-        g_mutex_unlock (&sink->render_lock);
-      }
       break;
+
     case PROP_FLIP:
+      if (sink->flip == g_value_get_enum (value))
+        break;
       sink->flip = g_value_get_enum (value);
       GST_WARNING_OBJECT (sink, "flip is set (%d)", sink->flip);
-      if (sink->flip) {
-        gst_wl_window_set_flip (sink->window, sink->flip);
-      }
       sink->video_info_changed = TRUE;
-      if (GST_STATE (sink) == GST_STATE_PAUSED) {
-        /*need to render last buffer */
-        g_mutex_lock (&sink->render_lock);
-        render_last_buffer (sink);
-        g_mutex_unlock (&sink->render_lock);
+      if (sink->window) {
+        gst_wl_window_set_flip (sink->window, sink->flip);
       }
       break;
 #endif
@@ -439,6 +446,12 @@ gst_wayland_sink_set_property (GObject * object,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
+  if (sink->video_info_changed && sink->window
+      && GST_STATE (sink) == GST_STATE_PAUSED) {
+    update_last_buffer_geometry (sink);
+  }
+  g_mutex_unlock (&sink->render_lock);
+
 }
 
 static void

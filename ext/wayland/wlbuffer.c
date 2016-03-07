@@ -145,6 +145,9 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
 
   self->used_by_compositor = FALSE;
 
+  GST_WARNING ("gstbuffer refcount value is (%d)",
+      GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
+
   /* unref should be last, because it may end up destroying the GstWlBuffer */
   gst_buffer_unref (self->gstbuffer);
 
@@ -221,6 +224,9 @@ gst_wl_buffer_force_release_and_unref (GstWlBuffer * self)
         self->gstbuffer);
     self->used_by_compositor = FALSE;
     gst_buffer_unref (self->gstbuffer);
+    GST_WARNING ("gstbuffer refcount value is (%d)",
+        GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
+
   }
 
   /* Finalize this GstWlBuffer early.
@@ -255,6 +261,8 @@ gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
    * the compositor is using the buffer and it should not return
    * back to the pool and be re-used until the compositor releases it. */
   gst_buffer_ref (self->gstbuffer);
+  GST_WARNING ("gstbuffer refcount value is (%d)",
+      GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
 
   self->used_by_compositor = TRUE;
 }
