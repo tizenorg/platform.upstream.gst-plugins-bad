@@ -30,7 +30,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-//#define DUMP_BUFFER
+
 #ifdef DUMP_BUFFER
 int dump_cnt = 0;
 int _write_rawdata (const char *file, const void *data, unsigned int size);

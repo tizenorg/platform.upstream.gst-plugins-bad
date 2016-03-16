@@ -77,6 +77,7 @@
  */
 
 #include "wlbuffer.h"
+#define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
 
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
@@ -117,6 +118,22 @@ gst_wl_buffer_finalize (GObject * gobject)
   if (self->wlbuffer)
     wl_buffer_destroy (self->wlbuffer);
 
+#ifdef USE_WL_FLUSH_BUFFER
+  if (self->display->flush_request) {
+    if (self->display->flush_tbm_bufmgr)
+      self->display->flush_tbm_bufmgr = NULL;
+    int i;
+    for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
+      if (self->display->flush_buffer->bo[i]) {
+        tbm_bo_unref (self->display->flush_buffer->bo[i]);
+        self->display->flush_buffer->bo[i] = NULL;
+      }
+    }
+    free (self->display->flush_buffer);
+    self->display->flush_buffer = NULL;
+  }
+#endif
+
   G_OBJECT_CLASS (gst_wl_buffer_parent_class)->finalize (gobject);
 }
 
@@ -145,9 +162,19 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
 
   self->used_by_compositor = FALSE;
 
+#ifdef USE_WL_FLUSH_BUFFER
   /* unref should be last, because it may end up destroying the GstWlBuffer */
+  if (!self->display->flush_request) {
+    /*in case of flush_request, gstbuffer ref-count has already decreased. */
+    gst_buffer_unref (self->gstbuffer);
+  } else {
+    /*we blocked below code at gstbuffer_disposed() */
+    /* unref(GstWlBuffer), now gst_wl_buffer_dispose() will be called by below code */
+    g_object_unref (self);
+  }
+#else
   gst_buffer_unref (self->gstbuffer);
-
+#endif
 }
 
 static const struct wl_buffer_listener buffer_listener = {
@@ -165,7 +192,13 @@ gstbuffer_disposed (GstWlBuffer * self)
 
   /* this will normally destroy the GstWlBuffer, unless the display is
    * finalizing and it has taken an additional reference to it */
-  g_object_unref (self);
+#ifdef USE_WL_FLUSH_BUFFER
+  /* in case of normal routine, gstbuffer_disposed() is called by buffer_release()
+     but in case of flush_request, this func() is called when basesink unref gstbuffer. 
+     buffer_release() is not called  if we do 'g_object_unref (self)' */
+  if (!self->display->flush_request)
+#endif
+    g_object_unref (self);
 }
 
 GstWlBuffer *
@@ -193,7 +226,6 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
 #ifdef GST_WLSINK_ENHANCEMENT   //need to contribute to upstream !!
   wl_proxy_set_queue ((struct wl_proxy *) self->wlbuffer, self->display->queue);
 #endif
-
   gst_mini_object_set_qdata ((GstMiniObject *) gstbuffer,
       gst_wl_buffer_qdata_quark (), self, (GDestroyNotify) gstbuffer_disposed);
   GST_INFO ("GstWlBuffer (%p)", self);
@@ -254,7 +286,12 @@ gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
   /* Add a reference to the buffer. This represents the fact that
    * the compositor is using the buffer and it should not return
    * back to the pool and be re-used until the compositor releases it. */
-  gst_buffer_ref (self->gstbuffer);
+#ifdef USE_WL_FLUSH_BUFFER
+  /* in case of flush_request, we need to copy info and unref gstbuffer
+     so, we need not to increase ref count. */
+  if (!self->display->flush_request)
+#endif
+    gst_buffer_ref (self->gstbuffer);
 
   self->used_by_compositor = TRUE;
 }
