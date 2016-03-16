@@ -29,6 +29,7 @@
 #include <wayland-tbm-client.h>
 #include <tizen-extension-client-protocol.h>
 #define NV_BUF_PLANE_NUM    2   /*SN12 or ST12 has 2 plane */
+#define USE_WL_FLUSH_BUFFER
 #endif
 
 G_BEGIN_DECLS
@@ -41,6 +42,12 @@ G_BEGIN_DECLS
 #define FUNCTION GST_INFO ("<ENTER>")
 typedef struct _GstWlDisplay GstWlDisplay;
 typedef struct _GstWlDisplayClass GstWlDisplayClass;
+
+#ifdef USE_WL_FLUSH_BUFFER
+typedef struct {
+  void *bo[NV_BUF_PLANE_NUM];
+}GstWlFlushBuffer;
+#endif
 
 #define TBM_BO_NUM 20
 
@@ -83,6 +90,12 @@ struct _GstWlDisplay
   int tbm_bo_idx;
   tbm_surface_h tsurface;
   gboolean USE_TBM;
+
+#ifdef USE_WL_FLUSH_BUFFER
+  GstWlFlushBuffer *flush_buffer;
+  tbm_bufmgr flush_tbm_bufmgr;
+  int flush_request;
+#endif
 
   gboolean is_native_format;    /*SN12, ST12 */
   void *bo[NV_BUF_PLANE_NUM];
