@@ -79,8 +79,8 @@ static const wl_VideoFormat formats[] = {
 enum wl_shm_format
 gst_video_format_to_wl_shm_format (GstVideoFormat format)
 {
-  FUNCTION;
   guint i;
+  FUNCTION;
 
   for (i = 0; i < G_N_ELEMENTS (formats); i++)
     if (formats[i].gst_format == format)
@@ -93,8 +93,8 @@ gst_video_format_to_wl_shm_format (GstVideoFormat format)
 GstVideoFormat
 gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format)
 {
-  FUNCTION;
   guint i;
+  FUNCTION;
 
   for (i = 0; i < G_N_ELEMENTS (formats); i++)
     if (formats[i].wl_format == wl_format)

@@ -44,6 +44,7 @@
 #include "gstwaylandsink.h"
 #ifdef GST_WLSINK_ENHANCEMENT
 #include <mm_types.h>
+#include "tizen-wlvideoformat.h"
 #endif
 #include "wlvideoformat.h"
 #include "wlbuffer.h"
@@ -57,7 +58,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-//#define DUMP_BUFFER
 #ifdef GST_WLSINK_ENHANCEMENT
 #define GST_TYPE_WAYLANDSINK_DISPLAY_GEOMETRY_METHOD (gst_waylandsink_display_geometry_method_get_type())
 #define GST_TYPE_WAYLANDSINK_ROTATE_ANGLE (gst_waylandsink_rotate_angle_get_type())
@@ -217,10 +217,10 @@ G_DEFINE_TYPE_WITH_CODE (GstWaylandSink, gst_wayland_sink, GST_TYPE_VIDEO_SINK,
 static void
 gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
 {
-  FUNCTION;
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
   GstBaseSinkClass *gstbasesink_class;
+  FUNCTION;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
@@ -324,11 +324,12 @@ gst_wayland_sink_init (GstWaylandSink * sink)
 
 #ifdef GST_WLSINK_ENHANCEMENT
 static void
-update_last_buffer_geometry (GstWaylandSink * sink)
+gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
 {
-  FUNCTION;
-
   GstWlBuffer *wlbuffer;
+  FUNCTION;
+  g_return_if_fail (sink != NULL);
+
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   wlbuffer->used_by_compositor = FALSE;
 
@@ -339,13 +340,168 @@ update_last_buffer_geometry (GstWaylandSink * sink)
      to call gst_wl_buffer_finalize(), we need to decrease buffer ref count */
   gst_buffer_unref (wlbuffer->gstbuffer);
 }
+#ifdef USE_WL_FLUSH_BUFFER
+static int
+gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+{
+  GstWlFlushBuffer *flush_buffer = NULL;
+  tbm_bo bo = NULL;
+  int bo_size = 0;
+  int i;
+  FUNCTION;
+
+  g_return_val_if_fail (display != NULL, FALSE);
+  g_return_val_if_fail (mm_video_buf != NULL, FALSE);
+
+  flush_buffer = (GstWlFlushBuffer *)malloc(sizeof(GstWlFlushBuffer));
+  if (!flush_buffer){
+    GST_ERROR ("GstWlFlushBuffer alloc faile");
+    return FALSE;
+  }
+  memset (flush_buffer, 0x0, sizeof(GstWlFlushBuffer));
+
+  display->flush_tbm_bufmgr = wayland_tbm_client_get_bufmgr (display->tbm_client);
+  g_return_if_fail (display->flush_tbm_bufmgr != NULL);
+
+  for (i=0; i<NV_BUF_PLANE_NUM; i++){
+    if (mm_video_buf->handle.bo[i] != NULL){
+      tbm_bo_handle src;
+      tbm_bo_handle dst;
+
+      /* get bo size */
+      bo_size = tbm_bo_size (mm_video_buf->handle.bo[i]);
+      GST_LOG ("tbm bo size: %d", bo_size);
+      /* alloc bo */
+      bo = tbm_bo_alloc (display->flush_tbm_bufmgr, bo_size, TBM_DEVICE_CPU);
+      if (!bo) {
+        GST_ERROR ("alloc tbm bo(size:%d) failed: %s", bo_size, strerror(errno));
+        return FALSE;
+      }
+      GST_INFO ("flush buffer tbm_bo =(%p)", bo);
+      flush_buffer->bo[i] = bo;
+      /* get virtual address */
+      src.ptr = dst.ptr = NULL;
+      /* bo map, we can use tbm_bo_map too. */
+      src = tbm_bo_get_handle (mm_video_buf->handle.bo[i], TBM_DEVICE_CPU);
+      dst = tbm_bo_get_handle (bo, TBM_DEVICE_CPU);
+      if (!src.ptr || !dst.ptr) {
+        GST_ERROR ("get tbm bo handle failed src(%p) dst(%p): %s", src.ptr, dst.ptr, strerror (errno));
+        tbm_bo_unref (mm_video_buf->handle.bo[i]);
+        tbm_bo_unref (bo);
+        return FALSE;
+      }
+      /* copy */
+      memcpy (dst.ptr, src.ptr, bo_size);
+      /* bo unmap */
+      tbm_bo_unmap (mm_video_buf->handle.bo[i]);
+      tbm_bo_unmap (bo);
+    }
+  }
+  display->flush_buffer = flush_buffer;
+  return TRUE;
+}
+
+static int
+gst_wayland_sink_copy_mm_video_buf_info_to_flush (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+{
+  int ret = FALSE;
+  g_return_val_if_fail (display != NULL, FALSE);
+  g_return_val_if_fail (mm_video_buf != NULL, FALSE);
+  FUNCTION;
+
+  ret = gst_wayland_sink_make_flush_buffer(display, mm_video_buf);
+  if (ret){
+    int i;
+    for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
+      if (display->flush_buffer->bo[i] != NULL) {
+        display->bo[i] = display->flush_buffer->bo[i];
+        GST_LOG("bo %p", display->bo[i]);
+      } else {
+        display->bo[i] = 0;
+      }
+      display->plane_size[i] = mm_video_buf->size[i];
+      display->stride_width[i] = mm_video_buf->stride_width[i];
+      display->stride_height[i] = mm_video_buf->stride_height[i];
+      display->native_video_size += display->plane_size[i];
+    }
+  }
+  return ret;
+}
+#endif
+
+static void
+gst_wayland_sink_add_mm_video_buf_info (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+{
+  int i;
+  g_return_if_fail (display != NULL);
+  g_return_if_fail (mm_video_buf != NULL);
+  FUNCTION;
+
+  for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
+    if (mm_video_buf->handle.bo[i] != NULL) {
+      display->bo[i] = mm_video_buf->handle.bo[i];
+    } else {
+      display->bo[i] = 0;
+    }
+    display->plane_size[i] = mm_video_buf->size[i];
+    display->stride_width[i] = mm_video_buf->stride_width[i];
+    display->stride_height[i] = mm_video_buf->stride_height[i];
+    display->native_video_size += display->plane_size[i];
+  }
+}
+
+static int
+gst_wayland_sink_get_mm_video_buf_info(GstWlDisplay * display, GstBuffer * buffer)
+{
+  GstMemory *mem;
+  GstMapInfo mem_info = GST_MAP_INFO_INIT;
+  MMVideoBuffer *mm_video_buf = NULL;
+
+  g_return_val_if_fail (display != NULL, FALSE);
+  g_return_val_if_fail (buffer != NULL, FALSE);
+
+  FUNCTION;
+
+  mem = gst_buffer_peek_memory (buffer, 1);
+  gst_memory_map (mem, &mem_info, GST_MAP_READ);
+  mm_video_buf = (MMVideoBuffer *) mem_info.data;
+  gst_memory_unmap (mem, &mem_info);
+
+  if (mm_video_buf == NULL) {
+    GST_WARNING ("mm_video_buf is NULL. Skip rendering");
+    return FALSE;
+  }
+  /* assign mm_video_buf info */
+  if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
+    GST_DEBUG ("TBM bo %p %p %p", mm_video_buf->handle.bo[0],
+        mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
+    display->native_video_size = 0;
+    display->flush_request = mm_video_buf->flush_request;
+    GST_DEBUG ("flush_request value is %d",display->flush_request);
+#ifdef USE_WL_FLUSH_BUFFER
+    if (display->flush_request) {
+      if(!gst_wayland_sink_copy_mm_video_buf_info_to_flush(display, mm_video_buf)){
+        GST_ERROR("cat not copy mm_video_buf info to flush");
+        return FALSE;
+        }
+    } else
+#endif
+      /* normal routine */
+      gst_wayland_sink_add_mm_video_buf_info(display, mm_video_buf);
+  } else {
+    GST_ERROR ("Buffer type is not TBM");
+    return FALSE;
+  }
+  return TRUE;
+}
+
 #endif
 static void
 gst_wayland_sink_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
+  FUNCTION;
 
   switch (prop_id) {
     case PROP_DISPLAY:
@@ -380,8 +536,8 @@ static void
 gst_wayland_sink_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
+  FUNCTION;
   g_mutex_lock (&sink->render_lock);
 
   switch (prop_id) {
@@ -448,7 +604,7 @@ gst_wayland_sink_set_property (GObject * object,
   }
   if (sink->video_info_changed && sink->window
       && GST_STATE (sink) == GST_STATE_PAUSED) {
-    update_last_buffer_geometry (sink);
+    gst_wayland_sink_update_last_buffer_geometry (sink);
   }
   g_mutex_unlock (&sink->render_lock);
 
@@ -457,9 +613,8 @@ gst_wayland_sink_set_property (GObject * object,
 static void
 gst_wayland_sink_finalize (GObject * object)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (object);
-
+  FUNCTION;
   GST_DEBUG_OBJECT (sink, "Finalizing the sink..");
 
   if (sink->last_buffer)
@@ -485,9 +640,9 @@ static void
 gst_wayland_sink_set_display_from_context (GstWaylandSink * sink,
     GstContext * context)
 {
-  FUNCTION;
   struct wl_display *display;
   GError *error = NULL;
+  FUNCTION;
 
   display = gst_wayland_display_handle_context_get_handle (context);
   sink->display = gst_wl_display_new_existing (display, FALSE, &error);
@@ -506,12 +661,12 @@ gst_wayland_sink_set_display_from_context (GstWaylandSink * sink,
 static gboolean
 gst_wayland_sink_find_display (GstWaylandSink * sink)
 {
-  FUNCTION;
   GstQuery *query;
   GstMessage *msg;
   GstContext *context = NULL;
   GError *error = NULL;
   gboolean ret = TRUE;
+  FUNCTION;
 
   g_mutex_lock (&sink->display_lock);
 
@@ -563,9 +718,9 @@ gst_wayland_sink_find_display (GstWaylandSink * sink)
 static GstStateChangeReturn
 gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (element);
   GstStateChangeReturn ret = GST_STATE_CHANGE_SUCCESS;
+  FUNCTION;
 
   switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
@@ -588,6 +743,9 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
           g_clear_object (&sink->window);
         } else {
           /* remove buffer from surface, show nothing */
+#ifdef USE_WL_FLUSH_BUFFER
+          sink->display->flush_request = 0;
+#endif
           gst_wl_window_render (sink->window, NULL, NULL);
         }
       }
@@ -620,8 +778,8 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
 static void
 gst_wayland_sink_set_context (GstElement * element, GstContext * context)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (element);
+  FUNCTION;
 
   if (gst_context_has_context_type (context,
           GST_WAYLAND_DISPLAY_HANDLE_CONTEXT_TYPE)) {
@@ -645,9 +803,9 @@ gst_wayland_sink_set_context (GstElement * element, GstContext * context)
 static GstCaps *
 gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 {
-  FUNCTION;
   GstWaylandSink *sink;
   GstCaps *caps;
+  FUNCTION;
 
   sink = GST_WAYLAND_SINK (bsink);
 
@@ -723,7 +881,6 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
 static gboolean
 gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
 {
-  FUNCTION;
   GstWaylandSink *sink;
   GstBufferPool *newpool;
   GstVideoInfo info;
@@ -735,6 +892,9 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   GArray *formats;
   gint i;
   GstStructure *structure;
+  GstWlShmAllocator *self = NULL;
+
+  FUNCTION;
 
   sink = GST_WAYLAND_SINK (bsink);
 
@@ -801,8 +961,7 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
       sink->video_info_changed = TRUE;
     } else {
       sink->display->is_native_format = FALSE;
-      GstWlShmAllocator *self =
-          GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
+      self = GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
       self->display = sink->display;
       /* create a new pool for the new configuration */
       newpool = gst_video_buffer_pool_new ();
@@ -825,8 +984,7 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
     }
   } else {                      /* USE SHM */
 
-    GstWlShmAllocator *self =
-        GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
+    self = GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
     self->display = sink->display;
 
     /* create a new pool for the new configuration */
@@ -908,13 +1066,14 @@ config_failed:
 static gboolean
 gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (bsink);
   GstStructure *config;
   guint size, min_bufs, max_bufs;
 #ifdef GST_WLSINK_ENHANCEMENT
   gboolean need_pool;
   GstCaps *caps;
+  FUNCTION;
+
   if (sink->USE_TBM) {
     if (sink->display->is_native_format == TRUE)
       return TRUE;
@@ -951,8 +1110,8 @@ gst_wayland_sink_preroll (GstBaseSink * bsink, GstBuffer * buffer)
 static void
 frame_redraw_callback (void *data, struct wl_callback *callback, uint32_t time)
 {
-  FUNCTION;
   GstWaylandSink *sink = data;
+  FUNCTION;
 
   GST_LOG ("frame_redraw_cb");
 
@@ -983,11 +1142,11 @@ gst_wayland_sink_update_window_geometry (GstWaylandSink * sink)
 static void
 render_last_buffer (GstWaylandSink * sink)
 {
-  FUNCTION;
   GstWlBuffer *wlbuffer;
   const GstVideoInfo *info = NULL;
   struct wl_surface *surface;
   struct wl_callback *callback;
+  FUNCTION;
 
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   surface = gst_wl_window_get_wl_surface (sink->window);
@@ -1017,11 +1176,11 @@ render_last_buffer (GstWaylandSink * sink)
 static GstFlowReturn
 gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (bsink);
   GstBuffer *to_render;
   GstWlBuffer *wlbuffer;
   GstFlowReturn ret = GST_FLOW_OK;
+  FUNCTION;
 
   g_mutex_lock (&sink->render_lock);
 
@@ -1104,40 +1263,9 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
       if (sink->USE_TBM && sink->display->is_native_format) {
         /* in case of SN12 or ST12 */
-        GstMemory *mem;
-        struct wl_buffer *wbuf = NULL;
-        GstMapInfo mem_info = GST_MAP_INFO_INIT;
-        MMVideoBuffer *mm_video_buf = NULL;
+        if (!gst_wayland_sink_get_mm_video_buf_info(sink->display, buffer))
+          return GST_FLOW_ERROR;
 
-        mem = gst_buffer_peek_memory (buffer, 1);
-        gst_memory_map (mem, &mem_info, GST_MAP_READ);
-        mm_video_buf = (MMVideoBuffer *) mem_info.data;
-        gst_memory_unmap (mem, &mem_info);
-
-        if (mm_video_buf == NULL) {
-          GST_WARNING_OBJECT (sink, "mm_video_buf is NULL. Skip rendering");
-          return ret;
-        }
-        /* assign mm_video_buf info */
-        if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
-          GST_DEBUG_OBJECT (sink, "TBM bo %p %p %p", mm_video_buf->handle.bo[0],
-              mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
-          sink->display->native_video_size = 0;
-          for (int i = 0; i < NV_BUF_PLANE_NUM; i++) {
-            if (mm_video_buf->handle.bo[i] != NULL) {
-              sink->display->bo[i] = mm_video_buf->handle.bo[i];
-            } else {
-              sink->display->bo[i] = 0;
-            }
-            sink->display->plane_size[i] = mm_video_buf->size[i];
-            sink->display->stride_width[i] = mm_video_buf->stride_width[i];
-            sink->display->stride_height[i] = mm_video_buf->stride_height[i];
-            sink->display->native_video_size += sink->display->plane_size[i];
-          }
-        } else {
-          GST_ERROR_OBJECT (sink, "Buffer type is not TBM");
-          return ret;
-        }
         wlbuffer = gst_buffer_get_wl_buffer (buffer);
         if (G_UNLIKELY (!wlbuffer)) {
           wbuf =
@@ -1145,11 +1273,9 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
               &sink->video_info);
           if (G_UNLIKELY (!wbuf))
             goto no_wl_buffer;
-
           gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
         }
       }
-
       else if (sink->USE_TBM && !sink->display->is_native_format) {
 
         /* sink->pool always exists (created in set_caps), but it may not
@@ -1367,9 +1493,8 @@ static void
 gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
     guintptr wl_surface_id)
 {
-  FUNCTION;
-
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
+  FUNCTION;
   g_return_if_fail (sink != NULL);
 
   if (sink->window != NULL) {
@@ -1379,7 +1504,7 @@ gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
   g_mutex_lock (&sink->render_lock);
   g_clear_object (&sink->window);
 
-  GST_INFO ("wl_surface_id %d %p", (int) wl_surface_id, wl_surface_id);
+  GST_INFO ("wl_surface_id %d %p", (int) wl_surface_id, (guintptr)wl_surface_id);
 
   if (wl_surface_id) {
     if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
@@ -1403,10 +1528,9 @@ gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
 static void
 gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
 {
-  FUNCTION;
-
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
   struct wl_surface *surface = (struct wl_surface *) handle;
+  FUNCTION;
 
   g_return_if_fail (sink != NULL);
 
@@ -1449,8 +1573,8 @@ static void
 gst_wayland_sink_set_render_rectangle (GstVideoOverlay * overlay,
     gint x, gint y, gint w, gint h)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
+  FUNCTION;
 
   g_return_if_fail (sink != NULL);
 
@@ -1472,8 +1596,8 @@ gst_wayland_sink_set_render_rectangle (GstVideoOverlay * overlay,
 static void
 gst_wayland_sink_expose (GstVideoOverlay * overlay)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (overlay);
+  FUNCTION;
 
   g_return_if_fail (sink != NULL);
 
@@ -1497,8 +1621,8 @@ gst_wayland_sink_waylandvideo_init (GstWaylandVideoInterface * iface)
 static void
 gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (video);
+  FUNCTION;
   g_return_if_fail (sink != NULL);
 
   g_mutex_lock (&sink->render_lock);
@@ -1516,8 +1640,8 @@ gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video)
 static void
 gst_wayland_sink_end_geometry_change (GstWaylandVideo * video)
 {
-  FUNCTION;
   GstWaylandSink *sink = GST_WAYLAND_SINK (video);
+  FUNCTION;
   g_return_if_fail (sink != NULL);
 
   g_mutex_lock (&sink->render_lock);

@@ -22,7 +22,10 @@
 
 #include "wlshmallocator.h"
 #include "wlvideoformat.h"
-
+#ifdef GST_WLSINK_ENHANCEMENT
+#include "tizen-wlvideoformat.h"
+#include <tbm_surface_internal.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +33,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-//#define DUMP_BUFFER
+
 #ifdef DUMP_BUFFER
 int dump_cnt = 0;
 int _write_rawdata (const char *file, const void *data, unsigned int size);
@@ -45,7 +48,6 @@ static GstMemory *
 gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
     GstAllocationParams * params)
 {
-  FUNCTION;
   GstWlShmAllocator *self = GST_WL_SHM_ALLOCATOR (allocator);
   char filename[1024];
   static int init = 0;
@@ -53,6 +55,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
   int idx;
   gpointer data;
   GstWlShmMemory *mem;
+  FUNCTION;
 
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->display->USE_TBM) {
@@ -171,8 +174,8 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
 static void
 gst_wl_shm_allocator_free (GstAllocator * allocator, GstMemory * memory)
 {
-  FUNCTION;
   GstWlShmMemory *shm_mem = (GstWlShmMemory *) memory;
+  FUNCTION;
 
   if (shm_mem->fd != -1)
     close (shm_mem->fd);
@@ -196,8 +199,8 @@ gst_wl_shm_mem_unmap (GstMemory * mem)
 static void
 gst_wl_shm_allocator_class_init (GstWlShmAllocatorClass * klass)
 {
-  FUNCTION;
   GstAllocatorClass *alloc_class = (GstAllocatorClass *) klass;
+  FUNCTION;
 
   alloc_class->alloc = GST_DEBUG_FUNCPTR (gst_wl_shm_allocator_alloc);
   alloc_class->free = GST_DEBUG_FUNCPTR (gst_wl_shm_allocator_free);
@@ -240,21 +243,22 @@ struct wl_buffer *
 gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
     const GstVideoInfo * info)
 {
-  FUNCTION;
   GstWlShmMemory *shm_mem = (GstWlShmMemory *) mem;
   gint width, height, stride;
   gsize size;
   enum wl_shm_format format;
   struct wl_shm_pool *wl_pool;
   struct wl_buffer *wbuffer;
+  FUNCTION;
 
 #ifdef GST_WLSINK_ENHANCEMENT
   if (display->USE_TBM) {
-    tbm_bo_handle virtual_addr;
     tbm_surface_info_s ts_info;
     int num_bo;
+#ifdef DUMP_BUFFER
+    tbm_bo_handle virtual_addr;
     void *data;
-
+#endif
     if (display->is_native_format == TRUE) {
       width = GST_VIDEO_INFO_WIDTH (info);
       height = GST_VIDEO_INFO_HEIGHT (info);
@@ -281,16 +285,15 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
         }
       }
 #endif
-      GST_DEBUG ("TBM bo %p %p %p", display->bo[0], display->bo[1], 0);
+      GST_DEBUG ("TBM bo %p %p %p", display->bo[0], display->bo[1], display->bo[2]);
       ts_info.width = width;
       ts_info.height = height;
       ts_info.format = format;
       ts_info.bpp = tbm_surface_internal_get_bpp (ts_info.format);
       ts_info.num_planes = tbm_surface_internal_get_num_planes (ts_info.format);
       GST_DEBUG
-          ("ts_info.width(%d) height(%d) format(%d) bpp(%d) num_planes(%d)",
-          ts_info.width, ts_info.height, gst_wl_tbm_format_to_string (format),
-          ts_info.bpp, ts_info.num_planes);
+          ("ts_info.width(%d) height(%d) bpp(%d) num_planes(%d)",
+          ts_info.width, ts_info.height, ts_info.bpp, ts_info.num_planes);
 
       ts_info.planes[0].stride = display->stride_width[0];
       ts_info.planes[1].stride = display->stride_width[1];
@@ -299,7 +302,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       num_bo = (display->bo[1]) ? 2 : 1;
       GST_INFO ("num_bo(%d)", num_bo);
       display->tsurface =
-          tbm_surface_internal_create_with_bos (&ts_info, display->bo, num_bo);
+          tbm_surface_internal_create_with_bos (&ts_info, (tbm_bo *)display->bo, num_bo);
       GST_INFO ("display->tsurface(%p)", display->tsurface);
       GST_INFO ("tbm_client(%p),tsurface(%p)", display->tbm_client,
           display->tsurface);
@@ -319,8 +322,8 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       g_return_val_if_fail (shm_mem->fd != -1, NULL);
 
       GST_DEBUG_OBJECT (mem->allocator, "Creating wl_buffer of size %"
-          G_GSSIZE_FORMAT " (%d x %d, stride %d), format %s", size, width,
-          height, stride, gst_wl_tbm_format_to_string (format));
+          G_GSSIZE_FORMAT " (%d x %d, stride %d)", size, width,
+          height, stride);
 
 #ifdef DUMP_BUFFER
       virtual_addr = tbm_bo_get_handle (shm_mem->tbm_bo_ptr, TBM_DEVICE_CPU);
@@ -332,13 +335,11 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       int ret;
       char file_name[128];
       GST_INFO ("DUMP %d ", dump_cnt);
-//        if (dump_cnt < 60) {
       sprintf (file_name, "/home/owner/WLSINK_OUT_DUMP_%2.2d.dump", dump_cnt++);
       ret = _write_rawdata (file_name, virtual_addr.ptr, size);
       if (ret) {
         GST_ERROR ("_write_rawdata() failed");
       }
-//        }
 #endif
       ts_info.width = width;
       ts_info.height = height;
@@ -355,7 +356,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       GST_INFO ("tbm_bo (%p)", shm_mem->tbm_bo_ptr);
 
       display->tsurface =
-          tbm_surface_internal_create_with_bos (&ts_info, &shm_mem->tbm_bo_ptr,
+          tbm_surface_internal_create_with_bos (&ts_info, (tbm_bo *)&shm_mem->tbm_bo_ptr,
           1);
       wbuffer =
           wayland_tbm_client_create_buffer (display->tbm_client,

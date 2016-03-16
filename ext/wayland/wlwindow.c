@@ -31,8 +31,6 @@
 #include "wlshmallocator.h"
 #include "wlbuffer.h"
 
-#define SWAP(a, b) { (a) ^= (b) ^= (a) ^= (b); }
-
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
 
@@ -67,8 +65,8 @@ static const struct wl_shell_surface_listener shell_surface_listener = {
 static void
 gst_wl_window_class_init (GstWlWindowClass * klass)
 {
-  FUNCTION;
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  FUNCTION;
   gobject_class->finalize = gst_wl_window_finalize;
 }
 
@@ -80,8 +78,8 @@ gst_wl_window_init (GstWlWindow * self)
 static void
 gst_wl_window_finalize (GObject * gobject)
 {
-  FUNCTION;
   GstWlWindow *self = GST_WL_WINDOW (gobject);
+  FUNCTION;
 
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->video_object)
@@ -114,14 +112,16 @@ gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
 gst_wl_window_new_internal (GstWlDisplay * display)
 #endif
 {
-  FUNCTION;
   GstWlWindow *window;
   GstVideoInfo info;
+#ifndef GST_WLSINK_ENHANCEMENT
   GstBuffer *buf;
   GstMapInfo mapinfo;
   struct wl_buffer *wlbuf;
   GstWlBuffer *gwlbuf;
+#endif
   struct wl_region *region;
+  FUNCTION;
 
   window = g_object_new (GST_TYPE_WL_WINDOW, NULL);
   window->display = g_object_ref (display);
@@ -222,9 +222,9 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 GstWlWindow *
 gst_wl_window_new_toplevel (GstWlDisplay * display, const GstVideoInfo * info)
 {
-  FUNCTION;
   GstWlWindow *window;
   gint width;
+  FUNCTION;
 
 /* not create shell_surface here for enlightenment */
 #ifdef GST_WLSINK_ENHANCEMENT
@@ -261,8 +261,8 @@ GstWlWindow *
 gst_wl_window_new_in_surface (GstWlDisplay * display,
     struct wl_surface * parent)
 {
-  FUNCTION;
   GstWlWindow *window;
+  FUNCTION;
 
   display->use_parent_wl_surface = TRUE;
 #ifdef GST_WLSINK_ENHANCEMENT
@@ -328,22 +328,22 @@ gst_wl_window_is_toplevel (GstWlWindow * window)
 static void
 gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
 {
-  FUNCTION;
   GstVideoRectangle src = { 0, };
   GstVideoRectangle res;
+#ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
+  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
+  GstVideoRectangle src_input = { 0, 0, 0, 0 };
+  GstVideoRectangle dst = { 0, 0, 0, 0 };
+  int temp = 0;
+  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
+#endif
+  FUNCTION;
 
   /* center the video_subsurface inside area_subsurface */
   src.w = window->video_width;
   src.h = window->video_height;
+
 #ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
-
-  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
-  GstVideoRectangle src_input = { 0, 0, 0, 0 };
-  GstVideoRectangle dst = { 0, 0, 0, 0 };
-
-  gint rotate = 0;
-  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
-
   src.x = src.y = 0;
   src_input.w = src_origin.w = window->video_width;
   src_input.h = src_origin.h = window->video_height;
@@ -481,9 +481,11 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
 
   /*need to swap */
-  if (transform % 2 == 1)       /*1, 3, 5, 7 */
-    SWAP (src_input.w, src_input.h);
-
+  if (transform % 2 == 1){ /*1, 3, 5, 7 */
+    temp = src_input.w;
+    src_input.w = src_input.h;
+    src_input.h = temp;
+  }
   wl_viewport_set_source (window->video_viewport,
       wl_fixed_from_int (src_input.x), wl_fixed_from_int (src_input.y),
       wl_fixed_from_int (src_input.w), wl_fixed_from_int (src_input.h));

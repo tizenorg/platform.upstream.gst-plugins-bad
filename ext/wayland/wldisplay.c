@@ -39,8 +39,8 @@ static void
 handle_tizen_video_format (void *data, struct tizen_video *tizen_video,
     uint32_t format)
 {
-  FUNCTION;
   GstWlDisplay *self = data;
+  FUNCTION;
 
   g_return_if_fail (self != NULL);
 
@@ -63,8 +63,8 @@ static void gst_wl_display_finalize (GObject * gobject);
 static void
 gst_wl_display_class_init (GstWlDisplayClass * klass)
 {
-  FUNCTION;
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
+  FUNCTION;
   gobject_class->finalize = gst_wl_display_finalize;
 }
 
@@ -88,8 +88,8 @@ gst_wl_display_init (GstWlDisplay * self)
 static void
 gst_wl_display_finalize (GObject * gobject)
 {
-  FUNCTION;
   GstWlDisplay *self = GST_WL_DISPLAY (gobject);
+  FUNCTION;
 
   gst_poll_set_flushing (self->wl_fd_poll, TRUE);
   g_thread_join (self->thread);
@@ -164,7 +164,6 @@ gst_wl_display_finalize (GObject * gobject)
 static void
 sync_callback (void *data, struct wl_callback *callback, uint32_t serial)
 {
-  FUNCTION;
   gboolean *done = data;
   *done = TRUE;
 }
@@ -176,10 +175,10 @@ static const struct wl_callback_listener sync_listener = {
 static gint
 gst_wl_display_roundtrip (GstWlDisplay * self)
 {
-  FUNCTION;
   struct wl_callback *callback;
   gint ret = 0;
   gboolean done = FALSE;
+  FUNCTION;
 
   g_return_val_if_fail (self != NULL, -1);
 
@@ -210,8 +209,8 @@ static void
 registry_handle_global (void *data, struct wl_registry *registry,
     uint32_t id, const char *interface, uint32_t version)
 {
-  FUNCTION;
   GstWlDisplay *self = data;
+  FUNCTION;
 
   if (g_strcmp0 (interface, "wl_compositor") == 0) {
     self->compositor = wl_registry_bind (registry, id, &wl_compositor_interface,
@@ -248,9 +247,9 @@ static const struct wl_registry_listener registry_listener = {
 static gpointer
 gst_wl_display_thread_run (gpointer data)
 {
-  FUNCTION;
   GstWlDisplay *self = data;
   GstPollFD pollfd = GST_POLL_FD_INIT;
+  FUNCTION;
 
   pollfd.fd = wl_display_get_fd (self->display);
   gst_poll_add_fd (self->wl_fd_poll, &pollfd);
@@ -285,8 +284,8 @@ error:
 GstWlDisplay *
 gst_wl_display_new (const gchar * name, GError ** error)
 {
-  FUNCTION;
   struct wl_display *display;
+  FUNCTION;
 
   display = wl_display_connect (name);
 
@@ -304,10 +303,10 @@ GstWlDisplay *
 gst_wl_display_new_existing (struct wl_display * display,
     gboolean take_ownership, GError ** error)
 {
-  FUNCTION;
   GstWlDisplay *self;
   GError *err = NULL;
   gint i;
+  FUNCTION;
 
   g_return_val_if_fail (display != NULL, NULL);
 
