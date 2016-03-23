@@ -145,7 +145,8 @@ enum
   PROP_ROTATE_ANGLE,
   PROP_DISPLAY_GEOMETRY_METHOD,
   PROP_ORIENTATION,
-  PROP_FLIP
+  PROP_FLIP,
+  PROP_VISIBLE
 #endif
 };
 int dump__cnt = 0;
@@ -288,6 +289,10 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
           GST_TYPE_WAYLANDSINK_FLIP, DEF_DISPLAY_FLIP,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class, PROP_VISIBLE,
+      g_param_spec_boolean ("visible", "Visible",
+          "Draws screen or blacks out, true means visible, false blacks out",
+          TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 #endif
 }
 
@@ -317,6 +322,7 @@ gst_wayland_sink_init (GstWaylandSink * sink)
   sink->flip = DEF_DISPLAY_FLIP;
   sink->rotate_angle = DEGREE_0;
   sink->orientation = DEGREE_0;
+  sink->visible = TRUE;
 #endif
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
@@ -324,25 +330,38 @@ gst_wayland_sink_init (GstWaylandSink * sink)
 
 #ifdef GST_WLSINK_ENHANCEMENT
 static void
+gst_wayland_sink_stop_video (GstWaylandSink * sink)
+{
+  FUNCTION;
+  g_return_if_fail (sink != NULL);
+  gst_wl_window_render (sink->window, NULL, NULL);
+}
+
+static void
 gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
 {
   GstWlBuffer *wlbuffer;
   FUNCTION;
   g_return_if_fail (sink != NULL);
-
+  GST_DEBUG ("gstbuffer ref count is %d",
+      GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   wlbuffer->used_by_compositor = FALSE;
-
-  /*need to render last buffer */
-  /* reuse current GstWlBuffer */
+  /*need to render last buffer, reuse current GstWlBuffer */
   render_last_buffer (sink);
   /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
-     to call gst_wl_buffer_finalize(), we need to decrease buffer ref count */
-  gst_buffer_unref (wlbuffer->gstbuffer);
+     to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
+     wayland can not release buffer if we attach same buffer,
+     if we use visible but we need to attach null buffer and wayland can release buffer,
+     so we don't need to below code. */
+  if (!sink->visible)
+    gst_buffer_unref (wlbuffer->gstbuffer);
 }
+
 #ifdef USE_WL_FLUSH_BUFFER
 static int
-gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+gst_wayland_sink_make_flush_buffer (GstWlDisplay * display,
+    MMVideoBuffer * mm_video_buf)
 {
   GstWlFlushBuffer *flush_buffer = NULL;
   tbm_bo bo = NULL;
@@ -353,18 +372,19 @@ gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_v
   g_return_val_if_fail (display != NULL, FALSE);
   g_return_val_if_fail (mm_video_buf != NULL, FALSE);
 
-  flush_buffer = (GstWlFlushBuffer *)malloc(sizeof(GstWlFlushBuffer));
-  if (!flush_buffer){
+  flush_buffer = (GstWlFlushBuffer *) malloc (sizeof (GstWlFlushBuffer));
+  if (!flush_buffer) {
     GST_ERROR ("GstWlFlushBuffer alloc faile");
     return FALSE;
   }
-  memset (flush_buffer, 0x0, sizeof(GstWlFlushBuffer));
+  memset (flush_buffer, 0x0, sizeof (GstWlFlushBuffer));
 
-  display->flush_tbm_bufmgr = wayland_tbm_client_get_bufmgr (display->tbm_client);
+  display->flush_tbm_bufmgr =
+      wayland_tbm_client_get_bufmgr (display->tbm_client);
   g_return_if_fail (display->flush_tbm_bufmgr != NULL);
 
-  for (i=0; i<NV_BUF_PLANE_NUM; i++){
-    if (mm_video_buf->handle.bo[i] != NULL){
+  for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
+    if (mm_video_buf->handle.bo[i] != NULL) {
       tbm_bo_handle src;
       tbm_bo_handle dst;
 
@@ -374,7 +394,8 @@ gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_v
       /* alloc bo */
       bo = tbm_bo_alloc (display->flush_tbm_bufmgr, bo_size, TBM_DEVICE_CPU);
       if (!bo) {
-        GST_ERROR ("alloc tbm bo(size:%d) failed: %s", bo_size, strerror(errno));
+        GST_ERROR ("alloc tbm bo(size:%d) failed: %s", bo_size,
+            strerror (errno));
         return FALSE;
       }
       GST_INFO ("flush buffer tbm_bo =(%p)", bo);
@@ -385,7 +406,8 @@ gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_v
       src = tbm_bo_get_handle (mm_video_buf->handle.bo[i], TBM_DEVICE_CPU);
       dst = tbm_bo_get_handle (bo, TBM_DEVICE_CPU);
       if (!src.ptr || !dst.ptr) {
-        GST_ERROR ("get tbm bo handle failed src(%p) dst(%p): %s", src.ptr, dst.ptr, strerror (errno));
+        GST_ERROR ("get tbm bo handle failed src(%p) dst(%p): %s", src.ptr,
+            dst.ptr, strerror (errno));
         tbm_bo_unref (mm_video_buf->handle.bo[i]);
         tbm_bo_unref (bo);
         return FALSE;
@@ -402,20 +424,21 @@ gst_wayland_sink_make_flush_buffer (GstWlDisplay * display, MMVideoBuffer * mm_v
 }
 
 static int
-gst_wayland_sink_copy_mm_video_buf_info_to_flush (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+gst_wayland_sink_copy_mm_video_buf_info_to_flush (GstWlDisplay * display,
+    MMVideoBuffer * mm_video_buf)
 {
   int ret = FALSE;
   g_return_val_if_fail (display != NULL, FALSE);
   g_return_val_if_fail (mm_video_buf != NULL, FALSE);
   FUNCTION;
 
-  ret = gst_wayland_sink_make_flush_buffer(display, mm_video_buf);
-  if (ret){
+  ret = gst_wayland_sink_make_flush_buffer (display, mm_video_buf);
+  if (ret) {
     int i;
     for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
       if (display->flush_buffer->bo[i] != NULL) {
         display->bo[i] = display->flush_buffer->bo[i];
-        GST_LOG("bo %p", display->bo[i]);
+        GST_LOG ("bo %p", display->bo[i]);
       } else {
         display->bo[i] = 0;
       }
@@ -430,7 +453,8 @@ gst_wayland_sink_copy_mm_video_buf_info_to_flush (GstWlDisplay * display, MMVide
 #endif
 
 static void
-gst_wayland_sink_add_mm_video_buf_info (GstWlDisplay * display, MMVideoBuffer * mm_video_buf)
+gst_wayland_sink_add_mm_video_buf_info (GstWlDisplay * display,
+    MMVideoBuffer * mm_video_buf)
 {
   int i;
   g_return_if_fail (display != NULL);
@@ -451,7 +475,8 @@ gst_wayland_sink_add_mm_video_buf_info (GstWlDisplay * display, MMVideoBuffer * 
 }
 
 static int
-gst_wayland_sink_get_mm_video_buf_info(GstWlDisplay * display, GstBuffer * buffer)
+gst_wayland_sink_get_mm_video_buf_info (GstWlDisplay * display,
+    GstBuffer * buffer)
 {
   GstMemory *mem;
   GstMapInfo mem_info = GST_MAP_INFO_INIT;
@@ -477,17 +502,18 @@ gst_wayland_sink_get_mm_video_buf_info(GstWlDisplay * display, GstBuffer * buffe
         mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
     display->native_video_size = 0;
     display->flush_request = mm_video_buf->flush_request;
-    GST_DEBUG ("flush_request value is %d",display->flush_request);
+    GST_DEBUG ("flush_request value is %d", display->flush_request);
 #ifdef USE_WL_FLUSH_BUFFER
     if (display->flush_request) {
-      if(!gst_wayland_sink_copy_mm_video_buf_info_to_flush(display, mm_video_buf)){
-        GST_ERROR("cat not copy mm_video_buf info to flush");
+      if (!gst_wayland_sink_copy_mm_video_buf_info_to_flush (display,
+              mm_video_buf)) {
+        GST_ERROR ("cat not copy mm_video_buf info to flush");
         return FALSE;
-        }
+      }
     } else
 #endif
       /* normal routine */
-      gst_wayland_sink_add_mm_video_buf_info(display, mm_video_buf);
+      gst_wayland_sink_add_mm_video_buf_info (display, mm_video_buf);
   } else {
     GST_ERROR ("Buffer type is not TBM");
     return FALSE;
@@ -524,6 +550,9 @@ gst_wayland_sink_get_property (GObject * object,
       break;
     case PROP_FLIP:
       g_value_set_enum (value, sink->flip);
+      break;
+    case PROP_VISIBLE:
+      g_value_set_boolean (value, sink->visible);
       break;
 #endif
     default:
@@ -595,6 +624,22 @@ gst_wayland_sink_set_property (GObject * object,
       sink->video_info_changed = TRUE;
       if (sink->window) {
         gst_wl_window_set_flip (sink->window, sink->flip);
+      }
+      break;
+
+    case PROP_VISIBLE:
+      if (sink->visible == g_value_get_boolean (value))
+        break;
+      sink->visible = g_value_get_boolean (value);
+      GST_WARNING_OBJECT (sink, "visible is set (%d)", sink->visible);
+      if (sink->visible && GST_STATE (sink) == GST_STATE_PAUSED) {
+        /* need to attatch last buffer */
+        sink->video_info_changed = TRUE;
+      } else if (!sink->visible && GST_STATE (sink) >= GST_STATE_PAUSED) {
+        /* video stop */
+        if (sink->window) {
+          gst_wayland_sink_stop_video (sink);
+        }
       }
       break;
 #endif
@@ -1263,7 +1308,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
       if (sink->USE_TBM && sink->display->is_native_format) {
         /* in case of SN12 or ST12 */
-        if (!gst_wayland_sink_get_mm_video_buf_info(sink->display, buffer))
+        if (!gst_wayland_sink_get_mm_video_buf_info (sink->display, buffer))
           return GST_FLOW_ERROR;
 
         wlbuffer = gst_buffer_get_wl_buffer (buffer);
@@ -1275,8 +1320,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
             goto no_wl_buffer;
           gst_buffer_add_wl_buffer (buffer, wbuf, sink->display);
         }
-      }
-      else if (sink->USE_TBM && !sink->display->is_native_format) {
+      } else if (sink->USE_TBM && !sink->display->is_native_format) {
 
         /* sink->pool always exists (created in set_caps), but it may not
          * be active if upstream is not using it */
@@ -1345,9 +1389,12 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       goto done;
     }
     gst_buffer_replace (&sink->last_buffer, buffer);
-    render_last_buffer (sink);
+
+    if (sink->visible)
+      render_last_buffer (sink);
 
     goto done;
+
   } else {                      /* USE SHM or normal format */
     /* drop double rendering */
     if (G_UNLIKELY (buffer == sink->last_buffer)) {
@@ -1355,7 +1402,9 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       goto done;
     }
     gst_buffer_replace (&sink->last_buffer, to_render);
-    render_last_buffer (sink);
+
+    if (sink->visible)
+      render_last_buffer (sink);
 
     if (buffer != to_render)
       gst_buffer_unref (to_render);
@@ -1504,7 +1553,8 @@ gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
   g_mutex_lock (&sink->render_lock);
   g_clear_object (&sink->window);
 
-  GST_INFO ("wl_surface_id %d %p", (int) wl_surface_id, (guintptr)wl_surface_id);
+  GST_INFO ("wl_surface_id %d %p", (int) wl_surface_id,
+      (guintptr) wl_surface_id);
 
   if (wl_surface_id) {
     if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
@@ -1551,12 +1601,12 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
     if (G_LIKELY (gst_wayland_sink_find_display (sink))) {
       /* we cannot use our own display with an external window handle */
       if (G_UNLIKELY (sink->display->own_display)) {
-		  GST_ELEMENT_WARNING (sink, RESOURCE, OPEN_READ_WRITE,
-			  ("Application did not provide a wayland display handle"),
-			  ("Now waylandsink use internal display handle "
-				  "which is created ourselves. Consider providing a "
-				  "display handle from your application with GstContext"));
-		  sink->window = gst_wl_window_new_in_surface (sink->display, surface);
+        GST_ELEMENT_WARNING (sink, RESOURCE, OPEN_READ_WRITE,
+            ("Application did not provide a wayland display handle"),
+            ("Now waylandsink use internal display handle "
+                "which is created ourselves. Consider providing a "
+                "display handle from your application with GstContext"));
+        sink->window = gst_wl_window_new_in_surface (sink->display, surface);
       } else {
         sink->window = gst_wl_window_new_in_surface (sink->display, surface);
       }

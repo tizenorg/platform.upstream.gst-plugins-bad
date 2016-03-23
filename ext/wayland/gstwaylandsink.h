@@ -103,6 +103,7 @@ struct _GstWaylandSink
   guint display_geometry_method;
   guint orientation;
   guint flip;
+  gboolean visible;
 #endif
 };
 

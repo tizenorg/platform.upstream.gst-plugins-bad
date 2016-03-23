@@ -438,10 +438,10 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
     case FLIP_NONE:
       break;
     case FLIP_VERTICAL:
-      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
       break;
     case FLIP_HORIZONTAL:
-      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
       break;
     case FLIP_BOTH:
       transform = WL_OUTPUT_TRANSFORM_180;
@@ -481,7 +481,7 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
 
   /*need to swap */
-  if (transform % 2 == 1){ /*1, 3, 5, 7 */
+  if (transform % 2 == 1) {     /*1, 3, 5, 7 */
     temp = src_input.w;
     src_input.w = src_input.h;
     src_input.h = temp;
