@@ -121,17 +121,19 @@ gst_wl_buffer_finalize (GObject * gobject)
     wl_buffer_destroy (self->wlbuffer);
 
 #ifdef USE_WL_FLUSH_BUFFER
-  if (self->display->flush_request) {
-    if (self->display->flush_tbm_bufmgr)
-      self->display->flush_tbm_bufmgr = NULL;
-    for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
-      if (self->display->flush_buffer->bo[i]) {
-        tbm_bo_unref (self->display->flush_buffer->bo[i]);
-        self->display->flush_buffer->bo[i] = NULL;
+  if (self->display) {
+    if (self->display->flush_request) {
+      if (self->display->flush_tbm_bufmgr)
+        self->display->flush_tbm_bufmgr = NULL;
+      for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
+        if (self->display->flush_buffer->bo[i]) {
+          tbm_bo_unref (self->display->flush_buffer->bo[i]);
+          self->display->flush_buffer->bo[i] = NULL;
+        }
       }
+      g_free (self->display->flush_buffer);
+      self->display->flush_buffer = NULL;
     }
-    g_free (self->display->flush_buffer);
-    self->display->flush_buffer = NULL;
   }
 #endif
 
