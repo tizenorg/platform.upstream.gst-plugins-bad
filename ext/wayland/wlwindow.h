@@ -85,7 +85,7 @@ void gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
 void gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h);
 #ifdef GST_WLSINK_ENHANCEMENT
-void gst_wl_window_set_video_info (GstWlWindow * window, GstVideoInfo * info);
+void gst_wl_window_set_video_info (GstWlWindow * window, const GstVideoInfo * info);
 void gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle);
 void gst_wl_window_set_disp_geo_method (GstWlWindow * window,
     guint disp_geo_method);

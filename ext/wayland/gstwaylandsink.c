@@ -883,12 +883,16 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
         tbm_fmt = g_array_index (formats, uint32_t, i);
         g_value_set_string (&value, gst_wl_tbm_format_to_string (tbm_fmt));
         gst_value_list_append_value (&list, &value);
-        /* TBM doesn't support SN12. So we add SN12 manually as supported format.
-         * SN12 is exactly same with NV12.
+        /* TBM doesn't support SN12 and ST12. So we add SN12 and ST12 manually as supported format.
+         * SN12 is same with NV12, ST12 is same with NV12MT
          */
         if (tbm_fmt == TBM_FORMAT_NV12) {
           g_value_set_string (&value,
               gst_video_format_to_string (GST_VIDEO_FORMAT_SN12));
+          gst_value_list_append_value (&list, &value);
+        } else if (tbm_fmt == TBM_FORMAT_NV12MT) {
+          g_value_set_string (&value,
+              gst_video_format_to_string (GST_VIDEO_FORMAT_ST12));
           gst_value_list_append_value (&list, &value);
         }
       } else {                  /* USE SHM */
@@ -1210,7 +1214,7 @@ render_last_buffer (GstWaylandSink * sink)
     gst_wl_window_render (sink->window, wlbuffer, info);
   else {
     if (G_UNLIKELY (info)) {
-      gst_wl_window_set_video_info (sink->window, &info);
+      gst_wl_window_set_video_info (sink->window, info);
     }
   }
 #else
@@ -1553,7 +1557,7 @@ gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
   g_mutex_lock (&sink->render_lock);
   g_clear_object (&sink->window);
 
-  GST_INFO ("wl_surface_id %d %p", (int) wl_surface_id,
+  GST_INFO ("wl_surface_id %d %x", (int) wl_surface_id,
       (guintptr) wl_surface_id);
 
   if (wl_surface_id) {
