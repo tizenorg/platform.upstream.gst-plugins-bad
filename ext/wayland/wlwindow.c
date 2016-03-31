@@ -31,6 +31,27 @@
 #include "wlshmallocator.h"
 #include "wlbuffer.h"
 
+enum
+{
+  ROTATE_0_FLIP_NONE,
+  ROTATE_0_FLIP_HORIZONTAL,
+  ROTATE_0_FLIP_VERTICAL,
+  ROTATE_0_FLIP_BOTH,
+  ROTATE_90_FLIP_NONE = 10,
+  ROTATE_90_FLIP_HORIZONTAL,
+  ROTATE_90_FLIP_VERTICAL,
+  ROTATE_90_FLIP_BOTH,
+  ROTATE_180_FLIP_NONE = 20,
+  ROTATE_180_FLIP_HORIZONTAL,
+  ROTATE_180_FLIP_VERTICAL,
+  ROTATE_180_FLIP_BOTH,
+  ROTATE_270_FLIP_NONE = 30,
+  ROTATE_270_FLIP_HORIZONTAL,
+  ROTATE_270_FLIP_VERTICAL,
+  ROTATE_270_FLIP_BOTH,
+  ROTATE_NUM,
+};
+
 GST_DEBUG_CATEGORY_EXTERN (gstwayland_debug);
 #define GST_CAT_DEFAULT gstwayland_debug
 
@@ -325,6 +346,69 @@ gst_wl_window_is_toplevel (GstWlWindow * window)
   return (window->shell_surface != NULL);
 }
 
+#ifdef GST_WLSINK_ENHANCEMENT
+static gint
+gst_wl_window_find_transform (guint rotate_angle, guint flip)
+{
+  gint transform;
+  guint combine = rotate_angle * 10 + flip;
+  FUNCTION;
+  GST_DEBUG ("rotate %d, flip %d, combine %d", rotate_angle, flip, combine);
+  switch (combine) {
+    case ROTATE_0_FLIP_NONE:
+      transform = WL_OUTPUT_TRANSFORM_NORMAL;
+      break;
+    case ROTATE_0_FLIP_HORIZONTAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
+      break;
+    case ROTATE_0_FLIP_VERTICAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
+      break;
+    case ROTATE_0_FLIP_BOTH:
+      transform = WL_OUTPUT_TRANSFORM_180;
+      break;
+    case ROTATE_90_FLIP_NONE:
+      transform = WL_OUTPUT_TRANSFORM_90;
+      break;
+    case ROTATE_90_FLIP_HORIZONTAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_270;
+      break;
+    case ROTATE_90_FLIP_VERTICAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_90;
+      break;
+    case ROTATE_90_FLIP_BOTH:
+      transform = WL_OUTPUT_TRANSFORM_270;
+      break;
+    case ROTATE_180_FLIP_NONE:
+      transform = WL_OUTPUT_TRANSFORM_180;
+      break;
+    case ROTATE_180_FLIP_HORIZONTAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
+      break;
+    case ROTATE_180_FLIP_VERTICAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
+      break;
+    case ROTATE_180_FLIP_BOTH:
+      transform = WL_OUTPUT_TRANSFORM_NORMAL;
+      break;
+    case ROTATE_270_FLIP_NONE:
+      transform = WL_OUTPUT_TRANSFORM_270;
+      break;
+    case ROTATE_270_FLIP_HORIZONTAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_90;
+      break;
+    case ROTATE_270_FLIP_VERTICAL:
+      transform = WL_OUTPUT_TRANSFORM_FLIPPED_270;
+      break;
+    case ROTATE_270_FLIP_BOTH:
+      transform = WL_OUTPUT_TRANSFORM_90;
+      break;
+  }
+
+  return transform;
+}
+
+#endif
 static void
 gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
 {
@@ -414,41 +498,7 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
       break;
   }
 
-  switch (window->rotate_angle) {
-    case DEGREE_0:
-      transform = WL_OUTPUT_TRANSFORM_NORMAL;
-      break;
-    case DEGREE_90:
-      transform = WL_OUTPUT_TRANSFORM_90;
-      break;
-    case DEGREE_180:
-      transform = WL_OUTPUT_TRANSFORM_180;
-      break;
-    case DEGREE_270:
-      transform = WL_OUTPUT_TRANSFORM_270;
-      break;
-
-    default:
-      GST_ERROR ("Unsupported rotation [%d]... set DEGREE 0.",
-          window->rotate_angle);
-      break;
-  }
-
-  switch (window->flip) {
-    case FLIP_NONE:
-      break;
-    case FLIP_VERTICAL:
-      transform = WL_OUTPUT_TRANSFORM_FLIPPED_180;
-      break;
-    case FLIP_HORIZONTAL:
-      transform = WL_OUTPUT_TRANSFORM_FLIPPED;
-      break;
-    case FLIP_BOTH:
-      transform = WL_OUTPUT_TRANSFORM_180;
-      break;
-    default:
-      GST_ERROR ("Unsupported flip [%d]... set FLIP_NONE.", window->flip);
-  }
+  transform = gst_wl_window_find_transform (window->rotate_angle, window->flip);
 
   GST_INFO
       ("window[%d x %d] src[%d,%d,%d x %d],dst[%d,%d,%d x %d],input[%d,%d,%d x %d],result[%d,%d,%d x %d]",
