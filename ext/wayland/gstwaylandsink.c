@@ -749,7 +749,8 @@ gst_wayland_sink_find_display (GstWaylandSink * sink)
           ret = FALSE;
         }
 #ifdef GST_WLSINK_ENHANCEMENT
-        sink->display->USE_TBM = sink->USE_TBM;
+        if (sink->display)
+          sink->display->USE_TBM = sink->USE_TBM;
 #endif
       }
     }

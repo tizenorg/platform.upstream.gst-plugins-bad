@@ -198,7 +198,7 @@ gstbuffer_disposed (GstWlBuffer * self)
   /* in case of normal routine, gstbuffer_disposed() is called by buffer_release()
      but in case of flush_request, this func() is called when basesink unref gstbuffer.
      buffer_release() is not called  if we do 'g_object_unref (self)' */
-  if (!self->display->flush_request)
+  if (self->display && !self->display->flush_request)
 #endif
     g_object_unref (self);
 }
