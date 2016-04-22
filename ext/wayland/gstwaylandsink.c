@@ -141,6 +141,7 @@ enum
   PROP_0,
   PROP_DISPLAY,
 #ifdef GST_WLSINK_ENHANCEMENT
+  PROP_USE_GAPLESS,
   PROP_USE_TBM,
   PROP_ROTATE_ANGLE,
   PROP_DISPLAY_GEOMETRY_METHOD,
@@ -205,6 +206,7 @@ static void gst_wayland_sink_waylandvideo_init (GstWaylandVideoInterface *
 static void gst_wayland_sink_begin_geometry_change (GstWaylandVideo * video);
 static void gst_wayland_sink_end_geometry_change (GstWaylandVideo * video);
 #ifdef GST_WLSINK_ENHANCEMENT
+static gboolean gst_wayland_sink_event (GstBaseSink * bsink, GstEvent * event);
 static void gst_wayland_sink_update_window_geometry (GstWaylandSink * sink);
 static void render_last_buffer (GstWaylandSink * sink);
 #endif
@@ -251,16 +253,25 @@ gst_wayland_sink_class_init (GstWaylandSinkClass * klass)
   gstbasesink_class->propose_allocation =
       GST_DEBUG_FUNCPTR (gst_wayland_sink_propose_allocation);
   gstbasesink_class->render = GST_DEBUG_FUNCPTR (gst_wayland_sink_render);
+#ifdef GST_WLSINK_ENHANCEMENT
+  gstbasesink_class->event = GST_DEBUG_FUNCPTR (gst_wayland_sink_event);
+#endif
 
   g_object_class_install_property (gobject_class, PROP_DISPLAY,
       g_param_spec_string ("display", "Wayland Display name", "Wayland "
           "display name to connect to, if not supplied via the GstContext",
           NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 #ifdef GST_WLSINK_ENHANCEMENT
+  g_object_class_install_property (gobject_class, PROP_USE_GAPLESS,
+      g_param_spec_boolean ("use-gapless", "use gapless",
+          "Use gapless playback on GST_STATE_PLAYING state, "
+          "Last tbm buffer is copied and returned to codec immediately when enabled",
+          TRUE, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
   g_object_class_install_property (gobject_class, PROP_USE_TBM,
-      g_param_spec_boolean ("use-tbm",
-          "Use Tizen Buffer Memory insted of Shared memory",
-          "When enabled, Memory is alloced by TBM insted of SHM ", TRUE,
+      g_param_spec_boolean ("use-tbm", "use tbm buffer",
+          "Use Tizen Buffer Memory insted of Shared memory, "
+          "Memory is alloced by TBM insted of SHM when enabled", TRUE,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class, PROP_ROTATE_ANGLE,
@@ -317,12 +328,16 @@ gst_wayland_sink_init (GstWaylandSink * sink)
 {
   FUNCTION;
 #ifdef GST_WLSINK_ENHANCEMENT
+  sink->use_gapless = TRUE;
+  sink->got_eos_event = FALSE;
   sink->USE_TBM = TRUE;
   sink->display_geometry_method = DEF_DISPLAY_GEOMETRY_METHOD;
   sink->flip = DEF_DISPLAY_FLIP;
   sink->rotate_angle = DEGREE_0;
   sink->orientation = DEGREE_0;
   sink->visible = TRUE;
+  g_mutex_init (&sink->gapless_lock);
+  g_cond_init (&sink->gapless_cond);
 #endif
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
@@ -335,6 +350,20 @@ gst_wayland_sink_stop_video (GstWaylandSink * sink)
   FUNCTION;
   g_return_if_fail (sink != NULL);
   gst_wl_window_render (sink->window, NULL, NULL);
+}
+
+static int
+gst_wayland_sink_need_to_make_flush_buffer (GstWaylandSink * sink)
+{
+  g_return_if_fail (sink != NULL);
+  g_return_if_fail (sink->display != NULL);
+
+  if ((sink->use_gapless && sink->got_eos_event)
+      || sink->display->flush_request) {
+    sink->display->flush_request = TRUE;
+    return TRUE;
+  }
+  return FALSE;
 }
 
 static void
@@ -352,8 +381,8 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
      to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
      wayland can not release buffer if we attach same buffer,
-     if we use visible but we need to attach null buffer and wayland can release buffer,
-     so we don't need to below code. */
+     if we use no visible, we need to attach null buffer and wayland can release buffer,
+     so we don't need to below if() code. */
   if (!sink->visible)
     gst_buffer_unref (wlbuffer->gstbuffer);
 }
@@ -475,17 +504,20 @@ gst_wayland_sink_add_mm_video_buf_info (GstWlDisplay * display,
 }
 
 static int
-gst_wayland_sink_get_mm_video_buf_info (GstWlDisplay * display,
+gst_wayland_sink_get_mm_video_buf_info (GstWaylandSink * sink,
     GstBuffer * buffer)
 {
+  GstWlDisplay *display;
   GstMemory *mem;
   GstMapInfo mem_info = GST_MAP_INFO_INIT;
   MMVideoBuffer *mm_video_buf = NULL;
 
-  g_return_val_if_fail (display != NULL, FALSE);
+  g_return_val_if_fail (sink != NULL, FALSE);
   g_return_val_if_fail (buffer != NULL, FALSE);
 
   FUNCTION;
+  display = sink->display;
+  g_return_val_if_fail (sink->display != NULL, FALSE);
 
   mem = gst_buffer_peek_memory (buffer, 1);
   gst_memory_map (mem, &mem_info, GST_MAP_READ);
@@ -504,7 +536,7 @@ gst_wayland_sink_get_mm_video_buf_info (GstWlDisplay * display,
     display->flush_request = mm_video_buf->flush_request;
     GST_DEBUG ("flush_request value is %d", display->flush_request);
 #ifdef USE_WL_FLUSH_BUFFER
-    if (display->flush_request) {
+    if (gst_wayland_sink_need_to_make_flush_buffer (sink)) {
       if (!gst_wayland_sink_copy_mm_video_buf_info_to_flush (display,
               mm_video_buf)) {
         GST_ERROR ("cat not copy mm_video_buf info to flush");
@@ -521,7 +553,28 @@ gst_wayland_sink_get_mm_video_buf_info (GstWlDisplay * display,
   return TRUE;
 }
 
+static void
+gst_wayland_sink_gapless_render_flush_buffer (GstBaseSink * bsink)
+{
+  GstWaylandSink *sink;
+  GstBuffer *buffer;
+  sink = GST_WAYLAND_SINK (bsink);
+  FUNCTION;
+  g_return_if_fail (sink != NULL);
+  g_return_if_fail (sink->last_buffer != NULL);
+
+  buffer = gst_buffer_copy (sink->last_buffer);
+
+  g_mutex_lock (&sink->gapless_lock);
+  g_cond_wait (&sink->gapless_cond, &sink->gapless_lock);
+
+  gst_wayland_sink_render (bsink, buffer);
+  if (buffer)
+    gst_buffer_unref (buffer);
+  g_mutex_unlock (&sink->gapless_lock);
+}
 #endif
+
 static void
 gst_wayland_sink_get_property (GObject * object,
     guint prop_id, GValue * value, GParamSpec * pspec)
@@ -536,6 +589,9 @@ gst_wayland_sink_get_property (GObject * object,
       GST_OBJECT_UNLOCK (sink);
       break;
 #ifdef GST_WLSINK_ENHANCEMENT
+    case PROP_USE_GAPLESS:
+      g_value_set_boolean (value, sink->use_gapless);
+      break;
     case PROP_USE_TBM:
       g_value_set_boolean (value, sink->USE_TBM);
       break;
@@ -576,6 +632,10 @@ gst_wayland_sink_set_property (GObject * object,
       GST_OBJECT_UNLOCK (sink);
       break;
 #ifdef GST_WLSINK_ENHANCEMENT
+    case PROP_USE_GAPLESS:
+      sink->use_gapless = g_value_get_boolean (value);
+      GST_LOG ("use gapless is (%d)", sink->use_gapless);
+      break;
     case PROP_USE_TBM:
       sink->USE_TBM = g_value_get_boolean (value);
       GST_LOG ("1:USE TBM 0: USE SHM set(%d)", sink->USE_TBM);
@@ -676,9 +736,36 @@ gst_wayland_sink_finalize (GObject * object)
 
   g_mutex_clear (&sink->display_lock);
   g_mutex_clear (&sink->render_lock);
+#ifdef GST_WLSINK_ENHANCEMENT
+  g_mutex_clear (&sink->gapless_lock);
+  g_cond_clear (&sink->gapless_cond);
+#endif
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
+
+#ifdef GST_WLSINK_ENHANCEMENT
+static gboolean
+gst_wayland_sink_event (GstBaseSink * bsink, GstEvent * event)
+{
+  GstWaylandSink *sink;
+  sink = GST_WAYLAND_SINK (bsink);
+
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_EOS:
+      GST_LOG ("get EOS event..state is %d", GST_STATE (sink));
+      if (sink->USE_TBM && sink->display->is_native_format && sink->use_gapless) {
+        sink->got_eos_event = TRUE;
+        gst_wayland_sink_gapless_render_flush_buffer (bsink);
+        sink->got_eos_event = FALSE;
+      }
+      break;
+    default:
+      break;
+  }
+  return GST_BASE_SINK_CLASS (parent_class)->event (bsink, event);
+}
+#endif
 
 /* must be called with the display_lock */
 static void
@@ -1167,6 +1254,14 @@ frame_redraw_callback (void *data, struct wl_callback *callback, uint32_t time)
 
   g_atomic_int_set (&sink->redraw_pending, FALSE);
   wl_callback_destroy (callback);
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (sink->got_eos_event && sink->use_gapless && sink->USE_TBM
+      && sink->display->is_native_format) {
+    g_mutex_lock (&sink->gapless_lock);
+    g_cond_signal (&sink->gapless_cond);
+    g_mutex_unlock (&sink->gapless_lock);
+  }
+#endif
 }
 
 static const struct wl_callback_listener frame_callback_listener = {
@@ -1263,7 +1358,8 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 #ifdef GST_WLSINK_ENHANCEMENT
 
   wlbuffer = gst_buffer_get_wl_buffer (buffer);
-  if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)) {
+  if (G_LIKELY (wlbuffer && wlbuffer->display == sink->display)
+      && !(sink->use_gapless && sink->got_eos_event)) {
     GST_LOG_OBJECT (sink, "buffer %p has a wl_buffer from our display, " "writing directly", buffer);   //buffer is from our  pool and have wl_buffer
     GST_INFO ("wl_buffer (%p)", wlbuffer->wlbuffer);
     to_render = buffer;
@@ -1313,11 +1409,12 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
       if (sink->USE_TBM && sink->display->is_native_format) {
         /* in case of SN12 or ST12 */
-        if (!gst_wayland_sink_get_mm_video_buf_info (sink->display, buffer))
+        if (!gst_wayland_sink_get_mm_video_buf_info (sink, buffer))
           return GST_FLOW_ERROR;
 
         wlbuffer = gst_buffer_get_wl_buffer (buffer);
-        if (G_UNLIKELY (!wlbuffer)) {
+        if (G_UNLIKELY (!wlbuffer) || (sink->use_gapless
+                && sink->got_eos_event)) {
           wbuf =
               gst_wl_shm_memory_construct_wl_buffer (mem, sink->display,
               &sink->video_info);
@@ -1389,7 +1486,8 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
   }
 
   if (sink->USE_TBM && sink->display->is_native_format) {
-    if (G_UNLIKELY (buffer == sink->last_buffer)) {
+    if (G_UNLIKELY (buffer == sink->last_buffer) && !(sink->use_gapless
+            && sink->got_eos_event)) {
       GST_LOG_OBJECT (sink, "Buffer already being rendered");
       goto done;
     }

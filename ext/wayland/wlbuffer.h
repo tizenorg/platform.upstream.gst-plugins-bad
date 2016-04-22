@@ -45,6 +45,7 @@ struct _GstWlBuffer
   gboolean used_by_compositor;
 
 #ifdef GST_WLSINK_ENHANCEMENT
+  gboolean is_flush_request;
   tbm_surface_h tsurface;
 #endif
 };
