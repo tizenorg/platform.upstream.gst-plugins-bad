@@ -102,6 +102,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
     /* allocate shm pool */
     snprintf (filename, 1024, "%s/%s-%d-%s", g_get_user_runtime_dir (),
         "wayland-shm", init++, "XXXXXX");
+	GST_INFO ("opening temp file %s",filename);
 
     fd = g_mkstemp (filename);
     if (fd < 0) {

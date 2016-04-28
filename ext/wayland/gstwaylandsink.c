@@ -343,6 +343,8 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   GstWlBuffer *wlbuffer;
   FUNCTION;
   g_return_if_fail (sink != NULL);
+  g_return_if_fail (sink->last_buffer != NULL);
+
   GST_DEBUG ("gstbuffer ref count is %d",
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);

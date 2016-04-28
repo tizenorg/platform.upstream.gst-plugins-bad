@@ -449,6 +449,9 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   /*default res.w and res.h */
   dst.w = window->render_rectangle.w;
   dst.h = window->render_rectangle.h;
+  dst.x = window->render_rectangle.x;
+  dst.y = window->render_rectangle.y;
+
   GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
   GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
       window->render_rectangle.x, window->render_rectangle.y,
@@ -457,8 +460,6 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
     case DISP_GEO_METHOD_LETTER_BOX:
       GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
       gst_video_sink_center_rect (src, dst, &res, TRUE);
-      res.x += window->render_rectangle.x;
-      res.y += window->render_rectangle.y;
       break;
     case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
       if (src.w > dst.w || src.h > dst.h) {
@@ -466,8 +467,6 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
         GST_INFO
             ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
         gst_video_sink_center_rect (src, dst, &res, TRUE);
-        res.x += window->render_rectangle.x;
-        res.y += window->render_rectangle.y;
       } else {
         /*ORIGIN SIZE */
         GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
@@ -522,10 +521,8 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
 
   if (window->video_subsurface) {
     GST_INFO ("have window->subsurface");
-    wl_subsurface_set_position (window->video_subsurface,
-        window->render_rectangle.x + res.x, window->render_rectangle.y + res.y);
-    GST_INFO ("wl_subsurface_set_position(%d,%d)",
-        window->render_rectangle.x + res.x, window->render_rectangle.y + res.y);
+    wl_subsurface_set_position (window->video_subsurface, res.x, res.y);
+    GST_INFO ("wl_subsurface_set_position(%d,%d)", res.x, res.y);
   }
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
   GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
