@@ -1330,6 +1330,30 @@ gst_adaptive_demux_src_query (GstPad * pad, GstObject * parent,
       }
       GST_MANIFEST_UNLOCK (demux);
       break;
+#ifdef GST_ADAPTIVE_MODIFICATION
+      case GST_QUERY_CUSTOM:{
+        /* Let decoder(which can not support DRC automatically) know the current streaming mode */
+
+        const GstStructure *s;
+        s = gst_query_get_structure (query);
+
+        if (gst_structure_has_name (s, "GstAdaptiveStreaming")) {
+          GValue value = { 0, };
+          GST_DEBUG_OBJECT (demux, "custom query to check adaptive streaming");
+
+          g_value_init (&value, G_TYPE_BOOLEAN);
+          g_value_set_boolean (&value, TRUE);
+
+          gst_structure_set_value ((GstStructure *)s, "adaptive-streaming", &value);
+          ret = TRUE;
+        } else {
+          GST_DEBUG_OBJECT (demux, "Unsupported query");
+          ret = FALSE;
+        }
+        break;
+      }
+#endif
+
     default:
       /* Don't forward queries upstream because of the special nature of this
        *  "demuxer", which relies on the upstream element only to be fed
