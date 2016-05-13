@@ -135,12 +135,10 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 {
   GstWlWindow *window;
   GstVideoInfo info;
-#ifndef GST_WLSINK_ENHANCEMENT
   GstBuffer *buf;
   GstMapInfo mapinfo;
   struct wl_buffer *wlbuf;
   GstWlBuffer *gwlbuf;
-#endif
   struct wl_region *region;
   FUNCTION;
 
@@ -211,8 +209,9 @@ gst_wl_window_new_internal (GstWlDisplay * display)
     /* Inform enlightenment of surface which render video */
     window->video_object =
         tizen_video_get_object (display->tizen_video, window->video_surface);
-  }
-#else /* open source */
+  /* gst_wl_buffer_attach is needed for mapping area_surface */
+  } else { /* shm case */
+#endif
   buf = gst_buffer_new_allocate (gst_wl_shm_allocator_get (), info.size, NULL);
   gst_buffer_map (buf, &mapinfo, GST_MAP_WRITE);
   *((guint32 *) mapinfo.data) = 0;      /* paint it black */
@@ -226,8 +225,9 @@ gst_wl_window_new_internal (GstWlDisplay * display)
   /* at this point, the GstWlBuffer keeps the buffer
    * alive and will free it on wl_buffer::release */
   gst_buffer_unref (buf);
+#ifdef GST_WLSINK_ENHANCEMENT
+  }
 #endif
-
   /* do not accept input */
   region = wl_compositor_create_region (display->compositor);
   wl_surface_set_input_region (window->area_surface, region);
