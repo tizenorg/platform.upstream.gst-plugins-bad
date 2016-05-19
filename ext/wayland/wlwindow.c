@@ -126,6 +126,43 @@ gst_wl_window_finalize (GObject * gobject)
   G_OBJECT_CLASS (gst_wl_window_parent_class)->finalize (gobject);
 }
 
+#ifdef GST_WLSINK_ENHANCEMENT
+static void
+gst_wl_window_map_sub_surface (GstWlDisplay * display, GstWlWindow * window,
+    GstVideoInfo * info)
+{
+  /* A sub-surface becomes mapped, when a non-NULL wl_buffer is applied
+   * and the parent surface is mapped */
+  GstBuffer *buf;
+  GstMapInfo mapinfo;
+  struct wl_buffer *wlbuf;
+  GstWlBuffer *gwlbuf;
+  GstWlShmAllocator *self = NULL;
+  FUNCTION;
+  g_return_val_if_fail (display, NULL);
+  g_return_val_if_fail (window, NULL);
+  g_return_val_if_fail (info, NULL);
+
+  self = GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
+  self->display = display;
+
+  buf = gst_buffer_new_allocate (gst_wl_shm_allocator_get (), info->size, NULL);
+  gst_buffer_map (buf, &mapinfo, GST_MAP_WRITE);
+  *((guint32 *) mapinfo.data) = 0;      /* paint it black */
+  gst_buffer_unmap (buf, &mapinfo);
+  wlbuf =
+      gst_wl_shm_memory_construct_wl_buffer (gst_buffer_peek_memory (buf, 0),
+      display, info);
+
+  gwlbuf = gst_buffer_add_wl_buffer (buf, wlbuf, display);
+  gst_wl_buffer_attach (gwlbuf, window->area_surface);
+
+  /* at this point, the GstWlBuffer keeps the buffer
+   * alive and will free it on wl_buffer::release */
+  gst_buffer_unref (buf);
+}
+#endif
+
 static GstWlWindow *
 #ifdef GST_WLSINK_ENHANCEMENT
 gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
@@ -211,6 +248,14 @@ gst_wl_window_new_internal (GstWlDisplay * display)
     /* Inform enlightenment of surface which render video */
     window->video_object =
         tizen_video_get_object (display->tizen_video, window->video_surface);
+
+    /* to use shm memory for mapping sub-surface, set FALSE to USE_TBM*/
+    window->display->USE_TBM = FALSE;
+    gst_wl_window_map_sub_surface (display, window, &info);
+    /*restore USE_TBM*/
+    window->display->USE_TBM = TRUE;
+  } else {
+    gst_wl_window_map_sub_surface (display, window, &info);
   }
 #else /* open source */
   buf = gst_buffer_new_allocate (gst_wl_shm_allocator_get (), info.size, NULL);
