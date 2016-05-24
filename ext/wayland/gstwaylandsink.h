@@ -97,6 +97,8 @@ struct _GstWaylandSink
   GMutex render_lock;
   GstBuffer *last_buffer;
 #ifdef GST_WLSINK_ENHANCEMENT
+  gboolean use_gapless;
+  gboolean got_eos_event;
   gboolean USE_TBM;
   GstCaps *caps;
   guint rotate_angle;
@@ -104,6 +106,9 @@ struct _GstWaylandSink
   guint orientation;
   guint flip;
   gboolean visible;
+
+  GMutex gapless_lock;
+  GCond gapless_cond;
 #endif
 };
 
