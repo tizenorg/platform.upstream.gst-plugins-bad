@@ -91,7 +91,7 @@ gst_wl_buffer_dispose (GObject * gobject)
 {
   GstWlBuffer *self = GST_WL_BUFFER (gobject);
   FUNCTION;
-
+  GST_INFO ("%p", self);
   GST_TRACE_OBJECT (self, "dispose");
 
   /* if the display is shutting down and we are trying to dipose
@@ -117,12 +117,13 @@ gst_wl_buffer_finalize (GObject * gobject)
   if (self->tsurface)
     tbm_surface_destroy (self->tsurface);
 #endif
+  GST_INFO ("%p", self->wlbuffer);
   if (self->wlbuffer)
     wl_buffer_destroy (self->wlbuffer);
 
 #ifdef USE_WL_FLUSH_BUFFER
   if (self->display) {
-    if (self->display->flush_request) {
+    if (self->is_flush_request) {
       if (self->display->flush_tbm_bufmgr)
         self->display->flush_tbm_bufmgr = NULL;
       for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
@@ -166,8 +167,8 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
 
 #ifdef USE_WL_FLUSH_BUFFER
   /* unref should be last, because it may end up destroying the GstWlBuffer */
-  if (!self->display->flush_request) {
-    /*in case of flush_request, gstbuffer ref-count has already decreased. */
+  if (!self->is_flush_request) {
+    /*in case of is_flush_request, gstbuffer ref-count has already decreased. */
     gst_buffer_unref (self->gstbuffer);
   } else {
     /*we blocked below code at gstbuffer_disposed() */
@@ -188,6 +189,7 @@ gstbuffer_disposed (GstWlBuffer * self)
 {
   FUNCTION;
   g_assert (!self->used_by_compositor);
+  GST_INFO ("%p", self->gstbuffer);
   self->gstbuffer = NULL;
 
   GST_TRACE_OBJECT (self, "owning GstBuffer was finalized");
@@ -196,9 +198,9 @@ gstbuffer_disposed (GstWlBuffer * self)
    * finalizing and it has taken an additional reference to it */
 #ifdef USE_WL_FLUSH_BUFFER
   /* in case of normal routine, gstbuffer_disposed() is called by buffer_release()
-     but in case of flush_request, this func() is called when basesink unref gstbuffer.
+     but in case of is_flush_request, this func() is called when basesink unref gstbuffer.
      buffer_release() is not called  if we do 'g_object_unref (self)' */
-  if (self->display && !self->display->flush_request)
+  if (!self->is_flush_request)
 #endif
     g_object_unref (self);
 }
@@ -220,6 +222,11 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
   else
     self->tsurface = NULL;
   GST_INFO ("self->tsurface(%p)", self->tsurface);
+#endif
+#ifdef USE_WL_FLUSH_BUFFER
+  self->is_flush_request = FALSE;
+  if (display->flush_request)
+    self->is_flush_request = TRUE;
 #endif
 
   gst_wl_display_register_buffer (self->display, self); //register GstWlBuffer
@@ -289,9 +296,9 @@ gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
    * the compositor is using the buffer and it should not return
    * back to the pool and be re-used until the compositor releases it. */
 #ifdef USE_WL_FLUSH_BUFFER
-  /* in case of flush_request, we need to copy info and unref gstbuffer
+  /* in case of is_flush_request, we need to copy info and unref gstbuffer
      so, we need not to increase ref count. */
-  if (!self->display->flush_request)
+  if (!self->is_flush_request)
 #endif
     gst_buffer_ref (self->gstbuffer);
 
