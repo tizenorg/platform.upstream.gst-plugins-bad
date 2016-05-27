@@ -65,7 +65,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
 
     self->display->tbm_bufmgr =
         wayland_tbm_client_get_bufmgr (self->display->tbm_client);
-    g_return_if_fail (self->display->tbm_bufmgr != NULL);
+    g_return_val_if_fail (self->display->tbm_bufmgr != NULL, NULL);
 
     self->display->tbm_bo[idx] =
         tbm_bo_alloc (self->display->tbm_bufmgr, size, TBM_BO_DEFAULT);

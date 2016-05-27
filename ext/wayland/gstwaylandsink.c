@@ -412,7 +412,7 @@ gst_wayland_sink_make_flush_buffer (GstWlDisplay * display,
 
   display->flush_tbm_bufmgr =
       wayland_tbm_client_get_bufmgr (display->tbm_client);
-  g_return_if_fail (display->flush_tbm_bufmgr != NULL);
+  g_return_val_if_fail (display->flush_tbm_bufmgr != NULL, FALSE);
 
   for (i = 0; i < NV_BUF_PLANE_NUM; i++) {
     if (mm_video_buf->handle.bo[i] != NULL) {
