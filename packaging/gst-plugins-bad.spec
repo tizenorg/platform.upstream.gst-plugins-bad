@@ -4,7 +4,7 @@
 
 Name:           gst-plugins-bad
 Version:        1.6.1
-Release:        4
+Release:        5
 Summary:        GStreamer Streaming-Media Framework Plug-Ins
 License:        LGPL-2.0+
 Group:          Multimedia/Framework
@@ -84,11 +84,43 @@ export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEAD
 	--disable-static\
 	--disable-examples\
 	--enable-experimental\
+%if "%{?profile}" == "tv"
+	--enable-tv\
+	--disable-autoconvert\
+	--disable-camerabin2\
+	--disable-dash\
+	--disable-hls\
+	--disable-id3tag\
+	--disable-jpegformat\
+	--disable-mpegdemux\
+	--disable-smoothstreaming\
+	--disable-coloreffects\
+	--disable-rtp\
+	--disable-gl\
+%endif
+	--disable-accurip\
+	--disable-adpcmdec\
+	--disable-audiofxbad\
+	--disable-decklink\
+	--disable-dvb\
+	--disable-fieldanalysis\
+	--disable-gdp\
+	--disable-ivtc\
+	--disable-liveadder\
+	--disable-rawparse\
+	--disable-videofilters\
+	--disable-yadif\
+	--disable-curl\
+	--disable-dtls\
+	--disable-fbdev\
+	--disable-uvch264\
+	--disable-vcd\
+	--disable-y4m\
 	--disable-adpcmenc\
 	--disable-aiff\
 	--disable-asfmux\
 	--disable-audiomixer\
-	--enable-compositor\
+	--disable-compositor\
 	--disable-audiovisualizers\
 	--disable-bayer\
 	--disable-cdxaparse\
@@ -157,35 +189,53 @@ rm -rf $RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %defattr(-, root, root)
 %license COPYING.LIB
-%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
+%if "%{?profile}" != "tv"
+%{_libdir}/gstreamer-%{gst_branch}/libgstautoconvert.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstcamerabin2.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstcoloreffects.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstid3tag.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstjpegformat.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsdemux.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstsmoothstreaming.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstdashdemux.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstopengl.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstrtpbad.so
+%{_libdir}/gstreamer-%{gst_branch}/libgstfragmented.so
+
+%{_libdir}/libgstinsertbin-%{gst_branch}.so.0*
+%{_libdir}/libgstphotography-%{gst_branch}.so.0*
+%{_libdir}/libgstbasecamerabinsrc-%{gst_branch}.so.0*
+%{_libdir}/libgstbadbase-%{gst_branch}.so.0*
+%{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
+%{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
+%{_libdir}/libgstadaptivedemux-1.0.so.0
+%{_libdir}/libgstadaptivedemux-1.0.so.0.601.0
+%{_libdir}/libgstgl-1.0.so.0
+%{_libdir}/libgstgl-1.0.so.0.601.0
+%endif
+#%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmdec.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstadpcmenc.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstasfmux.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstaudiovisualizers.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstautoconvert.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstbayer.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstcamerabin2.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstcoloreffects.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstcurl.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstcurl.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstdataurisrc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstdebugutilsbad.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdvb.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdvb.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstdvbsuboverlay.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstfestival.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstgaudieffects.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstgdp.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstgdp.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstgeometrictransform.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstid3tag.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstinter.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstinterlace.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstjpegformat.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstliveadder.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstliveadder.so
 
-%{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsdemux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegtsdemux.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegtsmux.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstpcapparse.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstpnm.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstrawparse.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstrawparse.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstremovesilence.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstsdpelem.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstsegmentclip.so
@@ -193,54 +243,39 @@ rm -rf $RPM_BUILD_ROOT
 #%{_libdir}/gstreamer-%{gst_branch}/libgstsmooth.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstspeed.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstvideoparsersbad.so
-%{_libdir}/gstreamer-%{gst_branch}/libgsty4mdec.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgsty4mdec.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstdvdspu.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfieldanalysis.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstfieldanalysis.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstfrei0r.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstsiren.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstsubenc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmpegpsmux.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdecklink.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstaccurip.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstaiff.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfbdevsink.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstaudiofxbad.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstfbdevsink.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstfreeverb.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstivtc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstivtc.so
 %{_libdir}/gstreamer-%{gst_branch}/libgstmidi.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstmxf.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstrfbsrc.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstsmoothstreaming.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdashdemux.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstvideofiltersbad.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstyadif.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstuvch264.so
 
 %if %{with wayland}
 %{_libdir}/libgstwayland-%{gst_branch}.so.0*
 %{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
 %endif
 
-%{_libdir}/libgstphotography-%{gst_branch}.so.0*
-%{_libdir}/libgstbasecamerabinsrc-%{gst_branch}.so.0*
 %{_libdir}/libgstcodecparsers-%{gst_branch}.so.0*
-%{_libdir}/libgstinsertbin-%{gst_branch}.so.0*
 %{_libdir}/libgstmpegts-%{gst_branch}.so.0*
-%{_libdir}/libgsturidownloader-%{gst_branch}.so.0*
-%{_libdir}/libgstbadbase-%{gst_branch}.so.0*
-%{_libdir}/libgstbadvideo-%{gst_branch}.so.0*
-%{_libdir}/gstreamer-%{gst_branch}/libgstcompositor.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstdtls.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstfragmented.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstopengl.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstrtpbad.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstcompositor.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstdtls.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstrtponvif.so
-%{_libdir}/gstreamer-%{gst_branch}/libgstvcdsrc.so
+#%{_libdir}/gstreamer-%{gst_branch}/libgstvcdsrc.so
 #%{_libdir}/gstreamer-%{gst_branch}/libgstwaylandsink.so
-%{_libdir}/libgstadaptivedemux-1.0.so.0
-%{_libdir}/libgstadaptivedemux-1.0.so.0.601.0
-%{_libdir}/libgstgl-1.0.so.0
-%{_libdir}/libgstgl-1.0.so.0.601.0
 #%{_libdir}/libgstwayland-1.0.so.0
 #%{_libdir}/libgstwayland-1.0.so.0.601.0
 #/usr/share/gstreamer-%{gst_branch}/presets/GstFreeverb.prs
@@ -250,7 +285,9 @@ rm -rf $RPM_BUILD_ROOT
 %manifest %{name}.manifest
 %defattr(-, root, root)
 %{_includedir}/gstreamer-%{gst_branch}
+%if "%{?profile}" != "tv"
 %{_libdir}/gstreamer-%{gst_branch}/include/gst/gl/gstglconfig.h
+%endif
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/gstreamer-codecparsers-%{gst_branch}.pc
 %{_libdir}/pkgconfig/gstreamer-plugins-bad-%{gst_branch}.pc

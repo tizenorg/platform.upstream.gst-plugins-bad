@@ -1739,6 +1739,17 @@ AC_SUBST(LIBUDEV_LIBS)
 AC_SUBST(LIBUSB_CFLAGS)
 AC_SUBST(LIBUSB_LIBS)
 
+dnl check for tv profile
+AC_ARG_ENABLE(tv, AC_HELP_STRING([--enable-tv], [enable tv profile]),
+        [
+          case "${enableval}" in
+           yes) TV_PROFILE=yes ;;
+           no)  TV_PROFILE=no ;;
+           *)   AC_MSG_ERROR(bad value ${enableval} for --enable-tv) ;;
+          esac
+        ],
+        [TV_PROFILE=no])
+AM_CONDITIONAL([TV_PROFILE], [test "x$TV_PROFILE" = "xyes"])
 
 dnl *** ext plug-ins ***
 dnl keep this list sorted alphabetically !
