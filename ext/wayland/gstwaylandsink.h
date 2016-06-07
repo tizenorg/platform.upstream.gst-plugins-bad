@@ -98,6 +98,7 @@ struct _GstWaylandSink
   GstBuffer *last_buffer;
 #ifdef GST_WLSINK_ENHANCEMENT
   gboolean use_gapless;
+  gboolean keep_camera_preview;
   gboolean got_eos_event;
   gboolean USE_TBM;
   GstCaps *caps;
@@ -107,8 +108,8 @@ struct _GstWaylandSink
   guint flip;
   gboolean visible;
 
-  GMutex gapless_lock;
-  GCond gapless_cond;
+  GMutex render_flush_buffer_lock;
+  GCond render_flush_buffer_cond;
 #endif
 };
 
