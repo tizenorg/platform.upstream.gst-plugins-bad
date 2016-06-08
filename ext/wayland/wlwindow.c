@@ -194,6 +194,7 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 #if 1                           /* create shell_surface here for enlightenment */
   /* go toplevel */
   if (display->need_shell_surface) {
+    /* for internal window */
     window->shell_surface = wl_shell_get_shell_surface (display->shell,
         window->area_surface);
   } else if (display->use_parent_wl_surface) {
@@ -249,10 +250,10 @@ gst_wl_window_new_internal (GstWlDisplay * display)
     window->video_object =
         tizen_video_get_object (display->tizen_video, window->video_surface);
 
-    /* to use shm memory for mapping sub-surface, set FALSE to USE_TBM*/
+    /* to use shm memory for mapping sub-surface, set FALSE to USE_TBM */
     window->display->USE_TBM = FALSE;
     gst_wl_window_map_sub_surface (display, window, &info);
-    /*restore USE_TBM*/
+    /*restore USE_TBM */
     window->display->USE_TBM = TRUE;
   } else {
     gst_wl_window_map_sub_surface (display, window, &info);
