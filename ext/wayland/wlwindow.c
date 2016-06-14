@@ -139,9 +139,10 @@ gst_wl_window_map_sub_surface (GstWlDisplay * display, GstWlWindow * window,
   GstWlBuffer *gwlbuf;
   GstWlShmAllocator *self = NULL;
   FUNCTION;
-  g_return_val_if_fail (display, NULL);
-  g_return_val_if_fail (window, NULL);
-  g_return_val_if_fail (info, NULL);
+
+  g_return_if_fail (display != NULL);
+  g_return_if_fail (window != NULL);
+  g_return_if_fail (info != NULL);
 
   self = GST_WL_SHM_ALLOCATOR (gst_wl_shm_allocator_get ());
   self->display = display;
