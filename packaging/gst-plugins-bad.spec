@@ -79,7 +79,7 @@ processing capabilities can be added simply by installing new plug-ins.
 %build
 export V=1
 NOCONFIGURE=1 ./autogen.sh
-export CFLAGS="-DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS -DGST_EXT_AVOID_PAD_SWITCHING -DGST_ADAPTIVE_MODIFICATION"
+export CFLAGS+=" -Wall -g -fPIC -DGST_WLSINK_ENHANCEMENT -DGST_TBM_SUPPORT -DMESA_EGL_NO_X11_HEADERS -DGST_EXT_AVOID_PAD_SWITCHING -DGST_ADAPTIVE_MODIFICATION"
 %configure\
 	--disable-static\
 	--disable-examples\
