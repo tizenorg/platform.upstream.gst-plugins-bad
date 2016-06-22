@@ -398,7 +398,7 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   GST_DEBUG ("gstbuffer ref count is %d",
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
-  if (wlbuffer)
+  g_return_if_fail (wlbuffer != NULL);
     wlbuffer->used_by_compositor = FALSE;
   /*need to render last buffer, reuse current GstWlBuffer */
   render_last_buffer (sink);
