@@ -33,7 +33,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/types.h>
-
+#define DUMP_BUFFER
 #ifdef DUMP_BUFFER
 int dump_cnt = 0;
 int _write_rawdata (const char *file, const void *data, unsigned int size);
@@ -102,7 +102,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
     /* allocate shm pool */
     snprintf (filename, 1024, "%s/%s-%d-%s", g_get_user_runtime_dir (),
         "wayland-shm", init++, "XXXXXX");
-	GST_INFO ("opening temp file %s",filename);
+    GST_INFO ("opening temp file %s", filename);
 
     fd = g_mkstemp (filename);
     if (fd < 0) {
@@ -286,9 +286,12 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
         }
       }
 #endif
-      GST_DEBUG ("TBM bo %p %p %p", display->bo[0], display->bo[1], display->bo[2]);
-      ts_info.width = width;
-      ts_info.height = height;
+      GST_DEBUG ("TBM bo %p %p %p", display->bo[0], display->bo[1],
+          display->bo[2]);
+      GST_INFO ("stride_width[0]: %d stride_height[0]:%d",
+          display->stride_width[0], display->stride_height[1]);
+      ts_info.width = display->stride_width[0];
+      ts_info.height = display->stride_height[0];
       ts_info.format = format;
       ts_info.bpp = tbm_surface_internal_get_bpp (ts_info.format);
       ts_info.num_planes = tbm_surface_internal_get_num_planes (ts_info.format);
@@ -302,8 +305,10 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       ts_info.planes[1].offset = (display->bo[1]) ? 0 : display->plane_size[0];
       num_bo = (display->bo[1]) ? 2 : 1;
       GST_INFO ("num_bo(%d)", num_bo);
+
       display->tsurface =
-          tbm_surface_internal_create_with_bos (&ts_info, (tbm_bo *)display->bo, num_bo);
+          tbm_surface_internal_create_with_bos (&ts_info,
+          (tbm_bo *) display->bo, num_bo);
       GST_INFO ("display->tsurface(%p)", display->tsurface);
       GST_INFO ("tbm_client(%p),tsurface(%p)", display->tbm_client,
           display->tsurface);
@@ -323,8 +328,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       g_return_val_if_fail (shm_mem->fd != -1, NULL);
 
       GST_DEBUG_OBJECT (mem->allocator, "Creating wl_buffer of size %"
-          G_GSSIZE_FORMAT " (%d x %d, stride %d)", size, width,
-          height, stride);
+          G_GSSIZE_FORMAT " (%d x %d, stride %d)", size, width, height, stride);
 
 #ifdef DUMP_BUFFER
       virtual_addr = tbm_bo_get_handle (shm_mem->tbm_bo_ptr, TBM_DEVICE_CPU);
@@ -357,8 +361,8 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       GST_INFO ("tbm_bo (%p)", shm_mem->tbm_bo_ptr);
 
       display->tsurface =
-          tbm_surface_internal_create_with_bos (&ts_info, (tbm_bo *)&shm_mem->tbm_bo_ptr,
-          1);
+          tbm_surface_internal_create_with_bos (&ts_info,
+          (tbm_bo *) & shm_mem->tbm_bo_ptr, 1);
       wbuffer =
           wayland_tbm_client_create_buffer (display->tbm_client,
           display->tsurface);
