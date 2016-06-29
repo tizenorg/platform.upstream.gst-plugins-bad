@@ -1054,6 +1054,9 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
     gst_structure_set_value (gst_caps_get_structure (caps, 0), "format", &list);
 
     GST_DEBUG_OBJECT (sink, "display caps: %" GST_PTR_FORMAT, caps);
+    g_value_unset (&list);
+    g_value_unset (&value);
+
   }
 
   g_mutex_unlock (&sink->display_lock);
@@ -1096,7 +1099,6 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   if (!gst_video_info_from_caps (&info, caps))
     goto invalid_format;
 #ifdef GST_WLSINK_ENHANCEMENT
-  sink->caps = gst_caps_copy (caps);
   if (sink->USE_TBM) {
     tbm_format =
         gst_video_format_to_wl_tbm_format (GST_VIDEO_INFO_FORMAT (&info));

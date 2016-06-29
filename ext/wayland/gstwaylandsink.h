@@ -101,7 +101,6 @@ struct _GstWaylandSink
   gboolean keep_camera_preview;
   gboolean got_eos_event;
   gboolean USE_TBM;
-  GstCaps *caps;
   guint rotate_angle;
   guint display_geometry_method;
   guint orientation;
