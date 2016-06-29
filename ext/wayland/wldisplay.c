@@ -152,6 +152,8 @@ gst_wl_display_finalize (GObject * gobject)
     wl_display_disconnect (self->display);
   }
 #ifdef GST_WLSINK_ENHANCEMENT
+  if (self->scaler)
+    wl_scaler_destroy (self->scaler);
   if (self->tizen_policy)
     tizen_policy_destroy (self->tizen_policy);
   if (self->tizen_video)
