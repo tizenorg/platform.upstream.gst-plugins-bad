@@ -399,7 +399,7 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   g_return_if_fail (wlbuffer != NULL);
-    wlbuffer->used_by_compositor = FALSE;
+  wlbuffer->used_by_compositor = FALSE;
   /*need to render last buffer, reuse current GstWlBuffer */
   render_last_buffer (sink);
   /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
@@ -751,10 +751,13 @@ gst_wayland_sink_set_property (GObject * object,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
-  if (sink->video_info_changed && sink->window
-      && GST_STATE (sink) == GST_STATE_PAUSED) {
-    gst_wayland_sink_update_last_buffer_geometry (sink);
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (sink->video_info_changed && sink->window) {
+    gst_wl_window_set_video_info_change (sink->window, TRUE);
+    if (GST_STATE (sink) == GST_STATE_PAUSED)
+      gst_wayland_sink_update_last_buffer_geometry (sink);
   }
+#endif
   g_mutex_unlock (&sink->render_lock);
 
 }
@@ -1348,6 +1351,10 @@ render_last_buffer (GstWaylandSink * sink)
   struct wl_surface *surface;
   struct wl_callback *callback;
   FUNCTION;
+#ifdef GST_WLSINK_ENHANCEMENT
+  g_return_if_fail (sink->last_buffer != NULL);
+  g_return_if_fail (sink->window != NULL);
+#endif
 
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   surface = gst_wl_window_get_wl_surface (sink->window);
@@ -1358,20 +1365,13 @@ render_last_buffer (GstWaylandSink * sink)
   wl_callback_add_listener (callback, &frame_callback_listener, sink);
 
   if (G_UNLIKELY (sink->video_info_changed)) {
+#ifdef GST_WLSINK_ENHANCEMENT
+      gst_wl_window_set_video_info_change (sink->window, TRUE);
+#endif
     info = &sink->video_info;
     sink->video_info_changed = FALSE;
   }
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (sink->last_buffer)
-    gst_wl_window_render (sink->window, wlbuffer, info);
-  else {
-    if (G_UNLIKELY (info)) {
-      gst_wl_window_set_video_info (sink->window, info);
-    }
-  }
-#else
   gst_wl_window_render (sink->window, wlbuffer, info);
-#endif
 }
 
 static GstFlowReturn
@@ -1399,11 +1399,10 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
       sink->window =
           gst_wl_window_new_toplevel (sink->display, &sink->video_info);
     }
-  }
 #ifdef GST_WLSINK_ENHANCEMENT
-  gst_wayland_sink_update_window_geometry (sink);
-  sink->video_info_changed = TRUE;
+    gst_wayland_sink_update_window_geometry (sink);
 #endif
+  }
   /* drop buffers until we get a frame callback */
   if (g_atomic_int_get (&sink->redraw_pending) == TRUE)
     goto done;
@@ -1733,7 +1732,6 @@ gst_wayland_sink_set_wl_window_wl_surface_id (GstVideoOverlay * overlay,
     }
   }
   gst_wayland_sink_update_window_geometry (sink);
-
   g_mutex_unlock (&sink->render_lock);
 
 }
@@ -1779,6 +1777,9 @@ gst_wayland_sink_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
           "ignoring window handle");
     }
   }
+#ifdef GST_WLSINK_ENHANCEMENT
+  gst_wayland_sink_update_window_geometry (sink);
+#endif
   g_mutex_unlock (&sink->render_lock);
 
 }

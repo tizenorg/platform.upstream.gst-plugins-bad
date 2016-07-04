@@ -248,6 +248,7 @@ gst_wl_window_new_internal (GstWlDisplay * display)
 #ifdef GST_WLSINK_ENHANCEMENT
   if (window->display->USE_TBM) {
     /* Inform enlightenment of surface which render video */
+    /* tizen_video(tbm) render on video_surface */
     window->video_object =
         tizen_video_get_object (display->tizen_video, window->video_surface);
 
@@ -397,7 +398,7 @@ gst_wl_window_is_toplevel (GstWlWindow * window)
 static gint
 gst_wl_window_find_transform (guint rotate_angle, guint flip)
 {
-  gint transform;
+  gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
   guint combine = rotate_angle * 10 + flip;
   FUNCTION;
   GST_DEBUG ("rotate %d, flip %d, combine %d", rotate_angle, flip, combine);
@@ -625,8 +626,17 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
     window->video_height = info->height;
 
     wl_subsurface_set_sync (window->video_subsurface);
+#ifdef GST_WLSINK_ENHANCEMENT
+    /* check video_info_changed to remove repetitive IPC */
+    if (window->video_info_changed) {
+      gst_wl_window_resize_video_surface (window, FALSE);
+      window->video_info_changed = FALSE;
+    }
+#else
     gst_wl_window_resize_video_surface (window, FALSE);
+#endif
   }
+
   GST_INFO ("GstWlBuffer(%p)", buffer);
   if (G_LIKELY (buffer))
     gst_wl_buffer_attach (buffer, window->video_surface);
@@ -698,20 +708,6 @@ gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
 
 #ifdef GST_WLSINK_ENHANCEMENT
 void
-gst_wl_window_set_video_info (GstWlWindow * window, const GstVideoInfo * info)
-{
-  FUNCTION;
-  g_return_if_fail (window != NULL);
-
-  window->video_width =
-      gst_util_uint64_scale_int_round (info->width, info->par_n, info->par_d);
-  window->video_height = info->height;
-
-  if (window->render_rectangle.w != 0)
-    gst_wl_window_resize_video_surface (window, FALSE);
-}
-
-void
 gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
 {
   FUNCTION;
@@ -746,4 +742,14 @@ gst_wl_window_set_flip (GstWlWindow * window, guint flip)
   window->flip = flip;
   GST_INFO ("flip value is (%d)", window->flip);
 }
+
+void
+gst_wl_window_set_video_info_change (GstWlWindow * window, guint changed)
+{
+  FUNCTION;
+  g_return_if_fail (window != NULL);
+  window->video_info_changed = changed;
+  GST_INFO ("video_info_changed value is (%d)", window->video_info_changed);
+}
+
 #endif
