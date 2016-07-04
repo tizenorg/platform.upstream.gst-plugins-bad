@@ -49,6 +49,7 @@ struct _GstWlWindow
   struct wl_shell_surface *shell_surface;
 #ifdef GST_WLSINK_ENHANCEMENT
   struct tizen_video_object *video_object;
+  guint video_info_changed;
 /*Display geometry method */
   guint disp_geo_method;
   guint rotate_angle;
@@ -85,12 +86,14 @@ void gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
 void gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h);
 #ifdef GST_WLSINK_ENHANCEMENT
-void gst_wl_window_set_video_info (GstWlWindow * window, const GstVideoInfo * info);
+void gst_wl_window_set_video_info (GstWlWindow * window,
+    const GstVideoInfo * info);
 void gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle);
 void gst_wl_window_set_disp_geo_method (GstWlWindow * window,
     guint disp_geo_method);
 void gst_wl_window_set_orientation (GstWlWindow * window, guint orientation);
 void gst_wl_window_set_flip (GstWlWindow * window, guint flip);
+void gst_wl_window_set_video_info_change (GstWlWindow * window, guint changed);
 #endif
 
 G_END_DECLS
