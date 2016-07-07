@@ -394,21 +394,29 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   FUNCTION;
   g_return_if_fail (sink != NULL);
   g_return_if_fail (sink->last_buffer != NULL);
-
-  GST_DEBUG ("gstbuffer ref count is %d",
-      GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   g_return_if_fail (wlbuffer != NULL);
   wlbuffer->used_by_compositor = FALSE;
-  /*need to render last buffer, reuse current GstWlBuffer */
-  render_last_buffer (sink);
-  /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
-     to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
-     wayland can not release buffer if we attach same buffer,
-     if we use no visible, we need to attach null buffer and wayland can release buffer,
-     so we don't need to below if() code. */
-  if (!sink->visible)
+
+  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+      GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
+
+  if (sink->visible) {
+    /*need to render last buffer, reuse current GstWlBuffer */
+    render_last_buffer (sink);
+    /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
+       to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
+       wayland can not release buffer if we attach same buffer,
+       if we use no visible, we need to attach null buffer and wayland can release buffer,
+       so we don't need to below if() code. */
     gst_buffer_unref (wlbuffer->gstbuffer);
+  } else {
+    GST_LOG ("skip rendering");
+  }
+
+  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+      GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
+
 }
 
 #ifdef USE_WL_FLUSH_BUFFER
@@ -1366,7 +1374,7 @@ render_last_buffer (GstWaylandSink * sink)
 
   if (G_UNLIKELY (sink->video_info_changed)) {
 #ifdef GST_WLSINK_ENHANCEMENT
-      gst_wl_window_set_video_info_change (sink->window, TRUE);
+    gst_wl_window_set_video_info_change (sink->window, TRUE);
 #endif
     info = &sink->video_info;
     sink->video_info_changed = FALSE;
@@ -1385,7 +1393,8 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
   g_mutex_lock (&sink->render_lock);
 
-  GST_LOG_OBJECT (sink, "render buffer %p", buffer);
+  GST_LOG_OBJECT (sink, "render gstbuffer %p, ref_count(%d)", buffer,
+      GST_OBJECT_REFCOUNT_VALUE (buffer));
 
   if (G_UNLIKELY (!sink->window)) {
     /* ask for window handle. Unlock render_lock while doing that because
@@ -1553,8 +1562,11 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     }
     gst_buffer_replace (&sink->last_buffer, buffer);
 
-    if (sink->visible)
+    if (sink->visible) {
       render_last_buffer (sink);
+    } else {
+      GST_LOG ("skip rendering");
+    }
 
     goto done;
 

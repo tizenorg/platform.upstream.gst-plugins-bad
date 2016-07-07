@@ -91,7 +91,7 @@ gst_wl_buffer_dispose (GObject * gobject)
 {
   GstWlBuffer *self = GST_WL_BUFFER (gobject);
   FUNCTION;
-  GST_INFO ("%p", self);
+  GST_INFO ("GstWlBuffer:%p", self);
   GST_TRACE_OBJECT (self, "dispose");
 
   /* if the display is shutting down and we are trying to dipose
@@ -114,13 +114,15 @@ gst_wl_buffer_finalize (GObject * gobject)
 
   GST_TRACE_OBJECT (self, "finalize");
 #ifdef GST_WLSINK_ENHANCEMENT
-  if (self->tsurface)
+  if (self->tsurface) {
+    GST_INFO ("self->tsurface:%p", self->tsurface);
     tbm_surface_destroy (self->tsurface);
+  }
 #endif
-  GST_INFO ("%p", self->wlbuffer);
-  if (self->wlbuffer)
+  if (self->wlbuffer) {
+    GST_INFO ("self->wl_buffer:%p", self->wlbuffer);
     wl_buffer_destroy (self->wlbuffer);
-
+  }
 #ifdef USE_WL_FLUSH_BUFFER
   if (self->display) {
     if (self->is_flush_request) {
@@ -160,8 +162,11 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
 {
   GstWlBuffer *self = data;
   FUNCTION;
-  GST_LOG_OBJECT (self, "wl_buffer(%p)::release (GstBuffer: %p)", wl_buffer,
-      self->gstbuffer);
+  g_return_if_fail (self != NULL);
+
+  GST_LOG_OBJECT (self,
+      "get event : wl_buffer(%p)::release (GstBuffer: %p):: tsurface(%p)",
+      wl_buffer, self->gstbuffer, self->tsurface);
 
   self->used_by_compositor = FALSE;
 
@@ -169,7 +174,13 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
   /* unref should be last, because it may end up destroying the GstWlBuffer */
   if (!self->is_flush_request) {
     /*in case of is_flush_request, gstbuffer ref-count has already decreased. */
+    GST_LOG_OBJECT (self, "gstbuffer(%p), ref_count(%d)", self->gstbuffer,
+        GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
     gst_buffer_unref (self->gstbuffer);
+    if (self->gstbuffer) {
+      GST_ERROR_OBJECT (self, "gstbuffer(%p), ref_count(%d)", self->gstbuffer,
+          GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
+    }
   } else {
     /*we blocked below code at gstbuffer_disposed() */
     /* unref(GstWlBuffer), now gst_wl_buffer_dispose() will be called by below code */
@@ -189,7 +200,7 @@ gstbuffer_disposed (GstWlBuffer * self)
 {
   FUNCTION;
   g_assert (!self->used_by_compositor);
-  GST_INFO ("%p", self->gstbuffer);
+  GST_INFO ("GstBuffer: %p", self->gstbuffer);
   self->gstbuffer = NULL;
 
   GST_TRACE_OBJECT (self, "owning GstBuffer was finalized");
@@ -301,6 +312,7 @@ gst_wl_buffer_attach (GstWlBuffer * self, struct wl_surface *surface)
   if (!self->is_flush_request)
 #endif
     gst_buffer_ref (self->gstbuffer);
-
+  GST_LOG_OBJECT (self, "gstbuffer(%p), ref_count(%d)", self->gstbuffer,
+      GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
   self->used_by_compositor = TRUE;
 }
