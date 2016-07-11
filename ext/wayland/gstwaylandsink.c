@@ -394,6 +394,7 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   FUNCTION;
   g_return_if_fail (sink != NULL);
   g_return_if_fail (sink->last_buffer != NULL);
+  g_return_if_fail (sink->display != NULL);
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   g_return_if_fail (wlbuffer != NULL);
   wlbuffer->used_by_compositor = FALSE;
@@ -401,6 +402,15 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
 
+  if (!sink->display->is_native_format) {
+    /* use SHM , use TBM with normal video format*/
+    render_last_buffer (sink);
+    if (!sink->visible)
+      gst_buffer_unref (wlbuffer->gstbuffer);
+    GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+        GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
+    return;
+  }
   if (sink->visible) {
     /*need to render last buffer, reuse current GstWlBuffer */
     render_last_buffer (sink);
