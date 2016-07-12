@@ -394,37 +394,44 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   FUNCTION;
   g_return_if_fail (sink != NULL);
   g_return_if_fail (sink->last_buffer != NULL);
-  g_return_if_fail (sink->display != NULL);
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   g_return_if_fail (wlbuffer != NULL);
-  wlbuffer->used_by_compositor = FALSE;
+  gboolean no_render_buffer = FALSE;
 
-  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+  if (wlbuffer->used_by_compositor){
+    /* used last buffer by compositor don't receive buffer-release-event when attach */
+	wlbuffer->used_by_compositor = FALSE;
+  } else {
+    /* unused last buffer by compositor will receive buffer release event when attach */
+    no_render_buffer = TRUE;
+  }
+
+  GST_LOG ("gstbuffer(%p) ref_count(%d)", sink->last_buffer,
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
 
-  if (!sink->display->is_native_format) {
-    /* use SHM , use TBM with normal video format*/
-    render_last_buffer (sink);
-    if (!sink->visible)
-      gst_buffer_unref (wlbuffer->gstbuffer);
-    GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
-        GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
-    return;
-  }
   if (sink->visible) {
     /*need to render last buffer, reuse current GstWlBuffer */
     render_last_buffer (sink);
+
     /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
-       to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
-       wayland can not release buffer if we attach same buffer,
-       if we use no visible, we need to attach null buffer and wayland can release buffer,
-       so we don't need to below if() code. */
-    gst_buffer_unref (wlbuffer->gstbuffer);
+            to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
+            wayland server can not release buffer if we attach same buffer and
+            videosink can not receive buffer-release-event. if we use no visible,
+            we need to attach null buffer and videosink can receive buffer-release-event */
+
+    /* need to decrease buffer ref_count, if no_render_buffer is TRUE,
+            buffer is attached firstly so, videosink can receive buffer-release-event */
+    if (no_render_buffer) {
+      GST_LOG ("skip unref.. will get buffer-release-event");
+    } else {
+      gst_buffer_unref (wlbuffer->gstbuffer);
+    }
+
   } else {
     GST_LOG ("skip rendering");
   }
 
-  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+  GST_LOG ("gstbuffer(%p) ref_count(%d)", sink->last_buffer,
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
 
 }
@@ -1588,8 +1595,11 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     }
     gst_buffer_replace (&sink->last_buffer, to_render);
 
-    if (sink->visible)
+    if (sink->visible) {
       render_last_buffer (sink);
+    } else {
+      GST_LOG ("skip rendering");
+    }
 
     if (buffer != to_render)
       gst_buffer_unref (to_render);
