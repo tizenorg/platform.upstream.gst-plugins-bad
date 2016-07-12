@@ -178,8 +178,9 @@ buffer_release (void *data, struct wl_buffer *wl_buffer)
         GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
     gst_buffer_unref (self->gstbuffer);
     if (self->gstbuffer) {
-      GST_ERROR_OBJECT (self, "gstbuffer(%p), ref_count(%d)", self->gstbuffer,
-          GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
+      GST_LOG_OBJECT (self,
+          "buffer is our pool..so is kept by bufferpool :: gstbuffer(%p), ref_count(%d)",
+          self->gstbuffer, GST_OBJECT_REFCOUNT_VALUE (self->gstbuffer));
     }
   } else {
     /*we blocked below code at gstbuffer_disposed() */
