@@ -106,9 +106,6 @@ struct _GstWaylandSink
   guint orientation;
   guint flip;
   gboolean visible;
-
-  GMutex render_flush_buffer_lock;
-  GCond render_flush_buffer_cond;
 #endif
 };
 

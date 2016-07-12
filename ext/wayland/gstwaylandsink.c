@@ -344,8 +344,6 @@ gst_wayland_sink_init (GstWaylandSink * sink)
   sink->rotate_angle = DEGREE_0;
   sink->orientation = DEGREE_0;
   sink->visible = TRUE;
-  g_mutex_init (&sink->render_flush_buffer_lock);
-  g_cond_init (&sink->render_flush_buffer_cond);
 #endif
   g_mutex_init (&sink->display_lock);
   g_mutex_init (&sink->render_lock);
@@ -394,37 +392,44 @@ gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
   FUNCTION;
   g_return_if_fail (sink != NULL);
   g_return_if_fail (sink->last_buffer != NULL);
-  g_return_if_fail (sink->display != NULL);
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
   g_return_if_fail (wlbuffer != NULL);
-  wlbuffer->used_by_compositor = FALSE;
+  gboolean no_render_buffer = FALSE;
 
-  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+  if (wlbuffer->used_by_compositor) {
+    /* used last buffer by compositor don't receive buffer-release-event when attach */
+    wlbuffer->used_by_compositor = FALSE;
+  } else {
+    /* unused last buffer by compositor will receive buffer release event when attach */
+    no_render_buffer = TRUE;
+  }
+
+  GST_LOG ("gstbuffer(%p) ref_count(%d)", sink->last_buffer,
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
 
-  if (!sink->display->is_native_format) {
-    /* use SHM , use TBM with normal video format*/
-    render_last_buffer (sink);
-    if (!sink->visible)
-      gst_buffer_unref (wlbuffer->gstbuffer);
-    GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
-        GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
-    return;
-  }
   if (sink->visible) {
-    /*need to render last buffer, reuse current GstWlBuffer */
+    /* need to render last buffer, reuse current GstWlBuffer */
     render_last_buffer (sink);
+
     /* ref count is incresed in gst_wl_buffer_attach() of render_last_buffer(),
        to call gst_wl_buffer_finalize(), we need to decrease buffer ref count.
-       wayland can not release buffer if we attach same buffer,
-       if we use no visible, we need to attach null buffer and wayland can release buffer,
-       so we don't need to below if() code. */
-    gst_buffer_unref (wlbuffer->gstbuffer);
+       wayland server can not release buffer if we attach same buffer and
+       videosink can not receive buffer-release-event. if we use no visible,
+       we need to attach null buffer and videosink can receive buffer-release-event */
+
+    /* need to decrease buffer ref_count, if no_render_buffer is TRUE,
+       buffer is attached firstly so, videosink can receive buffer-release-event */
+    if (no_render_buffer) {
+      GST_LOG ("skip unref.. will get buffer-release-event");
+    } else {
+      gst_buffer_unref (wlbuffer->gstbuffer);
+    }
+
   } else {
     GST_LOG ("skip rendering");
   }
 
-  GST_LOG ("gstbuffer(%p) ref count(%d)", sink->last_buffer,
+  GST_LOG ("gstbuffer(%p) ref_count(%d)", sink->last_buffer,
       GST_OBJECT_REFCOUNT_VALUE (sink->last_buffer));
 
 }
@@ -607,14 +612,9 @@ gst_wayland_sink_render_flush_buffer (GstBaseSink * bsink)
 
   buffer = gst_buffer_copy (sink->last_buffer);
 
-  g_mutex_lock (&sink->render_flush_buffer_lock);
-  g_cond_wait (&sink->render_flush_buffer_cond,
-      &sink->render_flush_buffer_lock);
-
   gst_wayland_sink_render (bsink, buffer);
   if (buffer)
     gst_buffer_unref (buffer);
-  g_mutex_unlock (&sink->render_flush_buffer_lock);
 }
 
 static void
@@ -801,10 +801,6 @@ gst_wayland_sink_finalize (GObject * object)
 
   g_mutex_clear (&sink->display_lock);
   g_mutex_clear (&sink->render_lock);
-#ifdef GST_WLSINK_ENHANCEMENT
-  g_mutex_clear (&sink->render_flush_buffer_lock);
-  g_cond_clear (&sink->render_flush_buffer_cond);
-#endif
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -923,8 +919,15 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
 
   switch (transition) {
     case GST_STATE_CHANGE_NULL_TO_READY:
+      GST_LOG ("WAYLANDSINK TRANSITION: NULL_TO_READY");
       if (!gst_wayland_sink_find_display (sink))
         return GST_STATE_CHANGE_FAILURE;
+      break;
+    case GST_STATE_CHANGE_READY_TO_PAUSED:
+      GST_LOG ("WAYLANDSINK TRANSITION: READY_TO_PAUSED");
+      break;
+    case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
+      GST_LOG ("WAYLANDSINK TRANSITION: PAUSED_TO_PLAYING");
       break;
     default:
       break;
@@ -935,7 +938,11 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
     return ret;
 
   switch (transition) {
+    case GST_STATE_CHANGE_PLAYING_TO_PAUSED:
+      GST_LOG ("WAYLANDSINK TRANSITION: PLAYING_TO_PAUSED");
+      break;
     case GST_STATE_CHANGE_PAUSED_TO_READY:
+      GST_LOG ("WAYLANDSINK TRANSITION: PAUSED_TO_READY");
 #ifdef GST_WLSINK_ENHANCEMENT
       if (sink->keep_camera_preview) {
         if (sink->window) {
@@ -960,6 +967,7 @@ gst_wayland_sink_change_state (GstElement * element, GstStateChange transition)
       }
       break;
     case GST_STATE_CHANGE_READY_TO_NULL:
+      GST_LOG ("WAYLANDSINK TRANSITION: READY_TO_NULL");
       g_mutex_lock (&sink->display_lock);
       /* If we had a toplevel window, we most likely have our own connection
        * to the display too, and it is a good idea to disconnect and allow
@@ -1332,13 +1340,6 @@ frame_redraw_callback (void *data, struct wl_callback *callback, uint32_t time)
 
   g_atomic_int_set (&sink->redraw_pending, FALSE);
   wl_callback_destroy (callback);
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (gst_wayland_sink_check_use_gapless (sink) || sink->keep_camera_preview) {
-    g_mutex_lock (&sink->render_flush_buffer_lock);
-    g_cond_signal (&sink->render_flush_buffer_cond);
-    g_mutex_unlock (&sink->render_flush_buffer_lock);
-  }
-#endif
 }
 
 static const struct wl_callback_listener frame_callback_listener = {
@@ -1588,8 +1589,11 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
     }
     gst_buffer_replace (&sink->last_buffer, to_render);
 
-    if (sink->visible)
+    if (sink->visible) {
       render_last_buffer (sink);
+    } else {
+      GST_LOG ("skip rendering");
+    }
 
     if (buffer != to_render)
       gst_buffer_unref (to_render);
