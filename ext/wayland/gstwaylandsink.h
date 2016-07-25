@@ -97,9 +97,8 @@ struct _GstWaylandSink
   GMutex render_lock;
   GstBuffer *last_buffer;
 #ifdef GST_WLSINK_ENHANCEMENT
-  gboolean use_gapless;
   gboolean keep_camera_preview;
-  gboolean got_eos_event;
+  gboolean got_costum_event;
   gboolean USE_TBM;
   guint rotate_angle;
   guint display_geometry_method;
