@@ -519,6 +519,7 @@ gst_wayland_sink_copy_mm_video_buf_info_to_flush (GstWlDisplay * display,
       display->stride_height[i] = mm_video_buf->stride_height[i];
       display->native_video_size += display->plane_size[i];
     }
+    memset (mm_video_buf, 0, sizeof(MMVideoBuffer));
   }
   return ret;
 }
@@ -1425,7 +1426,7 @@ gst_wayland_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 #endif
   }
   /* drop buffers until we get a frame callback */
-  if (g_atomic_int_get (&sink->redraw_pending) == TRUE)
+  if (g_atomic_int_get (&sink->redraw_pending) == TRUE && !gst_wayland_sink_check_use_gapless (sink))
     goto done;
   /* make sure that the application has called set_render_rectangle() */
   if (G_UNLIKELY (sink->window->render_rectangle.w == 0))
