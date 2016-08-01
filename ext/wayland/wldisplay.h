@@ -104,6 +104,7 @@ struct _GstWlDisplay
   int stride_height[NV_BUF_PLANE_NUM];
   int native_video_size;
   unsigned int wl_surface_id;
+  int buffer_width, buffer_height;
 #endif
 
 #if 1

@@ -97,7 +97,8 @@ gst_waylandsink_display_geometry_method_get_type (void)
     {2, "Full-screen", "FULL_SCREEN"},
     {3, "Cropped full-screen", "CROPPED_FULL_SCREEN"},
     {4, "Origin size(if screen size is larger than video size(width/height)) or Letter box(if video size(width/height) is larger than screen size)", "ORIGIN_SIZE_OR_LETTER_BOX"},
-    {5, NULL, NULL},
+    {5, "Specially described destination ROI", "DISP_GEO_METHOD_CUSTOM_ROI"},
+    {6, NULL, NULL},
   };
 
   if (!waylandsink_display_geometry_method_type) {
@@ -385,12 +386,13 @@ static void
 gst_wayland_sink_update_last_buffer_geometry (GstWaylandSink * sink)
 {
   GstWlBuffer *wlbuffer;
+  gboolean no_render_buffer = FALSE;
   FUNCTION;
   g_return_if_fail (sink != NULL);
   g_return_if_fail (sink->last_buffer != NULL);
   wlbuffer = gst_buffer_get_wl_buffer (sink->last_buffer);
+
   g_return_if_fail (wlbuffer != NULL);
-  gboolean no_render_buffer = FALSE;
 
   if (wlbuffer->used_by_compositor) {
     /* used last buffer by compositor don't receive buffer-release-event when attach */
@@ -573,8 +575,8 @@ gst_wayland_sink_get_mm_video_buf_info (GstWaylandSink * sink,
   }
   /* assign mm_video_buf info */
   if (mm_video_buf->type == MM_VIDEO_BUFFER_TYPE_TBM_BO) {
-    GST_DEBUG ("TBM bo %p %p %p", mm_video_buf->handle.bo[0],
-        mm_video_buf->handle.bo[1], mm_video_buf->handle.bo[2]);
+    GST_DEBUG ("TBM bo %p %p", mm_video_buf->handle.bo[0],
+        mm_video_buf->handle.bo[1]);
     display->native_video_size = 0;
     display->flush_request = mm_video_buf->flush_request;
     GST_DEBUG ("flush_request value is %d", display->flush_request);
@@ -1110,9 +1112,9 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
   GstBufferPool *newpool;
   GstVideoInfo info;
 #ifdef GST_WLSINK_ENHANCEMENT
-  uint32_t tbm_format;
+  uint32_t tbm_format = -1;
 #endif
-  enum wl_shm_format format;
+  enum wl_shm_format format = -1;
 
   GArray *formats;
   gint i;
