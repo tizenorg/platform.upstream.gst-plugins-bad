@@ -74,7 +74,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
           strerror (errno));
       return FALSE;
     }
-    GST_INFO ("display->tbm_bo[%d]=(%p)", idx, self->display->tbm_bo[idx]);
+    GST_LOG ("display->tbm_bo[%d]=(%p)", idx, self->display->tbm_bo[idx]);
     virtual_addr.ptr = NULL;
     virtual_addr =
         tbm_bo_get_handle (self->display->tbm_bo[idx], TBM_DEVICE_CPU);
@@ -91,7 +91,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
         NULL, size, 0, 0, size);
     mem->data = virtual_addr.ptr;
     mem->tbm_bo_ptr = self->display->tbm_bo[idx];
-    GST_INFO ("mem(%p) mem->data(%p) virtual_addr.ptr(%p) size(%d)", mem,
+    GST_LOG ("mem(%p) mem->data(%p) virtual_addr.ptr(%p) size(%d)", mem,
         mem->data, virtual_addr.ptr, size);
 
     return (GstMemory *) mem;
@@ -102,7 +102,7 @@ gst_wl_shm_allocator_alloc (GstAllocator * allocator, gsize size,
     /* allocate shm pool */
     snprintf (filename, 1024, "%s/%s-%d-%s", g_get_user_runtime_dir (),
         "wayland-shm", init++, "XXXXXX");
-    GST_INFO ("opening temp file %s", filename);
+    GST_LOG ("opening temp file %s", filename);
 
     fd = g_mkstemp (filename);
     if (fd < 0) {
@@ -265,7 +265,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       height = GST_VIDEO_INFO_HEIGHT (info);
       size = display->native_video_size;
       format = gst_video_format_to_wl_tbm_format (GST_VIDEO_INFO_FORMAT (info));
-      GST_INFO ("format %s, width(%d), height(%d), size(%d)",
+      GST_LOG ("format %s, width(%d), height(%d), size(%d)",
           gst_wl_tbm_format_to_string (format), width, height, size);
 
 #ifdef DUMP_BUFFER
@@ -286,12 +286,13 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
         }
       }
 #endif
-      GST_DEBUG ("TBM bo %p %p %p", display->bo[0], display->bo[1],
-          display->bo[2]);
-      GST_INFO ("stride_width[0]: %d stride_height[0]:%d",
+      GST_LOG ("TBM bo %p %p", display->bo[0], display->bo[1]);
+      GST_LOG ("stride_width[0]: %d stride_height[0]:%d",
           display->stride_width[0], display->stride_height[1]);
-      ts_info.width = display->stride_width[0];
-      ts_info.height = display->stride_height[0];
+      width = display->stride_width[0];
+      height = display->stride_height[0];
+      ts_info.width = width;
+      ts_info.height = height;
       ts_info.format = format;
       ts_info.bpp = tbm_surface_internal_get_bpp (ts_info.format);
       ts_info.num_planes = tbm_surface_internal_get_num_planes (ts_info.format);
@@ -304,13 +305,13 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       ts_info.planes[0].offset = 0;
       ts_info.planes[1].offset = (display->bo[1]) ? 0 : display->plane_size[0];
       num_bo = (display->bo[1]) ? 2 : 1;
-      GST_INFO ("num_bo(%d)", num_bo);
+      GST_LOG ("num_bo(%d)", num_bo);
 
       display->tsurface =
           tbm_surface_internal_create_with_bos (&ts_info,
           (tbm_bo *) display->bo, num_bo);
-      GST_INFO ("display->tsurface(%p)", display->tsurface);
-      GST_INFO ("tbm_client(%p),tsurface(%p)", display->tbm_client,
+      GST_LOG ("display->tsurface(%p)", display->tsurface);
+      GST_LOG ("tbm_client(%p),tsurface(%p)", display->tbm_client,
           display->tsurface);
       wbuffer =
           wayland_tbm_client_create_buffer (display->tbm_client,
@@ -339,7 +340,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       data = virtual_addr.ptr;
       int ret;
       char file_name[128];
-      GST_INFO ("DUMP %d ", dump_cnt);
+      GST_LOG ("DUMP %d ", dump_cnt);
       sprintf (file_name, "/home/owner/WLSINK_OUT_DUMP_%2.2d.dump", dump_cnt++);
       ret = _write_rawdata (file_name, virtual_addr.ptr, size);
       if (ret) {
@@ -358,7 +359,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
       ts_info.planes[1].offset = GST_VIDEO_INFO_PLANE_OFFSET (info, 1);
       ts_info.planes[2].offset = GST_VIDEO_INFO_PLANE_OFFSET (info, 2);
 
-      GST_INFO ("tbm_bo (%p)", shm_mem->tbm_bo_ptr);
+      GST_LOG ("tbm_bo (%p)", shm_mem->tbm_bo_ptr);
 
       display->tsurface =
           tbm_surface_internal_create_with_bos (&ts_info,
@@ -367,9 +368,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
           wayland_tbm_client_create_buffer (display->tbm_client,
           display->tsurface);
     }
-    GST_INFO ("wayland_tbm_client_create_buffer create wl_buffer %p", wbuffer);
-
-    return wbuffer;
+    GST_LOG ("wayland_tbm_client_create_buffer create wl_buffer %p", wbuffer);
 
   } else {                      /* USE SHM */
     width = GST_VIDEO_INFO_WIDTH (info);
@@ -392,9 +391,12 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
     close (shm_mem->fd);
     shm_mem->fd = -1;
     wl_shm_pool_destroy (wl_pool);
-
-    return wbuffer;
   }
+  display->buffer_width = width;
+  display->buffer_height = height;
+
+  return wbuffer;
+
 #else /* open source */
   width = GST_VIDEO_INFO_WIDTH (info);
   height = GST_VIDEO_INFO_HEIGHT (info);

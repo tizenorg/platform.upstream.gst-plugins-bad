@@ -91,7 +91,7 @@ gst_wl_buffer_dispose (GObject * gobject)
 {
   GstWlBuffer *self = GST_WL_BUFFER (gobject);
   FUNCTION;
-  GST_INFO ("GstWlBuffer:%p", self);
+  GST_LOG ("GstWlBuffer:%p", self);
   GST_TRACE_OBJECT (self, "dispose");
 
   /* if the display is shutting down and we are trying to dipose
@@ -115,12 +115,12 @@ gst_wl_buffer_finalize (GObject * gobject)
   GST_TRACE_OBJECT (self, "finalize");
 #ifdef GST_WLSINK_ENHANCEMENT
   if (self->tsurface) {
-    GST_INFO ("self->tsurface:%p", self->tsurface);
+    GST_LOG ("self->tsurface:%p", self->tsurface);
     tbm_surface_destroy (self->tsurface);
   }
 #endif
   if (self->wlbuffer) {
-    GST_INFO ("self->wl_buffer:%p", self->wlbuffer);
+    GST_LOG ("self->wl_buffer:%p", self->wlbuffer);
     wl_buffer_destroy (self->wlbuffer);
   }
 #ifdef USE_WL_FLUSH_BUFFER
@@ -201,7 +201,7 @@ gstbuffer_disposed (GstWlBuffer * self)
 {
   FUNCTION;
   g_assert (!self->used_by_compositor);
-  GST_INFO ("GstBuffer: %p", self->gstbuffer);
+  GST_LOG ("GstBuffer: %p", self->gstbuffer);
   self->gstbuffer = NULL;
 
   GST_TRACE_OBJECT (self, "owning GstBuffer was finalized");
@@ -233,7 +233,7 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
     self->tsurface = display->tsurface;
   else
     self->tsurface = NULL;
-  GST_INFO ("self->tsurface(%p)", self->tsurface);
+  GST_LOG ("self->tsurface(%p)", self->tsurface);
 #endif
 #ifdef USE_WL_FLUSH_BUFFER
   self->is_flush_request = FALSE;
@@ -249,7 +249,7 @@ gst_buffer_add_wl_buffer (GstBuffer * gstbuffer, struct wl_buffer *wlbuffer,
 #endif
   gst_mini_object_set_qdata ((GstMiniObject *) gstbuffer,
       gst_wl_buffer_qdata_quark (), self, (GDestroyNotify) gstbuffer_disposed);
-  GST_INFO ("GstWlBuffer (%p)", self);
+  GST_LOG ("GstWlBuffer (%p)", self);
   return self;
 }
 
@@ -288,7 +288,7 @@ gst_wl_buffer_force_release_and_unref (GstWlBuffer * self)
   self->wlbuffer = NULL;
   self->display = NULL;
 #ifdef GST_WLSINK_ENHANCEMENT
-  GST_INFO ("self->tsurface(%p)", self->tsurface);
+  GST_LOG ("self->tsurface(%p)", self->tsurface);
   if (self->tsurface)
     tbm_surface_destroy (self->tsurface);
 #endif

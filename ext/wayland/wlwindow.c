@@ -94,6 +94,9 @@ gst_wl_window_class_init (GstWlWindowClass * klass)
 static void
 gst_wl_window_init (GstWlWindow * self)
 {
+  g_return_if_fail (self != NULL);
+  self->buffer_width = self->buffer_height = self->buffer_x = self->buffer_y =
+      0;
 }
 
 static void
@@ -102,23 +105,27 @@ gst_wl_window_finalize (GObject * gobject)
   GstWlWindow *self = GST_WL_WINDOW (gobject);
   FUNCTION;
 
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (self->video_object)
-    tizen_video_object_destroy (self->video_object);
-#endif
-
   if (self->shell_surface) {
     wl_shell_surface_destroy (self->shell_surface);
   }
-
+#ifdef GST_WLSINK_ENHANCEMENT
+  if (self->video_object)
+    tizen_video_object_destroy (self->video_object);
+  if (self->tizen_area_viewport)
+    tizen_viewport_destroy (self->tizen_area_viewport);
+  if (self->tizen_video_viewport)
+    tizen_viewport_destroy (self->tizen_video_viewport);
+#else
   wl_viewport_destroy (self->video_viewport);
+  wl_viewport_destroy (self->area_viewport);
+#endif
   wl_subsurface_destroy (self->video_subsurface);
   wl_surface_destroy (self->video_surface);
 
   if (self->area_subsurface) {
     wl_subsurface_destroy (self->area_subsurface);
   }
-  wl_viewport_destroy (self->area_viewport);
+
   wl_surface_destroy (self->area_surface);
 
   g_clear_object (&self->display);
@@ -158,6 +165,16 @@ gst_wl_window_map_sub_surface (GstWlDisplay * display, GstWlWindow * window,
   gwlbuf = gst_buffer_add_wl_buffer (buf, wlbuf, display);
   gst_wl_buffer_attach (gwlbuf, window->area_surface);
 
+  /* for tizen view port
+     When change area_surface, we don't need to commit anymore if we do below code.
+     such as gst_wl_window_set_render_rectangle() and */
+  GST_INFO ("wl_surface_damage_buffer (%p, %d, %d, %d, %d)",
+      window->area_surface, 0, 0, info->width, info->height);
+  wl_surface_damage_buffer (window->area_surface, 0, 0, info->width,
+      info->height);
+  GST_INFO ("wl_surface_commit (%p)", window->area_surface);
+  wl_surface_commit (window->area_surface);
+
   /* at this point, the GstWlBuffer keeps the buffer
    * alive and will free it on wl_buffer::release */
   gst_buffer_unref (buf);
@@ -165,7 +182,8 @@ gst_wl_window_map_sub_surface (GstWlDisplay * display, GstWlWindow * window,
 #endif
 
 static GstWlWindow *
-#ifdef GST_WLSINK_ENHANCEMENT
+#if 1
+/* for enlightment, we need to get parent to create  area_subsurface */
 gst_wl_window_new_internal (GstWlDisplay * display, struct wl_surface *parent)
 #else
 gst_wl_window_new_internal (GstWlDisplay * display)
@@ -200,18 +218,27 @@ gst_wl_window_new_internal (GstWlDisplay * display)
         window->area_surface);
   } else if (display->use_parent_wl_surface) {
 #ifdef GST_WLSINK_ENHANCEMENT
-    GST_INFO ("call tizen_policy_get_subsurface");
+    GST_LOG ("call tizen_policy_get_subsurface");
     if (display->wl_surface_id && parent == NULL) {
       window->area_subsurface =
           tizen_policy_get_subsurface (display->tizen_policy,
           window->area_surface, display->wl_surface_id);
+      GST_INFO
+          ("area_subsurface (%p) = tizen_policy_get_subsurface(%p, %p, %d)",
+          window->area_subsurface, display->tizen_policy, window->area_surface,
+          display->wl_surface_id);
       wl_subsurface_set_desync (window->area_subsurface);
+      GST_INFO ("wl_surface_commit (%p)", window->area_surface);
       wl_surface_commit (window->area_surface);
     } else {
-      GST_INFO (" wl_surface %p", parent);
+      GST_INFO (" wl_surface parent %p", parent);
       window->area_subsurface =
           wl_subcompositor_get_subsurface (display->subcompositor,
           window->area_surface, parent);
+      GST_INFO
+          ("area_subsurface (%p) = wl_subcompositor_get_subsurface(%p, %p, %p)",
+          window->area_subsurface, display->subcompositor, window->area_surface,
+          parent);
       wl_subsurface_set_desync (window->area_subsurface);
     }
 #else
@@ -227,14 +254,31 @@ gst_wl_window_new_internal (GstWlDisplay * display)
   window->video_subsurface =
       wl_subcompositor_get_subsurface (display->subcompositor,
       window->video_surface, window->area_surface);
-  wl_subsurface_set_desync (window->video_subsurface);
-  wl_surface_commit (window->video_surface);
+  GST_INFO
+      ("video_subsurface (%p) = wl_subcompositor_get_subsurface(%p, %p, %p)",
+      window->video_subsurface, display->subcompositor, window->video_surface,
+      window->area_surface);
 
+  wl_subsurface_set_desync (window->video_subsurface);
+  GST_INFO ("wl_surface_commit (%p)", window->video_surface);
+  wl_surface_commit (window->video_surface);
+#ifdef GST_WLSINK_ENHANCEMENT
+  window->tizen_area_viewport =
+      tizen_video_get_viewport (display->tizen_video, window->area_surface);
+  GST_INFO ("tizen_area_viewport(%p) = tizen_video_get_viewport(%p, %p)",
+      window->tizen_area_viewport, display->tizen_video, window->area_surface);
+  window->tizen_video_viewport =
+      tizen_video_get_viewport (display->tizen_video, window->video_surface);
+  GST_INFO ("tizen_video_viewport(%p) = tizen_video_get_viewport(%p, %p)",
+      window->tizen_video_viewport, display->tizen_video,
+      window->video_surface);
+
+#else
   window->area_viewport = wl_scaler_get_viewport (display->scaler,
       window->area_surface);
   window->video_viewport = wl_scaler_get_viewport (display->scaler,
       window->video_surface);
-
+#endif
   /* draw the area_subsurface */
   gst_video_info_set_format (&info,
       /* we want WL_SHM_FORMAT_XRGB8888 */
@@ -355,9 +399,12 @@ gst_wl_window_new_in_surface (GstWlDisplay * display,
 #ifdef GST_WLSINK_ENHANCEMENT
   /*Area surface from App need to be under parent surface */
   if (display->tizen_policy) {
-    GST_INFO (" call tizen_policy_place_subsurface_below_parent ");
+    GST_INFO ("tizen_policy_place_subsurface_below_parent (%p, %p)",
+        display->tizen_policy, window->area_subsurface);
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->area_subsurface);
+    GST_INFO ("tizen_policy_place_subsurface_below_parent (%p, %p)",
+        display->tizen_policy, window->video_subsurface);
     tizen_policy_place_subsurface_below_parent (display->tizen_policy,
         window->video_subsurface);
   }
@@ -457,144 +504,97 @@ gst_wl_window_find_transform (guint rotate_angle, guint flip)
 }
 
 #endif
+#if GST_WLSINK_ENHANCEMENT
 static void
-gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
+gst_wl_window_resize_tizen_video_viewport (GstWlWindow * window,
+    gboolean commit)
 {
-  GstVideoRectangle src = { 0, };
-  GstVideoRectangle res;
-#ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
-  GstVideoRectangle src_origin = { 0, 0, 0, 0 };
-  GstVideoRectangle src_input = { 0, 0, 0, 0 };
-  GstVideoRectangle dst = { 0, 0, 0, 0 };
-  int temp = 0;
+  int tizen_disp_mode = -1;
+  struct tizen_destination_mode *tizen_dest_mode;
   gint transform = WL_OUTPUT_TRANSFORM_NORMAL;
-#endif
   FUNCTION;
 
-  /* center the video_subsurface inside area_subsurface */
-  src.w = window->video_width;
-  src.h = window->video_height;
-
-#ifdef GST_WLSINK_ENHANCEMENT   // need to change ifndef to ifdef
-  src.x = src.y = 0;
-  src_input.w = src_origin.w = window->video_width;
-  src_input.h = src_origin.h = window->video_height;
-  GST_INFO ("video (%d x %d)", window->video_width, window->video_height);
-  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
-      src_input.h);
-  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
-      src_origin.w, src_origin.h);
-
-  if (window->rotate_angle == DEGREE_0 || window->rotate_angle == DEGREE_180) {
-    src.w = window->video_width;        //video_width
-    src.h = window->video_height;       //video_height
-  } else {
-    src.w = window->video_height;
-    src.h = window->video_width;
-  }
-  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
-
-  /*default res.w and res.h */
-  dst.w = window->render_rectangle.w;
-  dst.h = window->render_rectangle.h;
-  dst.x = window->render_rectangle.x;
-  dst.y = window->render_rectangle.y;
-
-  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
-  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
-      window->render_rectangle.x, window->render_rectangle.y,
-      window->render_rectangle.w, window->render_rectangle.h);
   switch (window->disp_geo_method) {
+
     case DISP_GEO_METHOD_LETTER_BOX:
-      GST_INFO ("DISP_GEO_METHOD_LETTER_BOX");
-      gst_video_sink_center_rect (src, dst, &res, TRUE);
+      GST_LOG ("DISP_GEO_METHOD_LETTER_BOX");
+      tizen_disp_mode = TIZEN_DESTINATION_MODE_TYPE_LETTER_BOX;
       break;
-    case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
-      if (src.w > dst.w || src.h > dst.h) {
-        /*LETTER BOX */
-        GST_INFO
-            ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX -> set LETTER BOX");
-        gst_video_sink_center_rect (src, dst, &res, TRUE);
-      } else {
-        /*ORIGIN SIZE */
-        GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
-        gst_video_sink_center_rect (src, dst, &res, FALSE);
-        gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      }
+    case DISP_GEO_METHOD_ORIGIN_SIZE:
+      GST_LOG ("DISP_GEO_METHOD_ORIGIN_SIZE");
+      tizen_disp_mode = TIZEN_DESTINATION_MODE_TYPE_ORIGIN;
       break;
-    case DISP_GEO_METHOD_ORIGIN_SIZE:  //is working
-      GST_INFO ("DISP_GEO_METHOD_ORIGIN_SIZE");
-      gst_video_sink_center_rect (src, dst, &res, FALSE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      break;
-    case DISP_GEO_METHOD_FULL_SCREEN:  //is working
-      GST_INFO ("DISP_GEO_METHOD_FULL_SCREEN");
-      res.x = res.y = 0;
-      res.w = window->render_rectangle.w;
-      res.h = window->render_rectangle.h;
+    case DISP_GEO_METHOD_FULL_SCREEN:
+      GST_LOG ("DISP_GEO_METHOD_FULL_SCREEN");
+      tizen_disp_mode = TIZEN_DESTINATION_MODE_TYPE_FULL;
       break;
     case DISP_GEO_METHOD_CROPPED_FULL_SCREEN:
-      GST_INFO ("DISP_GEO_METHOD_CROPPED_FULL_SCREEN");
-      gst_video_sink_center_rect (src, dst, &res, FALSE);
-      gst_video_sink_center_rect (dst, src, &src_input, FALSE);
-      res.x = res.y = 0;
-      res.w = dst.w;
-      res.h = dst.h;
+      GST_LOG ("DISP_GEO_METHOD_CROPPED_FULL_SCREEN");
+      tizen_disp_mode = TIZEN_DESTINATION_MODE_TYPE_CROPPED_FULL;
+      break;
+    case DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX:
+      GST_LOG ("DISP_GEO_METHOD_ORIGIN_SIZE_OR_LETTER_BOX");
+      tizen_disp_mode = TIZEN_DESTINATION_MODE_TYPE_ORIGIN_OR_LETTER;
+      break;
+    case DISP_GEO_METHOD_CUSTOM_ROI:
+      GST_LOG ("DISP_GEO_METHOD_CUSTOM_ROI");
       break;
     default:
       break;
   }
+  if (tizen_disp_mode > -1) {
+    tizen_dest_mode =
+        tizen_viewport_get_destination_mode (window->tizen_video_viewport);
+    tizen_destination_mode_set (tizen_dest_mode, tizen_disp_mode);
+    GST_INFO ("tizen_destination_mode_set (%p, %d)", tizen_dest_mode,
+        tizen_disp_mode);
 
+  }
+  GST_LOG ("rotate_angle(%d), flip(%d)", window->rotate_angle, window->flip);
   transform = gst_wl_window_find_transform (window->rotate_angle, window->flip);
+  GST_INFO ("tizen_viewport_set_transform(%p, %d)",
+      window->tizen_video_viewport, transform);
+  tizen_viewport_set_transform (window->tizen_video_viewport, transform);
 
-  GST_INFO
-      ("window[%d x %d] src[%d,%d,%d x %d],dst[%d,%d,%d x %d],input[%d,%d,%d x %d],result[%d,%d,%d x %d]",
-      window->render_rectangle.w, window->render_rectangle.h,
-      src.x, src.y, src.w, src.h,
-      dst.x, dst.y, dst.w, dst.h,
-      src_input.x, src_input.y, src_input.w, src_input.h,
-      res.x, res.y, res.w, res.h);
-
-  GST_INFO ("video (%d x %d)", window->video_width, window->video_height);
-  GST_INFO ("src_input(%d, %d, %d x %d)", src_input.x, src_input.y, src_input.w,
-      src_input.h);
-  GST_INFO ("src_origin(%d, %d, %d x %d)", src_origin.x, src_origin.y,
-      src_origin.w, src_origin.h);
-  GST_INFO ("src(%d, %d, %d x %d)", src.x, src.y, src.w, src.h);
-  GST_INFO ("dst(%d,%d,%d x %d)", dst.x, dst.y, dst.w, dst.h);
-  GST_INFO ("window->render_rectangle(%d,%d,%d x %d)",
-      window->render_rectangle.x, window->render_rectangle.y,
-      window->render_rectangle.w, window->render_rectangle.h);
-  GST_INFO ("res(%d, %d, %d x %d)", res.x, res.y, res.w, res.h);
-
-  if (window->video_subsurface) {
-    GST_INFO ("have window->subsurface");
-    wl_subsurface_set_position (window->video_subsurface, res.x, res.y);
-    GST_INFO ("wl_subsurface_set_position(%d,%d)", res.x, res.y);
+  if (commit) {
+    GST_INFO ("need to commit");
+    GST_INFO ("wl_surface_damage_buffer (%p, %d, %d, %d, %d)",
+        window->video_surface, window->buffer_x, window->buffer_y,
+        window->buffer_width, window->buffer_height);
+    wl_surface_damage_buffer (window->video_surface, window->buffer_x,
+        window->buffer_y, window->buffer_width, window->buffer_height);
+    GST_INFO ("wl_surface_commit (%p)", window->video_surface);
+    wl_surface_commit (window->video_surface);
   }
-  wl_viewport_set_destination (window->video_viewport, res.w, res.h);
-  GST_INFO ("wl_viewport_set_destination(%d,%d)", res.w, res.h);
 
-  /*need to swap */
-  if (transform % 2 == 1) {     /*1, 3, 5, 7 */
-    temp = src_input.w;
-    src_input.w = src_input.h;
-    src_input.h = temp;
+  if (gst_wl_window_is_toplevel (window)) {
+    struct wl_region *region;
+
+    region = wl_compositor_create_region (window->display->compositor);
+    wl_region_add (region, 0, 0, window->render_rectangle.w,
+        window->render_rectangle.h);
+    wl_surface_set_input_region (window->area_surface, region);
+    wl_region_destroy (region);
   }
-  wl_viewport_set_source (window->video_viewport,
-      wl_fixed_from_int (src_input.x), wl_fixed_from_int (src_input.y),
-      wl_fixed_from_int (src_input.w), wl_fixed_from_int (src_input.h));
-  GST_INFO ("wl_viewport_set_source(%d,%d, %d x %d)", src_input.x, src_input.y,
-      src_input.w, src_input.h);
-
-  wl_surface_set_buffer_transform (window->video_surface, transform);
-  GST_INFO ("wl_surface_set_buffer_transform (%d)", transform);
+}
 #else
-  gst_video_sink_center_rect (src, window->render_rectangle, &res, TRUE);
+static void
+gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
+{
+  GstVideoRectangle src = { 0, };
+  GstVideoRectangle dst = { 0, };
+  GstVideoRectangle res;
+
+  /* center the video_subsurface inside area_subsurface */
+  src.w = window->video_width;
+  src.h = window->video_height;
+  dst.w = window->render_rectangle.w;
+  dst.h = window->render_rectangle.h;
+  gst_video_sink_center_rect (src, dst, &res, TRUE);
 
   wl_subsurface_set_position (window->video_subsurface, res.x, res.y);
   wl_viewport_set_destination (window->video_viewport, res.w, res.h);
-#endif
+
   if (commit) {
     wl_surface_damage (window->video_surface, 0, 0, res.w, res.h);
     wl_surface_commit (window->video_surface);
@@ -614,52 +614,86 @@ gst_wl_window_resize_video_surface (GstWlWindow * window, gboolean commit)
   window->surface_width = res.w;
   window->surface_height = res.h;
 }
-
+#endif
 void
 gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
     const GstVideoInfo * info)
 {
+#if GST_WLSINK_ENHANCEMENT
   FUNCTION;
+  /* check if video buffer size is changed for setting video viewport destination */
+  if (window->buffer_width != window->display->buffer_width
+      || window->buffer_height != window->display->buffer_height) {
+    window->buffer_width = window->display->buffer_width;
+    window->buffer_height = window->display->buffer_height;
+    GST_INFO ("tizen_viewport_set_destination (%p, %d, %d, %d,%d)",
+        window->tizen_video_viewport, window->buffer_x, window->buffer_y,
+        window->buffer_width, window->buffer_height);
+    tizen_viewport_set_destination (window->tizen_video_viewport,
+        window->buffer_x, window->buffer_y, window->buffer_width,
+        window->buffer_height);
+  }
+
   if (G_UNLIKELY (info)) {
     window->video_width =
         gst_util_uint64_scale_int_round (info->width, info->par_n, info->par_d);
     window->video_height = info->height;
 
     wl_subsurface_set_sync (window->video_subsurface);
-#ifdef GST_WLSINK_ENHANCEMENT
+
     /* check video_info_changed to remove repetitive IPC */
     if (window->video_info_changed) {
-      gst_wl_window_resize_video_surface (window, FALSE);
+      gst_wl_window_resize_tizen_video_viewport (window, FALSE);
       window->video_info_changed = FALSE;
     }
-#else
-    gst_wl_window_resize_video_surface (window, FALSE);
-#endif
   }
 
-  GST_INFO ("GstWlBuffer(%p)", buffer);
+  GST_LOG ("GstWlBuffer(%p)", buffer);
   if (G_LIKELY (buffer))
     gst_wl_buffer_attach (buffer, window->video_surface);
   else
     wl_surface_attach (window->video_surface, NULL, 0, 0);
 
-  /*Wayland-compositor will try to render damage area which need  to be updated */
+  /* use tizen view port */
+  GST_INFO ("wl_surface_damage_buffer (%p, %d, %d, %d, %d)",
+      window->video_surface, window->buffer_x, window->buffer_y,
+      window->buffer_width, window->buffer_height);
+  wl_surface_damage_buffer (window->video_surface, window->buffer_x,
+      window->buffer_y, window->buffer_width, window->buffer_height);
+  /* wl_surface_commit change surface state, if wl_buffer is not attached newly,  then surface is not changed */
+  GST_INFO ("wl_surface_commit (%p)", window->video_surface);
+  wl_surface_commit (window->video_surface);
+
+  if (G_UNLIKELY (info)) {
+    wl_subsurface_set_desync (window->video_subsurface);
+  }
+
+  wl_display_flush (window->display->display);
+
+#else /* open source */
+
+  if (G_UNLIKELY (info)) {
+    window->video_width =
+        gst_util_uint64_scale_int_round (info->width, info->par_n, info->par_d);
+    window->video_height = info->height;
+
+    wl_subsurface_set_sync (window->video_subsurface);
+    gst_wl_window_resize_video_surface (window, FALSE);
+  }
+
+  GST_LOG ("GstWlBuffer(%p)", buffer);
+  if (G_LIKELY (buffer))
+    gst_wl_buffer_attach (buffer, window->video_surface);
+  else
+    wl_surface_attach (window->video_surface, NULL, 0, 0);
+
   wl_surface_damage (window->video_surface, 0, 0, window->surface_width,
       window->surface_height);
-#ifdef GST_WLSINK_ENHANCEMENT
-  GST_LOG ("update area width %d, height %d", window->surface_width,
-      window->surface_height);
-#endif
-  /* wl_surface_commit change surface state, if wl_buffer is not attached newly,  then surface is not changed */
   wl_surface_commit (window->video_surface);
 
   if (G_UNLIKELY (info)) {
     /* commit also the parent (area_surface) in order to change
      * the position of the video_subsurface */
-#ifdef GST_WLSINK_ENHANCEMENT
-    GST_DEBUG ("render_rectangle %d*%d", window->render_rectangle.w,
-        window->render_rectangle.h);
-#endif
     wl_surface_damage (window->area_surface, 0, 0, window->render_rectangle.w,
         window->render_rectangle.h);
     wl_surface_commit (window->area_surface);
@@ -667,21 +701,42 @@ gst_wl_window_render (GstWlWindow * window, GstWlBuffer * buffer,
   }
 
   wl_display_flush (window->display->display);
+#endif
 }
 
 void
 gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
     gint w, gint h)
 {
+#if GST_WLSINK_ENHANCEMENT
   FUNCTION;
   g_return_if_fail (window != NULL);
-#ifdef GST_WLSINK_ENHANCEMENT
-  if (window->render_rectangle.x == x && window->render_rectangle.y == y
-      && window->render_rectangle.w == w && window->render_rectangle.h == h) {
-    GST_DEBUG ("but the values are same. skip");
-    return;
+
+  if (gst_wl_window_is_toplevel (window)) {
+    window->render_rectangle.x = x;
+    window->render_rectangle.y = y;
+    window->render_rectangle.w = w;
+    window->render_rectangle.h = h;
   }
-#endif
+
+  /* position the area inside the parent - needs a parent commit to apply */
+  /* use tizen view port */
+  if (window->tizen_area_viewport) {
+    GST_INFO ("tizen_viewport_set_destination (%p, %d, %d, %d, %d)",
+        window->tizen_area_viewport, x, y, w, h);
+    tizen_viewport_set_destination (window->tizen_area_viewport, x, y, w, h);
+  }
+
+  if (window->video_width != 0) {
+    wl_subsurface_set_sync (window->video_subsurface);
+    /* use tizen view port */
+    gst_wl_window_resize_tizen_video_viewport (window, TRUE);
+    wl_subsurface_set_desync (window->video_subsurface);
+  }
+#else /* open source */
+
+  g_return_if_fail (window != NULL);
+
   window->render_rectangle.x = x;
   window->render_rectangle.y = y;
   window->render_rectangle.w = w;
@@ -704,6 +759,8 @@ gst_wl_window_set_render_rectangle (GstWlWindow * window, gint x, gint y,
 
   if (window->video_width != 0)
     wl_subsurface_set_desync (window->video_subsurface);
+
+#endif
 }
 
 #ifdef GST_WLSINK_ENHANCEMENT
@@ -713,7 +770,7 @@ gst_wl_window_set_rotate_angle (GstWlWindow * window, guint rotate_angle)
   FUNCTION;
   g_return_if_fail (window != NULL);
   window->rotate_angle = rotate_angle;
-  GST_INFO ("rotate_angle value is (%d)", window->rotate_angle);
+  GST_LOG ("rotate_angle value is (%d)", window->rotate_angle);
 }
 
 void
@@ -722,7 +779,7 @@ gst_wl_window_set_disp_geo_method (GstWlWindow * window, guint disp_geo_method)
   FUNCTION;
   g_return_if_fail (window != NULL);
   window->disp_geo_method = disp_geo_method;
-  GST_INFO ("disp_geo_method value is (%d)", window->disp_geo_method);
+  GST_LOG ("disp_geo_method value is (%d)", window->disp_geo_method);
 }
 
 void
@@ -731,7 +788,7 @@ gst_wl_window_set_orientation (GstWlWindow * window, guint orientation)
   FUNCTION;
   g_return_if_fail (window != NULL);
   window->orientation = orientation;
-  GST_INFO ("orientation value is (%d)", window->orientation);
+  GST_LOG ("orientation value is (%d)", window->orientation);
 }
 
 void
@@ -740,7 +797,7 @@ gst_wl_window_set_flip (GstWlWindow * window, guint flip)
   FUNCTION;
   g_return_if_fail (window != NULL);
   window->flip = flip;
-  GST_INFO ("flip value is (%d)", window->flip);
+  GST_LOG ("flip value is (%d)", window->flip);
 }
 
 void
@@ -749,7 +806,7 @@ gst_wl_window_set_video_info_change (GstWlWindow * window, guint changed)
   FUNCTION;
   g_return_if_fail (window != NULL);
   window->video_info_changed = changed;
-  GST_INFO ("video_info_changed value is (%d)", window->video_info_changed);
+  GST_LOG ("video_info_changed value is (%d)", window->video_info_changed);
 }
 
 #endif

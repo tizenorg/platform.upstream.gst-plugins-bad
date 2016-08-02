@@ -44,7 +44,7 @@ handle_tizen_video_format (void *data, struct tizen_video *tizen_video,
 
   g_return_if_fail (self != NULL);
 
-  GST_INFO ("format is %d", format);
+  GST_LOG ("format is %d", format);
   g_array_append_val (self->tbm_formats, format);
 }
 
@@ -216,7 +216,7 @@ registry_handle_global (void *data, struct wl_registry *registry,
 
   if (g_strcmp0 (interface, "wl_compositor") == 0) {
     self->compositor = wl_registry_bind (registry, id, &wl_compositor_interface,
-        MIN (version, 3));
+        MIN (version, 4));
   } else if (g_strcmp0 (interface, "wl_subcompositor") == 0) {
     self->subcompositor =
         wl_registry_bind (registry, id, &wl_subcompositor_interface, 1);
@@ -235,7 +235,7 @@ registry_handle_global (void *data, struct wl_registry *registry,
     self->tizen_video =
         wl_registry_bind (registry, id, &tizen_video_interface, version);
     g_return_if_fail (self->tizen_video != NULL);
-    GST_INFO ("id(%d)", id);
+    GST_LOG ("id(%d)", id);
 
     tizen_video_add_listener (self->tizen_video, &tz_video_listener, self);
 #endif
@@ -354,7 +354,7 @@ gst_wl_display_new_existing (struct wl_display * display,
     g_object_unref (self);
     return NULL;
   }
-  GST_INFO ("tbm_client(%p)", self->tbm_client);
+  GST_LOG ("tbm_client(%p)", self->tbm_client);
 #endif
   VERIFY_INTERFACE_EXISTS (shm, "wl_shm");
   VERIFY_INTERFACE_EXISTS (scaler, "wl_scaler");

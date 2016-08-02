@@ -42,19 +42,30 @@ struct _GstWlWindow
   GstWlDisplay *display;
   struct wl_surface *area_surface;
   struct wl_subsurface *area_subsurface;
-  struct wl_viewport *area_viewport;
   struct wl_surface *video_surface;
   struct wl_subsurface *video_subsurface;
-  struct wl_viewport *video_viewport;
   struct wl_shell_surface *shell_surface;
-#ifdef GST_WLSINK_ENHANCEMENT
+#ifndef GST_WLSINK_ENHANCEMENT /* no define */
+  struct wl_viewport *video_viewport;
+  struct wl_viewport *area_viewport;
+#else
   struct tizen_video_object *video_object;
+  struct tizen_viewport *tizen_area_viewport;
+  struct tizen_viewport *tizen_video_viewport;
   guint video_info_changed;
 /*Display geometry method */
+  guint buffer_width, buffer_height;
+  guint buffer_x, buffer_y;
   guint disp_geo_method;
   guint rotate_angle;
   guint orientation;
   guint flip;
+  guint mode_ratio_w;
+  guint mode_ratio_h;
+  guint mode_scale_w;
+  guint mode_scale_h;
+  guint mode_align_w;
+  guint mode_align_h;
 #endif
 
   /* the size and position of the area_(sub)surface */
